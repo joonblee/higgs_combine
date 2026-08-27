@@ -49,7 +49,8 @@ Planned Run-2, Run-3, and full-combination commands (sigFit files stored in ./si
     python3 limit_workflow.py \
       --stage all --target ${target} --parameter alpha --mode blind --task all \
       --sigfit-dir ./sigfit_inputs \
-      --impact-parallel 12 --r-max 100 --strict --allow-negative-r --r-min -2
+      --impact-parallel 12 --r-max 100 --strict --allow-negative-r --r-min -2 \
+      &> limit_blind_${target}.log &
   done
 
 The current production provides generator PDF/scale/alpha_s variations for tt and
@@ -174,7 +175,7 @@ EXP_SYST: Dict[str, Tuple[str, str]] = {
 L1_PREFIRE_SYST: Dict[str, Tuple[str, str]] = {
     "l1prefire": ("L1PrefireDown", "L1PrefireUp"),
 }
-L1_PREFIRE_YEARS = frozenset({"2016preVFP", "2016postVFP", "2017"})
+L1_PREFIRE_YEARS = frozenset({"2016preVFP", "2016postVFP", "2017", "2018"})
 
 # BTV fixed-WP multi-era prescription.  Local names distinguish the four
 # correctionlib source families.  nuisance_global_name() below keeps the
@@ -1685,7 +1686,7 @@ def nuisance_global_name(local: str, year: str) -> str:
     # combined 2016 entry, therefore the analysis-specific names preserve the
     # existing correlation model exactly.
     if local == "l1prefire":
-        return f"CMS_NPS26009_l1_ecal_prefiring_{year}"
+        return f"CMS_l1_prefiring_{year}"
 
     # Analysis-specific data-driven background uncertainties.  Include the
     # affected process/category before the era, leaving the era as the suffix.
