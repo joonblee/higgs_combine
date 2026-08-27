@@ -2427,7 +2427,7 @@ def nps_endpoint_safe_plot_impacts_script(plot_script: Path, outdir: Path) -> Pa
     # actual impact axis away from the canvas boundary.
     margin_line = (
         "    pads[1].SetRightMargin("
-        "max(float(pads[1].GetRightMargin()), 0.14))"
+        "max(float(pads[1].GetRightMargin()), 0.05))"
     )
     if margin_line not in source:
         anchor = "    pads[0].SetGrid(1, 0)"
@@ -2441,7 +2441,7 @@ def nps_endpoint_safe_plot_impacts_script(plot_script: Path, outdir: Path) -> Pa
     # Move ROOT's x10^N exponent to the left by 10% of the pad width.  This is
     # applied immediately before drawing the impact histogram, so the exponent
     # remains visible without changing the numerical axis representation.
-    exponent_line = '    ROOT.TGaxis.SetExponentOffset(-0.10, 0.0, "x")'
+    exponent_line = '    ROOT.TGaxis.SetExponentOffset(0.0, 0.0, "x")'
     if exponent_line not in source:
         anchor = "    h_impacts.Draw()"
         if anchor not in source:
