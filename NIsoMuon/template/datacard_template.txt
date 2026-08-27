@@ -1,0 +1,35 @@
+## Shape input card
+imax 1 number of channels
+jmax * number of background
+kmax * number of nuisance parameters
+----------------------------------------------------------------------------------------------------
+bin          bin1
+observation  Nobs
+------------------------------------------------------------
+bin          bin1   bin1   bin1   bin1
+process      sig    QCD    tt     tW
+process      0      1      2      3
+rate         Rsig   RQCD   Rtt    RtW
+----------------------------------------------------------------------------------------------------
+lumi          lnN   1.016  -      1.016  1.016
+jer           lnN   a/b    -      a/b    a/b
+jes           lnN   a/b    -      a/b    a/b
+pu            lnN   a/b    -      a/b    a/b
+btag_sf       lnN   a/b    -      a/b    a/b
+mu_trig_sf    lnN   a/b    -      a/b    a/b
+mu_id_sf      lnN   a/b    -      a/b    a/b
+mu_scale      lnN   a/b    -      a/b    a/b
+
+QCD_norm      lnN   -      1.xx   -      -
+QCD_shape     lnN   -      a/b    -      -
+
+tt_xsec       lnN   -      -      1.xx   -
+tW_xsec       lnN   -      -      -      1.xx
+
+sig_stat      lnN   1.xx   -      -      -
+tt_stat       lnN   -      -      1.xx   -
+tW_stat       lnN   -      -      -      1.xx
+
+PDF_error     lnN   a/b    -      a/b    a/b
+PDF_scale     lnN   a/b    -      a/b    a/b
+PDF_alphas    lnN   a/b    -      a/b    a/b

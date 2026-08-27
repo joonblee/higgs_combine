@@ -1,0 +1,107 @@
+# NPS-26-009 nuisance dictionary for CMS systematics/check_names.py
+# Common CMS nuisances follow systematics_master.yml.  Analysis-specific
+# nuisance names use the CMS_NPS26009_ prefix.
+
+'CMS_res_j_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: jet_energy_resolution
+  description: 'Jet energy resolution uncertainty separated by data-taking era.'
+
+'CMS_scale_j_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: jet_energy_scale
+  description: 'Total jet energy scale uncertainty separated by data-taking era.'
+
+'CMS_pileup_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: pileup
+  description: 'Pileup uncertainty separated by data-taking era.'
+
+'CMS_eff_m_id_(2017|2018|2022|2022EE|2023|2023BPix)':
+  class: muon_efficiency
+  description: 'Muon identification efficiency uncertainty separated by data-taking era.'
+
+'CMS_eff_m_trigger_(2017|2018|2022|2022EE|2023|2023BPix)':
+  class: muon_efficiency
+  description: 'Muon trigger efficiency uncertainty separated by data-taking era.'
+
+'CMS_scale_m_(2017|2018|2022|2022EE|2023|2023BPix)':
+  class: muon_energy_scale
+  description: 'Muon momentum scale uncertainty separated by data-taking era.'
+
+'CMS_btag_fixedWP_bc_uncorrelated_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: btag
+  description: 'Statistical component of the fixed-WP b/c-jet tagging scale-factor uncertainty, separated by era.'
+
+'CMS_btag_fixedWP_light_uncorrelated_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: btag
+  description: 'Statistical component of the fixed-WP light-jet tagging scale-factor uncertainty, separated by era.'
+
+pdf_alphas:
+  class: pdf
+  description: 'PDF uncertainty from the variation of alpha_s.'
+
+QCDscale_fac_ttbar:
+  class: qcd_scale
+  description: 'Uncertainty from variation of the QCD factorization scale in ttbar production.'
+
+QCDscale_ren_ttbar:
+  class: qcd_scale
+  description: 'Uncertainty from variation of the QCD renormalization scale in ttbar production.'
+
+'CMS_NPS26009_lumi_(2016|2017|2018|2022|2023)':
+  class: custom
+  description: 'Aggregate luminosity uncertainty for the indicated year group, using one uniform year-suffix naming scheme while preserving the analysis correlation model.'
+
+'CMS_NPS26009_eff_m_id_(2016preVFP|2016postVFP)':
+  class: custom
+  description: 'Muon identification scale-factor uncertainty split between the 2016 preVFP and postVFP analysis eras.'
+
+'CMS_NPS26009_eff_m_trigger_(2016preVFP|2016postVFP)':
+  class: custom
+  description: 'Muon trigger scale-factor uncertainty split between the 2016 preVFP and postVFP analysis eras.'
+
+'CMS_NPS26009_scale_m_(2016preVFP|2016postVFP)':
+  class: custom
+  description: 'Muon momentum-scale uncertainty split between the 2016 preVFP and postVFP analysis eras.'
+
+'CMS_NPS26009_l1_ecal_prefiring_(2016preVFP|2016postVFP|2017)':
+  class: custom
+  description: 'L1 ECAL prefiring uncertainty decorrelated between the 2016 preVFP, 2016 postVFP, and 2017 analysis eras.'
+
+'CMS_NPS26009_btag_fixedWP_bc_correlated_(13TeV|13p6TeV)':
+  class: custom
+  description: 'Correlated fixed-WP b/c-jet tagging scale-factor component, shared within Run 2 or Run 3 but decorrelated between the two run periods.'
+
+'CMS_NPS26009_btag_fixedWP_light_correlated_(13TeV|13p6TeV)':
+  class: custom
+  description: 'Correlated fixed-WP light-jet tagging scale-factor component, shared within Run 2 or Run 3 but decorrelated between the two run periods.'
+
+'CMS_NPS26009_bckgNorm_QCD_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Normalization uncertainty of the data-driven QCD background in the OS b-jet signal category, separated by era.'
+
+'CMS_NPS26009_bckgShape_QCD_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Functional-form envelope uncertainty of the data-driven QCD background in the OS b-jet signal category, separated by era.'
+
+'CMS_NPS26009_NFStat_DY_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Statistical uncertainty of the DY normalization-factor numerator in the OS b-jet signal category, separated by era.'
+
+'CMS_NPS26009_LightJetStat_DY_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Statistical uncertainty propagated from the light-jet DY control sample to the OS b-jet signal category, separated by era.'
+
+'CMS_NPS26009_MCstat_(signal|ttbar|singleTop|other|QCD|DY)_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Finite simulated-template statistical uncertainty for the indicated process in the OS b-jet signal category, separated by era.'
+
+CMS_NPS26009_topmass_ttbar_BJetOS:
+  class: custom
+  description: 'ttbar normalization uncertainty from the dependence of the NNLO+NNLL cross section on the assumed top-quark mass, shared across Run 2 and Run 3.'
+
+CMS_NPS26009_pdf_NNPDF31:
+  class: custom
+  description: 'Total NNPDF31 symmetric-Hessian PDF uncertainty obtained from the 100 error members and shared by the configured generator-theory processes.'
+
+'CMS_NPS26009_QCDscale_(fac|ren)_(singleTop|signal|DY|QCD|other)':
+  class: custom
+  description: 'Factorization- or renormalization-scale uncertainty for a process without a dedicated process name in the CMS master QCD-scale convention.'
