@@ -39,7 +39,7 @@ Uncertainty policy in this revision
   process-specific nuisances.  The simultaneous (muR,muF)=(0.5,0.5) and (2,2)
   variations are read only to validate the factorised response; they are not
   added as a third nuisance.  The two antipodal scale combinations are excluded.
-* The Run-2 L1 ECAL prefiring correction is varied with the NanoAOD
+* The Run-2 L1 ECAL/muon prefiring correction is varied with the NanoAOD
   L1PreFiringWeight Up/Down branches for 2016preVFP, 2016postVFP, and 2017.
   The corresponding nuisance parameters are decorrelated between data-taking eras.
 
@@ -1250,7 +1250,7 @@ def build_channels_for_mass(
                     args.ignore_rel_below,
                 )
 
-        # L1 ECAL prefiring uncertainty.  Only the affected Run-2 periods
+        # L1 ECAL/muon prefiring uncertainty.  Only the affected Run-2 periods
         # have non-trivial NanoAOD prefiring weights.  The nuisance is kept
         # separate for each data-taking era.
         for syst_name, (down_suffix, up_suffix) in L1_PREFIRE_SYST.items():
@@ -3044,7 +3044,7 @@ def print_configuration(args: argparse.Namespace) -> None:
         "uncorr decorrelated by era"
     )
     print("[CONFIG] tt_xsec/ST_xsec=disabled")
-    print("[CONFIG] L1 prefiring syst=2016preVFP,2016postVFP,2017; decorrelated by era")
+    print("[CONFIG] L1 prefiring syst=2016preVFP,2016postVFP,2017,2018; decorrelated by era")
     d13, u13 = tt_mass_lnn("2018")
     d136, u136 = tt_mass_lnn("2023")
     print(
