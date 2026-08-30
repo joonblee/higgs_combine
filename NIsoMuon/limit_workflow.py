@@ -1681,8 +1681,8 @@ def nuisance_global_name(local: str, year: str) -> str:
             return f"CMS_NPS26009_{custom_stem}_{year}"
         return f"{common_name}_{year}"
 
-    # The current L1 ECAL prefiring nuisances are decorrelated between
-    # 2016preVFP, 2016postVFP and 2017.  The master common source has only a
+    # The current L1 ECAL/muon prefiring nuisances are decorrelated between
+    # 2016preVFP, 2016postVFP, 2017, and 2018.  The master common source has only a
     # combined 2016 entry, therefore the analysis-specific names preserve the
     # existing correlation model exactly.
     if local == "l1prefire":
