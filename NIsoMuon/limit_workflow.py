@@ -62,7 +62,7 @@ python3 limit_workflow.py \
   --parameter alpha \
   --mode blind \
   --task all \
-  --impact-parallel 12 \
+  --impact-parallel 45 \
   --r-max 100 \
   --strict \
   --allow-negative-r \
@@ -1982,9 +1982,10 @@ def write_datacard(
             width_floor = max(args.rate_floor, 1.0e-12 * width_scale)
             sigma_down_card = max(sigma_down, width_floor)
             sigma_up_card = max(sigma_up, width_floor)
+            sigma_card = max(sigma_down_card, sigma_up_card)
 
             upper_range = max(
-                nominal_qcd + QCD_ADDITIVE_RANGE_NSIGMA * sigma_up_card,
+                nominal_qcd + QCD_ADDITIVE_RANGE_NSIGMA * sigma_card,
                 2.0 * nominal_qcd,
                 10.0 * args.rate_floor,
             )
@@ -1999,7 +2000,7 @@ def write_datacard(
             additive_lines.append(
                 f"{nuisance_name} param "
                 f"{format_number(nominal_qcd)} "
-                f"-{format_number(sigma_down_card)}/+{format_number(sigma_up_card)}"
+                f"{format_number(sigma_card)}"
             )
 
         if additive_lines:
