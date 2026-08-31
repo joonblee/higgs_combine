@@ -48,6 +48,27 @@ Uncertainty policy in this revision
 
 Planned Run-level command (sigFit files stored in ./sigfit_inputs):
 
+python3 limit_workflow.py \
+  --stage cards \
+  --target runs \
+  --parameter alpha \
+  --mode blind \
+  --sigfit-dir ./sigfit_inputs \
+  --strict
+
+python3 limit_workflow.py \
+  --stage run \
+  --target runs \
+  --parameter alpha \
+  --mode blind \
+  --task all \
+  --impact-parallel 12 \
+  --r-max 100 \
+  --strict \
+  --allow-negative-r \
+  --r-min -2 \
+  &> limit_blind_runs.log &
+
   python3 limit_workflow.py \
     --stage all --target runs --parameter alpha --mode blind --task all \
     --sigfit-dir ./sigfit_inputs \
@@ -1978,7 +1999,7 @@ def write_datacard(
             additive_lines.append(
                 f"{nuisance_name} param "
                 f"{format_number(nominal_qcd)} "
-                f"{format_number(sigma_down_card)}/{format_number(sigma_up_card)}"
+                f"-{format_number(sigma_down_card)}/+{format_number(sigma_up_card)}"
             )
 
         if additive_lines:
