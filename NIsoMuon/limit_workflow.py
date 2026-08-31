@@ -2199,7 +2199,7 @@ def internal_signal_yield_from_card(card: Path) -> float:
             rates = [float(x) for x in tokens[1:]]
     if processes is None or rates is None:
         raise WorkflowError(f"Cannot parse signal rate from {card}")
-    return sum(rate for process, rate in zip(processes, rates) if process == "sig")
+    return sum(rate for process, rate in zip(processes, rates) if process in {"sig","Zprime"})
 
 
 # -------------------------------------------------------------------------------------------------
@@ -2313,7 +2313,7 @@ def counting_card_observation_signal_background(
             rates[start:stop],
         ):
             effective_rate = rate * nominal_rate_modifier(bin_name, process)
-            if process == "sig":
+            if process in {"sig", "Zprime"}:
                 sig += effective_rate
             else:
                 bkg += effective_rate
@@ -2516,7 +2516,7 @@ def run_fitdiagnostics(
     command = [
         "combine", "-M", "FitDiagnostics", str(card),
         "-m", format_mass_for_combine(mass),
-        "--cminDefaultMinimizerStrategy", "0",
+        "--cminDefaultMinimizerStrategy", "1",
         "--setParameters", "r=0",
         *explicit_range_args(physical_r_min(args), effective_r_max(args, card), card),
         "--saveNormalizations", "--saveShapes", "--saveWithUncertainties",
@@ -2678,7 +2678,7 @@ def run_impacts(
             "combineTool.py", "-M", "Impacts", "-d", str(workspace),
             "-m", format_mass_for_combine(mass),
             "--robustFit", "1",
-            "--cminDefaultMinimizerStrategy", "0",
+            "--cminDefaultMinimizerStrategy", "1",
             "--setParameters", "r=0",
             *explicit_range_args(impact_rmin, impact_rmax, card),
             "-n", f".{name}",
