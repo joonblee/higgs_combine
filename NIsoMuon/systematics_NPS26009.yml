@@ -1,6 +1,6 @@
 # NPS-26-009 nuisance dictionary for CMS systematics/check_names.py
-# Common CMS nuisances follow systematics_master.yml.  Analysis-specific
-# nuisance names use the CMS_NPS26009_ prefix.
+# CMS systematic stems are kept whenever possible, including explicitly
+# documented era-split variants. Analysis-specific sources use CMS_NPS26009_.
 
 'CMS_res_j_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: jet_energy_resolution
@@ -14,15 +14,15 @@
   class: pileup
   description: 'Pileup uncertainty separated by data-taking era.'
 
-'CMS_eff_m_id_(2017|2018|2022|2022EE|2023|2023BPix)':
+'CMS_eff_m_id_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: muon_efficiency
   description: 'Muon identification efficiency uncertainty separated by data-taking era.'
 
-'CMS_eff_m_trigger_(2017|2018|2022|2022EE|2023|2023BPix)':
+'CMS_eff_m_trigger_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: muon_efficiency
   description: 'Muon trigger efficiency uncertainty separated by data-taking era.'
 
-'CMS_scale_m_(2017|2018|2022|2022EE|2023|2023BPix)':
+'CMS_scale_m_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: muon_energy_scale
   description: 'Muon momentum scale uncertainty separated by data-taking era.'
 
@@ -49,18 +49,6 @@ QCDscale_ren_ttbar:
 'CMS_NPS26009_lumi_(2016|2017|2018|2022|2023)':
   class: custom
   description: 'Aggregate luminosity uncertainty for the indicated year group, using one uniform year-suffix naming scheme while preserving the analysis correlation model.'
-
-'CMS_NPS26009_eff_m_id_(2016preVFP|2016postVFP)':
-  class: custom
-  description: 'Muon identification scale-factor uncertainty split between the 2016 preVFP and postVFP analysis eras.'
-
-'CMS_NPS26009_eff_m_trigger_(2016preVFP|2016postVFP)':
-  class: custom
-  description: 'Muon trigger scale-factor uncertainty split between the 2016 preVFP and postVFP analysis eras.'
-
-'CMS_NPS26009_scale_m_(2016preVFP|2016postVFP)':
-  class: custom
-  description: 'Muon momentum-scale uncertainty split between the 2016 preVFP and postVFP analysis eras.'
 
 'CMS_l1_prefiring_(2016preVFP|2016postVFP|2017|2018)':
   class: custom

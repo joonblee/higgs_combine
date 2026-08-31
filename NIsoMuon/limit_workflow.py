@@ -1714,9 +1714,9 @@ def nuisance_global_name(local: str, year: str) -> str:
     if local == "btagSFlight_uncorrelated":
         return f"CMS_btag_fixedWP_light_uncorrelated_{year}"
 
-    # Common experimental sources.  The master list has no pre/post-VFP split
-    # for the muon sources below.  Keep the existing 2016preVFP/2016postVFP
-    # decorrelation by using analysis-specific names only for those two eras.
+    # Common experimental sources. Keep the CMS systematic stem consistent
+    # across all data-taking eras. The era suffix preserves the intended
+    # decorrelation, including the 2016 preVFP/postVFP split.
     common_exp = {
         "jer": "CMS_res_j",
         "jes": "CMS_scale_j",
@@ -1726,15 +1726,12 @@ def nuisance_global_name(local: str, year: str) -> str:
         return f"{common_exp[local]}_{year}"
 
     muon_exp = {
-        "mu_trig_sf": ("CMS_eff_m_trigger", "eff_m_trigger"),
-        "mu_id_sf": ("CMS_eff_m_id", "eff_m_id"),
-        "mu_scale": ("CMS_scale_m", "scale_m"),
+        "mu_trig_sf": "CMS_eff_m_trigger",
+        "mu_id_sf": "CMS_eff_m_id",
+        "mu_scale": "CMS_scale_m",
     }
     if local in muon_exp:
-        common_name, custom_stem = muon_exp[local]
-        if year in {"2016preVFP", "2016postVFP"}:
-            return f"CMS_NPS26009_{custom_stem}_{year}"
-        return f"{common_name}_{year}"
+        return f"{muon_exp[local]}_{year}"
 
     # The current L1 ECAL/muon prefiring nuisances are decorrelated between
     # 2016preVFP, 2016postVFP, 2017, and 2018.  The master common source has only a
@@ -1870,7 +1867,7 @@ def write_datacard(
         pad_row(["observation", *[ch.observation for ch in channels]]),
         "-" * 130,
         pad_row(["bin", *[bins[ich] for ich, _ in columns]]),
-        pad_row(["process", *[process for _, process in columns]]),
+        pad_row(["process", *["Zprime" if process == "sig" else process for _, process in columns]]),
         pad_row(["process", *[PROC_ID[process] for _, process in columns]]),
         pad_row(["rate", *[format_number(card_rate(ich, process)) for ich, process in columns]]),
         "-" * 130,
