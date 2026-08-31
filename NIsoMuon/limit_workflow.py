@@ -13,8 +13,11 @@ This ONE file performs all stages:
 
 Uncertainty policy in this revision
 -----------------------------------
-* Data-driven QCD has QCD_norm and QCD_shape only.  No QCD_stat is derived
-  from the fitted functional template.  QCD_stat is retained only in QCD-MC mode.
+* Data-driven QCD has QCD_norm and QCD_shape only.  QCD_norm remains a
+  multiplicative lnN nuisance, while QCD_shape is propagated as an additive
+  Gaussian uncertainty on the absolute QCD yield via a constrained rateParam.
+  No QCD_stat is derived from the fitted functional template.  QCD_stat is
+  retained only in QCD-MC mode.
 * Data-driven DY uses the constant-NF estimate.  DY_NFStat and
   DY_LightJetStat are read from the explicitly separated templates; no generic
   DY_stat term is constructed from the nominal histogram error.
@@ -43,15 +46,13 @@ Uncertainty policy in this revision
   L1PreFiringWeight Up/Down branches for 2016preVFP, 2016postVFP, and 2017.
   The corresponding nuisance parameters are decorrelated between data-taking eras.
 
-Planned Run-2, Run-3, and full-combination commands (sigFit files stored in ./sigfit_inputs):
+Planned Run-level command (sigFit files stored in ./sigfit_inputs):
 
-  for target in run2 run3 full; do
-    python3 limit_workflow.py \
-      --stage all --target ${target} --parameter alpha --mode blind --task all \
-      --sigfit-dir ./sigfit_inputs \
-      --impact-parallel 12 --r-max 100 --strict --allow-negative-r --r-min -2 \
-      &> limit_blind_${target}.log &
-  done
+  python3 limit_workflow.py \
+    --stage all --target runs --parameter alpha --mode blind --task all \
+    --sigfit-dir ./sigfit_inputs \
+    --impact-parallel 12 --r-max 100 --strict --allow-negative-r --r-min -2 \
+    &> limit_blind_runs.log &
 
 The current production provides generator PDF/scale/alpha_s variations for tt and
 single-top backgrounds. Signal theory variations are not requested by default; signal
@@ -191,6 +192,12 @@ QCD_SYST: Dict[str, Tuple[str, str]] = {
     "QCD_norm": ("NormDown", "NormUp"),
     "QCD_shape": ("ShapeDown", "ShapeUp"),
 }
+
+# QCD_shape is represented by an absolute-yield Gaussian rateParam rather than
+# lnN.  This is only a generous numerical range for the fitted yield parameter;
+# it is not interpreted as a physical upper bound.
+QCD_ADDITIVE_RANGE_NSIGMA = 10.0
+
 # Nominal data-driven DY treatment: constant normalisation factor (NF).
 # The ROOT producer retains TFDown/TFUp directory names for compatibility,
 # but these templates represent the NF numerator-statistics uncertainty.
@@ -267,6 +274,8 @@ class ChannelResult:
     raw_rates: Dict[str, float]
     rates: Dict[str, float]
     nuisances: Dict[str, Dict[str, str]]
+    qcd_shape_sigma_down: Optional[float] = None
+    qcd_shape_sigma_up: Optional[float] = None
     warnings: List[str] = field(default_factory=list)
 
 
@@ -349,6 +358,8 @@ def canonical_target(value: str) -> str:
         return "run3"
     if key in {"full", "run23", "run2run3", "combined", "run2plus3"}:
         return "full"
+    if key in {"runs", "runresults", "runcombinations"}:
+        return "runs"
     if key in {"era", "eras", "perera", "peryear", "years"}:
         return "eras"
     if key in {"all"}:
@@ -357,7 +368,7 @@ def canonical_target(value: str) -> str:
         if value == year or key == normalise_key(year):
             return year
     raise argparse.ArgumentTypeError(
-        "Use run2, run3, full/run2+3, eras, all, or one data-taking era."
+        "Use run2, run3, full/run2+3, runs, eras, all, or one data-taking era."
     )
 
 
@@ -418,6 +429,8 @@ def selected_targets(target: str) -> List[str]:
         return ["Run3"]
     if target == "full":
         return ["Run2Run3"]
+    if target == "runs":
+        return ["Run2", "Run3", "Run2Run3"]
     if target == "eras":
         return list(YEARS)
     if target == "all":
@@ -1208,6 +1221,8 @@ def build_channels_for_mass(
                 )
 
         nuis: Dict[str, Dict[str, str]] = {}
+        qcd_shape_sigma_down: Optional[float] = None
+        qcd_shape_sigma_up: Optional[float] = None
 
         # Luminosity affects simulation-normalised processes only.
         nuis["lumi"] = {p: "-" for p in PROCESSES}
@@ -1302,11 +1317,14 @@ def build_channels_for_mass(
                 )
 
         # Data-driven QCD: fitted central template plus explicit norm/shape terms.
+        # QCD_norm remains multiplicative (lnN).  QCD_shape is instead converted
+        # to an additive Gaussian uncertainty in the absolute QCD yield.  This
+        # avoids exponential lnN extrapolation when the nominal QCD rate tends
+        # to zero but the analytic-function envelope has a finite absolute size.
         # No finite-template or fitted-function QCD_stat nuisance is constructed.
         if args.qcd_method == "data-driven":
             qcd_file = file_for_process(args, year, "QCD", signal_file, "qcd")
             for syst_name, (down_suffix, up_suffix) in QCD_SYST.items():
-                nuis[syst_name] = {p: "-" for p in PROCESSES}
                 down = read_required(
                     reader, audit, f"{syst_name}/QCD", f"{year}:Down",
                     qcd_file, hist_path(syst_region(args, down_suffix)), low, high
@@ -1315,6 +1333,41 @@ def build_channels_for_mass(
                     reader, audit, f"{syst_name}/QCD", f"{year}:Up",
                     qcd_file, hist_path(syst_region(args, up_suffix)), low, high
                 )
+
+                if syst_name == "QCD_shape":
+                    if down is not None and up is not None:
+                        nominal_qcd = raw_rates["QCD"]
+                        down_qcd = max(float(down.value), 0.0)
+                        up_qcd = max(float(up.value), 0.0)
+
+                        if down_qcd > nominal_qcd * (1.0 + 1.0e-9):
+                            warnings.append(
+                                f"QCD ShapeDown={down_qcd:.6g} exceeds the nominal "
+                                f"QCD yield={nominal_qcd:.6g} in {year}; the additive "
+                                "downward width is therefore clipped at zero."
+                            )
+                        if up_qcd < nominal_qcd * (1.0 - 1.0e-9):
+                            warnings.append(
+                                f"QCD ShapeUp={up_qcd:.6g} is below the nominal "
+                                f"QCD yield={nominal_qcd:.6g} in {year}; the additive "
+                                "upward width is therefore clipped at zero."
+                            )
+
+                        sigma_down = max(nominal_qcd - down_qcd, 0.0)
+                        sigma_up = max(up_qcd - nominal_qcd, 0.0)
+                        relative_size = max(sigma_down, sigma_up) / max(
+                            abs(nominal_qcd), args.rate_floor
+                        )
+
+                        if (
+                            max(sigma_down, sigma_up) > 0.0
+                            and relative_size >= args.ignore_rel_below
+                        ):
+                            qcd_shape_sigma_down = sigma_down
+                            qcd_shape_sigma_up = sigma_up
+                    continue
+
+                nuis[syst_name] = {p: "-" for p in PROCESSES}
                 nuis[syst_name]["QCD"] = lnn_from_down_up(
                     raw_nominal["QCD"].value,
                     down.value if down else None,
@@ -1542,6 +1595,8 @@ def build_channels_for_mass(
             raw_rates=raw_rates,
             rates=dict(raw_rates),
             nuisances=nuis,
+            qcd_shape_sigma_down=qcd_shape_sigma_down,
+            qcd_shape_sigma_up=qcd_shape_sigma_up,
             warnings=warnings,
         )
 
@@ -1752,7 +1807,7 @@ def nuisance_order(
         *EXP_SYST.keys(),
         *L1_PREFIRE_SYST.keys(),
         *BTAG_SYST.keys(),
-        *([] if args.qcd_method == "mc" else QCD_SYST.keys()),
+        *([] if args.qcd_method == "mc" else ("QCD_norm",)),
     ]
     if args.dy_method == "data-driven":
         order.extend(DATA_DRIVEN_DY_NUISANCES)
@@ -1793,6 +1848,19 @@ def write_datacard(
         (ich, process) for ich in range(len(channels)) for process in PROCESSES
     ]
 
+    def card_rate(ich: int, process: str) -> float:
+        channel = channels[ich]
+        if (
+            args.qcd_method == "data-driven"
+            and process == "QCD"
+            and channel.qcd_shape_sigma_down is not None
+            and channel.qcd_shape_sigma_up is not None
+        ):
+            # The constrained rateParam below is the absolute QCD yield, so the
+            # base process rate must be unity.
+            return 1.0
+        return channel.rates[process]
+
     lines: List[str] = [
         f"imax {len(channels)} number of channels",
         "jmax * number of backgrounds",
@@ -1804,7 +1872,7 @@ def write_datacard(
         pad_row(["bin", *[bins[ich] for ich, _ in columns]]),
         pad_row(["process", *[process for _, process in columns]]),
         pad_row(["process", *[PROC_ID[process] for _, process in columns]]),
-        pad_row(["rate", *[format_number(channels[ich].rates[process]) for ich, process in columns]]),
+        pad_row(["rate", *[format_number(card_rate(ich, process)) for ich, process in columns]]),
         "-" * 130,
         f"# mass M-{label}, target {target}",
         f"# limit_parameter = {args.parameter}",
@@ -1841,7 +1909,7 @@ def write_datacard(
         "# uncertainty_policy = explicit data-driven terms; no generic tt_xsec/ST_xsec",
         "# CMS_NPS26009_topmass_ttbar_BJetOS = asymmetric ttbar normalisation from top-mass dependence of the NNLO+NNLL reference cross section",
         "# b tagging = BTV fixed-WP HF/LF x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)",
-        "# data-driven QCD: analysis-specific normalization + shape nuisances; no fitted-template QCD_stat",
+        "# data-driven QCD: QCD_norm is lnN; QCD_shape is an additive absolute-yield Gaussian rateParam; no fitted-template QCD_stat",
         "# data-driven DY: constant NF + analysis-specific NF/source-stat nuisances; no DY_stat",
         f"# PDF set = {PDF_SET_NAME}; PDFError0..99 use symmetric-Hessian quadrature",
         "# generator scale: separate paired muF/muR nuisances; no 7-point envelope",
@@ -1873,6 +1941,52 @@ def write_datacard(
         values = values_by_name[name]
         if any(value != "-" for value in values):
             lines.append(pad_row([name, "lnN", *values]))
+
+    # Additive QCD functional-form uncertainty.  The QCD process has base
+    # rate=1 in these channels, so the rateParam value itself is the absolute
+    # QCD event yield.  The same parameter receives an asymmetric Gaussian
+    # constraint in event-yield units.
+    if args.qcd_method == "data-driven":
+        additive_lines: List[str] = []
+        for channel in channels:
+            sigma_down = channel.qcd_shape_sigma_down
+            sigma_up = channel.qcd_shape_sigma_up
+            if sigma_down is None or sigma_up is None:
+                continue
+
+            nominal_qcd = channel.raw_rates["QCD"]
+            width_scale = max(
+                nominal_qcd,
+                sigma_down,
+                sigma_up,
+                args.rate_floor,
+            )
+            width_floor = max(args.rate_floor, 1.0e-12 * width_scale)
+            sigma_down_card = max(sigma_down, width_floor)
+            sigma_up_card = max(sigma_up, width_floor)
+
+            upper_range = max(
+                nominal_qcd + QCD_ADDITIVE_RANGE_NSIGMA * sigma_up_card,
+                2.0 * nominal_qcd,
+                10.0 * args.rate_floor,
+            )
+            nuisance_name = nuisance_global_name("QCD_shape", channel.year)
+            bin_name = f"bin_{channel.year}"
+
+            additive_lines.append(
+                f"{nuisance_name} rateParam {bin_name} QCD "
+                f"{format_number(nominal_qcd)} "
+                f"[0,{format_number(upper_range)}]"
+            )
+            additive_lines.append(
+                f"{nuisance_name} param "
+                f"{format_number(nominal_qcd)} "
+                f"{format_number(sigma_down_card)}/{format_number(sigma_up_card)}"
+            )
+
+        if additive_lines:
+            lines.append("# Additive Gaussian QCD functional-form uncertainty")
+            lines.extend(additive_lines)
 
     warnings = [f"{ch.year}: {warning}" for ch in channels for warning in ch.warnings]
     if warnings:
@@ -2111,21 +2225,25 @@ def range_args(args: argparse.Namespace, card: Path) -> List[str]:
 def counting_card_observation_signal_background(
     card: Path,
 ) -> Tuple[List[float], List[float], List[float]]:
-    """Read observation, signal, and total background yields by channel.
+    """Read nominal observation, signal, and total background yields by channel.
 
-    Datacards produced by this workflow list all processes channel by channel.
-    This parser is intentionally independent of the fixed process count and uses
-    the process-name row to identify signal columns.
+    Numeric rateParam initial values are included when reconstructing nominal
+    yields.  This matters for the additive QCD-shape treatment, where the QCD
+    base rate is unity and the rateParam stores the nominal absolute QCD yield.
     """
     observations: Optional[List[float]] = None
     process_names: Optional[List[str]] = None
     rates: Optional[List[float]] = None
+    bin_rows: List[List[str]] = []
+    numeric_rate_params: List[Tuple[str, str, float]] = []
 
     for line in card.read_text().splitlines():
         tokens = line.split()
         if not tokens:
             continue
-        if tokens[0] == "observation":
+        if tokens[0] == "bin":
+            bin_rows.append(tokens[1:])
+        elif tokens[0] == "observation":
             observations = [float(x) for x in tokens[1:]]
         elif tokens[0] == "process" and any(
             not re.fullmatch(r"[-+]?\d+", x) for x in tokens[1:]
@@ -2133,6 +2251,12 @@ def counting_card_observation_signal_background(
             process_names = tokens[1:]
         elif tokens[0] == "rate":
             rates = [float(x) for x in tokens[1:]]
+        elif len(tokens) >= 5 and tokens[1] == "rateParam":
+            try:
+                initial_value = float(tokens[4])
+            except ValueError:
+                continue
+            numeric_rate_params.append((tokens[2], tokens[3], initial_value))
 
     if observations is None or process_names is None or rates is None:
         raise WorkflowError(f"Cannot parse counting rates from {card}")
@@ -2140,6 +2264,22 @@ def counting_card_observation_signal_background(
         raise WorkflowError(f"Process/rate column mismatch in {card}")
     if not observations or len(rates) % len(observations) != 0:
         raise WorkflowError(f"Cannot map process columns to channels in {card}")
+
+    process_bins = next(
+        (row for row in reversed(bin_rows) if len(row) == len(rates)),
+        None,
+    )
+    if process_bins is None:
+        raise WorkflowError(f"Cannot parse process-bin row from {card}")
+
+    def nominal_rate_modifier(bin_name: str, process: str) -> float:
+        modifier = 1.0
+        for rate_bin, rate_process, initial_value in numeric_rate_params:
+            bin_matches = rate_bin == "*" or rate_bin == bin_name
+            process_matches = rate_process == "*" or rate_process == process
+            if bin_matches and process_matches:
+                modifier *= initial_value
+        return modifier
 
     nproc = len(rates) // len(observations)
     signals: List[float] = []
@@ -2149,11 +2289,16 @@ def counting_card_observation_signal_background(
         stop = start + nproc
         sig = 0.0
         bkg = 0.0
-        for process, rate in zip(process_names[start:stop], rates[start:stop]):
+        for bin_name, process, rate in zip(
+            process_bins[start:stop],
+            process_names[start:stop],
+            rates[start:stop],
+        ):
+            effective_rate = rate * nominal_rate_modifier(bin_name, process)
             if process == "sig":
-                sig += rate
+                sig += effective_rate
             else:
-                bkg += rate
+                bkg += effective_rate
         signals.append(sig)
         backgrounds.append(bkg)
     return observations, signals, backgrounds
@@ -2203,6 +2348,11 @@ def nominal_unconstrained_rhat(card: Path, lower: float, upper: float) -> float:
                 hi = mid
         return 0.5 * (lo + hi)
     return lower
+
+
+def physical_r_min(args: argparse.Namespace) -> float:
+    """Return the physical lower POI bound for final limits and standard diagnostics."""
+    return max(0.0, effective_r_min(args))
 
 
 def initial_impact_range(args: argparse.Namespace, card: Path) -> Tuple[float, float, float]:
@@ -2311,7 +2461,7 @@ def run_asymptotic(
             "combine", "-M", "AsymptoticLimits", str(card),
             "-m", format_mass_for_combine(mass),
             "--cminDefaultMinimizerStrategy", "0",
-            *range_args(args, card),
+            *explicit_range_args(physical_r_min(args), effective_r_max(args, card), card),
             "-n", f".{fit_tag}",
         ]
         if blind_expected:
@@ -2350,7 +2500,7 @@ def run_fitdiagnostics(
         "-m", format_mass_for_combine(mass),
         "--cminDefaultMinimizerStrategy", "0",
         "--setParameters", "r=0",
-        *range_args(args, card),
+        *explicit_range_args(physical_r_min(args), effective_r_max(args, card), card),
         "--saveNormalizations", "--saveShapes", "--saveWithUncertainties",
         "-n", name,
     ]
@@ -2831,6 +2981,14 @@ def run_combine(args: argparse.Namespace) -> None:
     require_command("combineTool.py")
     if args.task in {"impacts", "all"}:
         require_command("text2workspace.py")
+
+    if args.allow_negative_r and effective_r_min(args) < 0.0:
+        print(
+            "[WARNING] --allow-negative-r is diagnostic-only. "
+            "Negative r is applied only to impacts; AsymptoticLimits and "
+            "FitDiagnostics use the physical lower bound r>=0."
+        )
+
     for target in selected_targets(args.target):
         run_target(args, target)
 
@@ -2843,7 +3001,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="limit_workflow.py",
         formatter_class=argparse.RawTextHelpFormatter,
-        description="Standalone NIsoMuon Run-2/Run-3 datacard + Combine limit/impact workflow (20260826_0541).",
+        description="Standalone NIsoMuon Run-2/Run-3 datacard + Combine limit/impact workflow (20260826_0541). Use --target runs for Run2+Run3+full in one invocation.",
     )
     parser.add_argument("--stage", choices=("cards", "run", "all"), default="all")
     parser.add_argument("--target", type=canonical_target, default="run2")
@@ -3086,8 +3244,9 @@ def print_configuration(args: argparse.Namespace) -> None:
     print(f"[CONFIG] outputs={args.output_base}/{args.parameter}/{args.mode}")
     if args.allow_negative_r:
         print(
-            "[CONFIG] WARNING: negative internal r is enabled for a diagnostic fit; "
-            "do not use this setting for the final physical upper limit."
+            "[CONFIG] WARNING: a negative internal r was requested. "
+            "This is applied only to impacts; AsymptoticLimits and FitDiagnostics "
+            "remain in the physical range r>=0."
         )
     if args.parameter == "alpha":
         if args.alpha_internal_unit is None:
