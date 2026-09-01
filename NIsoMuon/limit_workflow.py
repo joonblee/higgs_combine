@@ -2464,6 +2464,84 @@ def clean_mass_outputs(outdir: Path, tag: str, label: str, task: str) -> None:
                 path.unlink()
 
 
+def _read_single_limit_json(
+    output: Path,
+    outdir: Path,
+    fit_tag: str,
+) -> Optional[Dict[str, Any]]:
+    # Collect one AsymptoticLimits ROOT file into a temporary JSON payload.
+    tmp_json = outdir / f"._adaptive_limit_check_{fit_tag}.json"
+    if tmp_json.exists():
+        tmp_json.unlink()
+
+    status = run_command(
+        [
+            "combineTool.py", "-M", "CollectLimits", str(output),
+            "-o", tmp_json.name,
+        ],
+        outdir,
+        allow_failure=True,
+    )
+    if status != 0 or not tmp_json.exists():
+        if tmp_json.exists():
+            tmp_json.unlink()
+        return None
+
+    try:
+        payload = json.loads(tmp_json.read_text())
+    except Exception:
+        return None
+    finally:
+        if tmp_json.exists():
+            tmp_json.unlink()
+
+    if not isinstance(payload, dict) or not payload:
+        return None
+
+    # One ROOT input should correspond to one mass point.
+    values = next(iter(payload.values()))
+    if not isinstance(values, dict):
+        return None
+    return values
+
+
+def _limit_range_status(
+    values: Optional[Mapping[str, Any]],
+    rmax: float,
+    threshold: float,
+    blind_expected: bool,
+) -> Tuple[bool, str]:
+    # Return (needs_expansion, reason).
+    #
+    # For a blind-expected run require all five expected quantiles.
+    # For the observed run only obs is needed because expected bands are
+    # collected from the separate --run blind job.
+    required = list(EXPECTED_LIMIT_KEYS) if blind_expected else ["obs"]
+
+    if values is None:
+        return True, "CollectLimits could not read the output"
+
+    missing = [
+        key for key in required
+        if not isinstance(values.get(key), (int, float))
+        or isinstance(values.get(key), bool)
+        or not math.isfinite(float(values.get(key)))
+    ]
+    if missing:
+        return True, "missing/non-finite quantile(s): " + ",".join(missing)
+
+    largest_key = max(required, key=lambda key: float(values[key]))
+    largest = float(values[largest_key])
+    if largest >= threshold * rmax:
+        return (
+            True,
+            f"{largest_key}={largest:.6g} is >= "
+            f"{threshold:.3g}*rMax={threshold*rmax:.6g}",
+        )
+
+    return False, f"{largest_key}={largest:.6g}"
+
+
 def run_asymptotic(
     args: argparse.Namespace,
     card: Path,
@@ -2476,24 +2554,100 @@ def run_asymptotic(
 
     def run_one(name_suffix: str, blind_expected: bool) -> Path:
         fit_tag = f"{tag}_M{label}{name_suffix}"
-        command = [
-            "combine", "-M", "AsymptoticLimits", str(card),
-            "-m", format_mass_for_combine(mass),
-            "--cminDefaultMinimizerStrategy", "0",
-            *explicit_range_args(physical_r_min(args), effective_r_max(args, card), card),
-            "-n", f".{fit_tag}",
-        ]
-        if blind_expected:
-            command.extend(["--run", "blind"])
-        run_command(command, outdir)
-        matches = sorted(
-            outdir.glob(f"higgsCombine.{fit_tag}.AsymptoticLimits.mH*.root")
-        )
-        if not matches:
+        rmax_cap = effective_r_max(args, card)
+        current_rmax = min(args.limit_r_start, rmax_cap)
+
+        if current_rmax <= physical_r_min(args):
             raise WorkflowError(
-                f"AsymptoticLimits output is missing for {target} M-{label} ({fit_tag})"
+                f"Adaptive limit rMax={current_rmax:.6g} is not above "
+                f"the physical rMin={physical_r_min(args):.6g}."
             )
-        return matches[-1]
+
+        attempt = 0
+        while True:
+            # Remove an earlier adaptive-attempt ROOT file with the same fit tag
+            # so a failed retry cannot accidentally reuse stale output.
+            for old_output in outdir.glob(
+                f"higgsCombine.{fit_tag}.AsymptoticLimits.mH*.root"
+            ):
+                old_output.unlink()
+
+            command = [
+                "combine", "-M", "AsymptoticLimits", str(card),
+                "-m", format_mass_for_combine(mass),
+                "--cminDefaultMinimizerStrategy", "1",
+                *explicit_range_args(
+                    physical_r_min(args), current_rmax, card
+                ),
+                "-n", f".{fit_tag}",
+            ]
+            if blind_expected:
+                command.extend(["--run", "blind"])
+
+            print(
+                f"[LIMIT-RANGE] {target} M-{label}: "
+                f"attempt={attempt+1}, rMax={current_rmax:.6g}, "
+                f"cap={rmax_cap:.6g}"
+            )
+
+            status = run_command(command, outdir, allow_failure=True)
+            matches = sorted(
+                outdir.glob(
+                    f"higgsCombine.{fit_tag}.AsymptoticLimits.mH*.root"
+                )
+            )
+
+            values: Optional[Dict[str, Any]] = None
+            reason = ""
+            needs_expansion = True
+
+            if status == 0 and matches:
+                values = _read_single_limit_json(
+                    matches[-1], outdir, fit_tag
+                )
+                needs_expansion, reason = _limit_range_status(
+                    values,
+                    current_rmax,
+                    args.limit_r_expand_threshold,
+                    blind_expected,
+                )
+            elif status != 0:
+                reason = f"Combine exited with status {status}"
+            else:
+                reason = "AsymptoticLimits ROOT output is missing"
+
+            if not needs_expansion and matches:
+                print(
+                    f"[LIMIT-RANGE] {target} M-{label}: "
+                    f"accepted rMax={current_rmax:.6g} ({reason})"
+                )
+                return matches[-1]
+
+            at_cap = current_rmax >= rmax_cap * (1.0 - 1.0e-12)
+            if at_cap:
+                raise WorkflowError(
+                    f"AsymptoticLimits for {target} M-{label} still requires "
+                    f"more range at the rMax cap={rmax_cap:.6g}: {reason}. "
+                    "Increase --r-max (or the corresponding default cap) and rerun."
+                )
+
+            next_rmax = min(
+                rmax_cap,
+                current_rmax * args.limit_r_expand_factor,
+            )
+            if next_rmax <= current_rmax * (1.0 + 1.0e-12):
+                raise WorkflowError(
+                    f"Could not expand AsymptoticLimits rMax for "
+                    f"{target} M-{label}: current={current_rmax:.6g}, "
+                    f"cap={rmax_cap:.6g}."
+                )
+
+            print(
+                f"[LIMIT-RANGE] {target} M-{label}: {reason}; "
+                f"retry with rMax={next_rmax:.6g}"
+            )
+            current_rmax = next_rmax
+            attempt += 1
 
     if args.mode == "blind":
         expected = run_one("", True)
@@ -3111,6 +3265,34 @@ def build_parser() -> argparse.ArgumentParser:
     combine.add_argument("--r-min", type=float, default=None)
     combine.add_argument("--r-max", type=float, default=None)
     combine.add_argument(
+        "--limit-r-start",
+        type=float,
+        default=10.0,
+        help=(
+            "Initial rMax used only by AsymptoticLimits. The range is "
+            "automatically expanded up to the existing effective --r-max cap. "
+            "Default: 10."
+        ),
+    )
+    combine.add_argument(
+        "--limit-r-expand-factor",
+        type=float,
+        default=2.0,
+        help=(
+            "Multiplicative rMax expansion factor used only by "
+            "AsymptoticLimits; default: 2."
+        ),
+    )
+    combine.add_argument(
+        "--limit-r-expand-threshold",
+        type=float,
+        default=0.80,
+        help=(
+            "Expand AsymptoticLimits rMax when a required limit quantile "
+            "is at or above this fraction of the current rMax; default: 0.80."
+        ),
+    )
+    combine.add_argument(
         "--allow-negative-r",
         action="store_true",
         help=(
@@ -3176,6 +3358,14 @@ def validate_args(args: argparse.Namespace) -> None:
         raise WorkflowError("--impact-parallel must be at least 1.")
     if args.impact_range_retries < 0:
         raise WorkflowError("--impact-range-retries must be non-negative.")
+    if args.limit_r_start <= 0.0:
+        raise WorkflowError("--limit-r-start must be positive.")
+    if args.limit_r_expand_factor <= 1.0:
+        raise WorkflowError("--limit-r-expand-factor must be larger than 1.")
+    if not (0.0 < args.limit_r_expand_threshold < 1.0):
+        raise WorkflowError(
+            "--limit-r-expand-threshold must be strictly between 0 and 1."
+        )
     if args.r_min is not None and args.r_min < 0.0 and not args.allow_negative_r:
         raise WorkflowError(
             "Negative --r-min is diagnostic only. Add --allow-negative-r explicitly."
