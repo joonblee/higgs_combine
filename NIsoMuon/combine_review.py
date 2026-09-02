@@ -799,8 +799,7 @@ def best_fit_values_from_multidimfit(root_path: Path, injected_r: float) -> Tupl
         tree.GetEntry(i)
         if "quantileExpected" in branch_names:
             quant = float(getattr(tree, "quantileExpected"))
-            # Best-fit entry convention used by Combine.
-            if quant >= 0.0:
+            if abs(quant + 1.0) > 1.0e-6:
                 continue
         rhat = float(getattr(tree, "r"))
         if not math.isfinite(rhat):
@@ -820,7 +819,6 @@ def best_fit_values_from_multidimfit(root_path: Path, injected_r: float) -> Tupl
                 sigma = candidate
         if sigma is not None:
             pulls.append((rhat - injected_r) / sigma)
-
     root_file.Close()
     return r_values, pulls
 
