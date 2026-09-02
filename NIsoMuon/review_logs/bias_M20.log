@@ -1,0 +1,72 @@
+[REVIEW CONFIG]
+{
+  "alpha_internal_unit": 8.005935406497654e-07,
+  "card": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-20_Run2Run3.txt",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_16_0_0",
+  "existing_expected_median_alpha95": 1.4510757924276998e-05,
+  "existing_expected_median_r95": 18.125,
+  "mass": 20.0,
+  "scram_arch": "el9_amd64_gcc13",
+  "target": "Run2Run3",
+  "tasks": [
+    "bias"
+  ]
+}
+
+========================================================================================
+[TASK] bias | target=Run2Run3 | M=20
+========================================================================================
+[WORKSPACE] reuse /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/workspace_Run2Run3_M20.root
+[BIAS] reuse completed fit for r=0: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasFit_Run2Run3_M20_r0.MultiDimFit.mH20.123456.root
+[BIAS] reuse completed fit for r=18.125: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasFit_Run2Run3_M20_r18p125.MultiDimFit.mH20.123456.root
+[BIAS] reuse generated toys for r=36.25: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasGen_Run2Run3_M20_r36p25.GenerateOnly.mH20.12345.root
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias && combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/workspace_Run2Run3_M20.root -m 20 -t 500 --toysFile /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasGen_Run2Run3_M20_r36p25.GenerateOnly.mH20.12345.root --algo singles --setParameters r=36.25 --rMin -2 --rMax 100 --setParameterRanges r=-2,100 -n .ReviewBiasFit_Run2Run3_M20_r36p25)
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Range of Parameter r To : (-2,100)
+Set Default Value of Parameter r To : 36.25
+Set Range of Parameter r To : (-2,100)
+Toy toy_1 not found in /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasGen_Run2Run3_M20_r36p25.GenerateOnly.mH20.12345.root. List follows:
+TFile**		/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasGen_Run2Run3_M20_r36p25.GenerateOnly.mH20.12345.root	
+ TFile*		/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasGen_Run2Run3_M20_r36p25.GenerateOnly.mH20.12345.root	
+  TDirectoryFile*		toys	toys
+  KEY: TDirectoryFile	toys;1	toys
+
+[BIAS SUMMARY]
+[
+  {
+    "fit_file": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasFit_Run2Run3_M20_r0.MultiDimFit.mH20.123456.root",
+    "injected_alpha": 0.0,
+    "injected_r": 0.0,
+    "mean_bias_r": 0.5076387798323687,
+    "mean_fitted_r": 0.5076387798323687,
+    "multiplier_of_existing_expected_r95": 0.0,
+    "n_best_fits_read": 994,
+    "n_toys_requested": 500,
+    "std_fitted_r": 4.878860690713983
+  },
+  {
+    "fit_file": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasFit_Run2Run3_M20_r18p125.MultiDimFit.mH20.123456.root",
+    "injected_alpha": 1.4510757924276998e-05,
+    "injected_r": 18.125,
+    "mean_bias_r": -6.606223382667931,
+    "mean_fitted_r": 11.518776617332069,
+    "multiplier_of_existing_expected_r95": 1.0,
+    "n_best_fits_read": 998,
+    "n_toys_requested": 500,
+    "std_fitted_r": 9.959658460741293
+  },
+  {
+    "fit_file": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/higgsCombine.ReviewBiasFit_Run2Run3_M20_r36p25.MultiDimFit.mH20.123456.root",
+    "injected_alpha": 2.9021515848553996e-05,
+    "injected_r": 36.25,
+    "multiplier_of_existing_expected_r95": 2.0,
+    "n_best_fits_read": 0,
+    "n_toys_requested": 500
+  }
+]
+[SAVED] /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20/bias/bias_summary_Run2Run3_M20.json
+
+[DONE] review outputs: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M20

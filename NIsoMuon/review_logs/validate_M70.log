@@ -1,0 +1,644 @@
+[REVIEW CONFIG]
+{
+  "alpha_internal_unit": 0.0004119195853095905,
+  "card": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-70_Run2Run3.txt",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_16_0_0",
+  "existing_expected_median_alpha95": 0.000605006890923461,
+  "existing_expected_median_r95": 1.46875,
+  "mass": 70.0,
+  "scram_arch": "el9_amd64_gcc13",
+  "target": "Run2Run3",
+  "tasks": [
+    "validate"
+  ]
+}
+
+========================================================================================
+[TASK] validate | target=Run2Run3 | M=70
+========================================================================================
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70 && /data6/Users/joonblee/higgs_combine/CMSSW_16_0_0/bin/el9_amd64_gcc13/ValidateDatacards.py /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-70_Run2Run3.txt --mass 70 --printLevel 3 --jsonFile /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/validation_M70.json)
+/cvmfs/cms.cern.ch/el9_amd64_gcc13/lcg/root/6.36.07-bd71f88d9cd20e5042c0ac03a7e23595/lib/cppyy/__init__.py:334: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources as pr
+[SetFlag] Changing value of flag "check-negative-bins-on-import" from 1 to 0
+[SetFlag] Changing value of flag "workspaces-use-clone" from 0 to 1
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2017
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2018
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2022
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2023
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix
+Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping checks on systematic shapes.
+================================
+=======Validation results=======
+================================
+>>>There were no warnings of type  'up/down templates vary the yield in the same direction'
+>>>There were no warnings of type  'up/down templates are identical'
+>>>There were no warnings of type  'At least one of the up/down systematic uncertainty templates is empty'
+>>>There were  64 warnings of type  'Uncertainty has normalisation effect of more than 10.0%'
+    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP there were  1  such warnings
+        In bin  bin_2016postVFP the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP there were  1  such warnings
+        In bin  bin_2016preVFP the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2017 there were  1  such warnings
+        In bin  bin_2017 the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2018 there were  1  such warnings
+        In bin  bin_2018 the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2022 there were  1  such warnings
+        In bin  bin_2022 the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE there were  1  such warnings
+        In bin  bin_2022EE the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2016postVFP there were  1  such warnings
+        In bin  bin_2016postVFP the affected processes are:  ["Others"]
+    For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2016preVFP there were  1  such warnings
+        In bin  bin_2016preVFP the affected processes are:  ["Others"]
+    For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2017 there were  1  such warnings
+        In bin  bin_2017 the affected processes are:  ["Others"]
+    For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2018 there were  1  such warnings
+        In bin  bin_2018 the affected processes are:  ["Others"]
+    For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2022 there were  1  such warnings
+        In bin  bin_2022 the affected processes are:  ["Others"]
+    For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2022EE there were  1  such warnings
+        In bin  bin_2022EE the affected processes are:  ["Others"]
+    For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2023 there were  1  such warnings
+        In bin  bin_2023 the affected processes are:  ["Others"]
+    For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2023BPix there were  1  such warnings
+        In bin  bin_2023BPix the affected processes are:  ["Others"]
+    For uncertainty CMS_NPS26009_MCstat_singleTop_BJetOS_2016postVFP there were  1  such warnings
+        In bin  bin_2016postVFP the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_MCstat_singleTop_BJetOS_2016preVFP there were  1  such warnings
+        In bin  bin_2016preVFP the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_MCstat_singleTop_BJetOS_2017 there were  1  such warnings
+        In bin  bin_2017 the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_MCstat_singleTop_BJetOS_2018 there were  1  such warnings
+        In bin  bin_2018 the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_MCstat_singleTop_BJetOS_2022 there were  1  such warnings
+        In bin  bin_2022 the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_MCstat_singleTop_BJetOS_2022EE there were  1  such warnings
+        In bin  bin_2022EE the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_MCstat_singleTop_BJetOS_2023 there were  1  such warnings
+        In bin  bin_2023 the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix there were  1  such warnings
+        In bin  bin_2023BPix the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_MCstat_ttbar_BJetOS_2016preVFP there were  1  such warnings
+        In bin  bin_2016preVFP the affected processes are:  ["tt"]
+    For uncertainty CMS_NPS26009_MCstat_ttbar_BJetOS_2022 there were  1  such warnings
+        In bin  bin_2022 the affected processes are:  ["tt"]
+    For uncertainty CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE there were  1  such warnings
+        In bin  bin_2022EE the affected processes are:  ["tt"]
+    For uncertainty CMS_NPS26009_MCstat_ttbar_BJetOS_2023 there were  1  such warnings
+        In bin  bin_2023 the affected processes are:  ["tt"]
+    For uncertainty CMS_NPS26009_MCstat_ttbar_BJetOS_2023BPix there were  1  such warnings
+        In bin  bin_2023BPix the affected processes are:  ["tt"]
+    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP there were  1  such warnings
+        In bin  bin_2016postVFP the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP there were  1  such warnings
+        In bin  bin_2016preVFP the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2017 there were  1  such warnings
+        In bin  bin_2017 the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2018 there were  1  such warnings
+        In bin  bin_2018 the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2022 there were  1  such warnings
+        In bin  bin_2022 the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2022EE there were  1  such warnings
+        In bin  bin_2022EE the affected processes are:  ["DY"]
+    For uncertainty CMS_NPS26009_QCDscale_fac_singleTop there were  1  such warnings
+        In bin  bin_2018 the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_QCDscale_ren_singleTop there were  6  such warnings
+        In bin  bin_2016postVFP the affected processes are:  ["ST"]
+        In bin  bin_2017 the affected processes are:  ["ST"]
+        In bin  bin_2018 the affected processes are:  ["ST"]
+        In bin  bin_2022 the affected processes are:  ["ST"]
+        In bin  bin_2023 the affected processes are:  ["ST"]
+        In bin  bin_2023BPix the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_btag_fixedWP_bc_correlated_13TeV there were  2  such warnings
+        In bin  bin_2016preVFP the affected processes are:  ["Others"]
+        In bin  bin_2017 the affected processes are:  ["Others"]
+    For uncertainty CMS_NPS26009_btag_fixedWP_bc_correlated_13p6TeV there were  4  such warnings
+        In bin  bin_2022 the affected processes are:  ["Others", "ST", "Zprime", "tt"]
+    For uncertainty CMS_NPS26009_pdf_NNPDF31 there were  2  such warnings
+        In bin  bin_2017 the affected processes are:  ["ST"]
+        In bin  bin_2023 the affected processes are:  ["ST"]
+    For uncertainty CMS_btag_fixedWP_bc_uncorrelated_2016preVFP there were  1  such warnings
+        In bin  bin_2016preVFP the affected processes are:  ["Others"]
+    For uncertainty CMS_eff_m_trigger_2022 there were  1  such warnings
+        In bin  bin_2022 the affected processes are:  ["Others"]
+    For uncertainty CMS_pileup_2016postVFP there were  1  such warnings
+        In bin  bin_2016postVFP the affected processes are:  ["ST"]
+    For uncertainty CMS_pileup_2016preVFP there were  1  such warnings
+        In bin  bin_2016preVFP the affected processes are:  ["ST"]
+    For uncertainty CMS_pileup_2017 there were  1  such warnings
+        In bin  bin_2017 the affected processes are:  ["Others"]
+    For uncertainty CMS_pileup_2022 there were  2  such warnings
+        In bin  bin_2022 the affected processes are:  ["Others", "ST"]
+    For uncertainty CMS_pileup_2022EE there were  1  such warnings
+        In bin  bin_2022EE the affected processes are:  ["ST"]
+    For uncertainty CMS_pileup_2023 there were  2  such warnings
+        In bin  bin_2023 the affected processes are:  ["Others", "ST"]
+    For uncertainty CMS_pileup_2023BPix there were  2  such warnings
+        In bin  bin_2023BPix the affected processes are:  ["Others", "ST"]
+    For uncertainty CMS_scale_m_2017 there were  1  such warnings
+        In bin  bin_2017 the affected processes are:  ["Others"]
+    For uncertainty QCDscale_ren_ttbar there were  3  such warnings
+        In bin  bin_2016postVFP the affected processes are:  ["tt"]
+        In bin  bin_2016preVFP the affected processes are:  ["tt"]
+        In bin  bin_2017 the affected processes are:  ["tt"]
+>>>There were no warnings of type  'Uncertainty probably has no genuine shape effect'
+>>>There were  2 warnings of type  'Empty process'
+    For bin bin_2023 there were  1  such warnings. The affected processes are:  ["DY"]
+    For bin bin_2023BPix there were  1  such warnings. The affected processes are:  ["DY"]
+>>>There were no warnings of type  'Bins of the template empty in background'
+>>>There were no warnings of type  'Histogram bin errors are not sqrt(sumw2), needed for accurate bin-by-bin uncertainties'
+>>>There were no warnings of type  'Bins of the background template have a relative bin error larger than 200.0%'
+>>>There were no alerts of type  'Small signal process'
+>>>There were no alerts of type  'Shape uncertainties with 1 bin only. You can consider replacing them with lnN'
+
+[VALIDATION JSON]
+{
+  "emptyProcessShape": {
+    "bin_2023": [
+      "DY"
+    ],
+    "bin_2023BPix": [
+      "DY"
+    ]
+  },
+  "largeNormEff": {
+    "CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP": {
+      "bin_2016postVFP": {
+        "DY": {
+          "value_d": 1e-06,
+          "value_u": 2.00574
+        }
+      }
+    },
+    "CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP": {
+      "bin_2016preVFP": {
+        "DY": {
+          "value_d": 0.0264693,
+          "value_u": 1.98407
+        }
+      }
+    },
+    "CMS_NPS26009_LightJetStat_DY_BJetOS_2017": {
+      "bin_2017": {
+        "DY": {
+          "value_d": 0.0195898,
+          "value_u": 1.98945
+        }
+      }
+    },
+    "CMS_NPS26009_LightJetStat_DY_BJetOS_2018": {
+      "bin_2018": {
+        "DY": {
+          "value_d": 0.0173491,
+          "value_u": 1.99018
+        }
+      }
+    },
+    "CMS_NPS26009_LightJetStat_DY_BJetOS_2022": {
+      "bin_2022": {
+        "DY": {
+          "value_d": 1e-06,
+          "value_u": 2.97283
+        }
+      }
+    },
+    "CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE": {
+      "bin_2022EE": {
+        "DY": {
+          "value_d": 1e-06,
+          "value_u": 2.5167
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_other_BJetOS_2016postVFP": {
+      "bin_2016postVFP": {
+        "Others": {
+          "value_d": 0.2434,
+          "value_u": 1.7566
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_other_BJetOS_2016preVFP": {
+      "bin_2016preVFP": {
+        "Others": {
+          "value_d": 1e-06,
+          "value_u": 2.60938
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_other_BJetOS_2017": {
+      "bin_2017": {
+        "Others": {
+          "value_d": 1e-06,
+          "value_u": 16.8365
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_other_BJetOS_2018": {
+      "bin_2018": {
+        "Others": {
+          "value_d": 0.499554,
+          "value_u": 1.50045
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_other_BJetOS_2022": {
+      "bin_2022": {
+        "Others": {
+          "value_d": 1e-06,
+          "value_u": 5.88395
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_other_BJetOS_2022EE": {
+      "bin_2022EE": {
+        "Others": {
+          "value_d": 0.672113,
+          "value_u": 1.32789
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_other_BJetOS_2023": {
+      "bin_2023": {
+        "Others": {
+          "value_d": 0.71983,
+          "value_u": 1.28017
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_other_BJetOS_2023BPix": {
+      "bin_2023BPix": {
+        "Others": {
+          "value_d": 0.479368,
+          "value_u": 1.52063
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_singleTop_BJetOS_2016postVFP": {
+      "bin_2016postVFP": {
+        "ST": {
+          "value_d": 0.469415,
+          "value_u": 1.53059
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_singleTop_BJetOS_2016preVFP": {
+      "bin_2016preVFP": {
+        "ST": {
+          "value_d": 0.471981,
+          "value_u": 1.52802
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_singleTop_BJetOS_2017": {
+      "bin_2017": {
+        "ST": {
+          "value_d": 0.697037,
+          "value_u": 1.30296
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_singleTop_BJetOS_2018": {
+      "bin_2018": {
+        "ST": {
+          "value_d": 0.71004,
+          "value_u": 1.28996
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_singleTop_BJetOS_2022": {
+      "bin_2022": {
+        "ST": {
+          "value_d": 1e-06,
+          "value_u": 2.0
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_singleTop_BJetOS_2022EE": {
+      "bin_2022EE": {
+        "ST": {
+          "value_d": 0.221368,
+          "value_u": 1.77863
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_singleTop_BJetOS_2023": {
+      "bin_2023": {
+        "ST": {
+          "value_d": 0.396916,
+          "value_u": 1.60308
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix": {
+      "bin_2023BPix": {
+        "ST": {
+          "value_d": 0.258916,
+          "value_u": 1.74108
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_ttbar_BJetOS_2016preVFP": {
+      "bin_2016preVFP": {
+        "tt": {
+          "value_d": 0.898106,
+          "value_u": 1.10189
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_ttbar_BJetOS_2022": {
+      "bin_2022": {
+        "tt": {
+          "value_d": 0.862756,
+          "value_u": 1.13724
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE": {
+      "bin_2022EE": {
+        "tt": {
+          "value_d": 0.896492,
+          "value_u": 1.10351
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_ttbar_BJetOS_2023": {
+      "bin_2023": {
+        "tt": {
+          "value_d": 0.878671,
+          "value_u": 1.12133
+        }
+      }
+    },
+    "CMS_NPS26009_MCstat_ttbar_BJetOS_2023BPix": {
+      "bin_2023BPix": {
+        "tt": {
+          "value_d": 0.808005,
+          "value_u": 1.192
+        }
+      }
+    },
+    "CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP": {
+      "bin_2016postVFP": {
+        "DY": {
+          "value_d": 0.89345,
+          "value_u": 1.10655
+        }
+      }
+    },
+    "CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP": {
+      "bin_2016preVFP": {
+        "DY": {
+          "value_d": 0.740338,
+          "value_u": 1.25966
+        }
+      }
+    },
+    "CMS_NPS26009_NFStat_DY_BJetOS_2017": {
+      "bin_2017": {
+        "DY": {
+          "value_d": 0.827915,
+          "value_u": 1.17208
+        }
+      }
+    },
+    "CMS_NPS26009_NFStat_DY_BJetOS_2018": {
+      "bin_2018": {
+        "DY": {
+          "value_d": 0.839375,
+          "value_u": 1.16062
+        }
+      }
+    },
+    "CMS_NPS26009_NFStat_DY_BJetOS_2022": {
+      "bin_2022": {
+        "DY": {
+          "value_d": 1e-06,
+          "value_u": 2.12494
+        }
+      }
+    },
+    "CMS_NPS26009_NFStat_DY_BJetOS_2022EE": {
+      "bin_2022EE": {
+        "DY": {
+          "value_d": 0.65425,
+          "value_u": 1.34575
+        }
+      }
+    },
+    "CMS_NPS26009_QCDscale_fac_singleTop": {
+      "bin_2018": {
+        "ST": {
+          "value_d": 1.04474,
+          "value_u": 0.877282
+        }
+      }
+    },
+    "CMS_NPS26009_QCDscale_ren_singleTop": {
+      "bin_2016postVFP": {
+        "ST": {
+          "value_d": 1.15839,
+          "value_u": 0.874621
+        }
+      },
+      "bin_2017": {
+        "ST": {
+          "value_d": 1.13408,
+          "value_u": 0.875379
+        }
+      },
+      "bin_2018": {
+        "ST": {
+          "value_d": 1.09005,
+          "value_u": 0.844007
+        }
+      },
+      "bin_2022": {
+        "ST": {
+          "value_d": 1.21869,
+          "value_u": 0.893799
+        }
+      },
+      "bin_2023": {
+        "ST": {
+          "value_d": 1.17182,
+          "value_u": 0.882023
+        }
+      },
+      "bin_2023BPix": {
+        "ST": {
+          "value_d": 1.21869,
+          "value_u": 0.821869
+        }
+      }
+    },
+    "CMS_NPS26009_btag_fixedWP_bc_correlated_13TeV": {
+      "bin_2016preVFP": {
+        "Others": {
+          "value_d": 0.853557,
+          "value_u": 1.14644
+        }
+      },
+      "bin_2017": {
+        "Others": {
+          "value_d": 1.24425,
+          "value_u": 0.755754
+        }
+      }
+    },
+    "CMS_NPS26009_btag_fixedWP_bc_correlated_13p6TeV": {
+      "bin_2022": {
+        "Others": {
+          "value_d": 0.884274,
+          "value_u": 1.11573
+        },
+        "ST": {
+          "value_d": 0.753768,
+          "value_u": 1.24623
+        },
+        "Zprime": {
+          "value_d": 0.834772,
+          "value_u": 1.14508
+        },
+        "tt": {
+          "value_d": 0.893324,
+          "value_u": 1.10668
+        }
+      }
+    },
+    "CMS_NPS26009_pdf_NNPDF31": {
+      "bin_2017": {
+        "ST": {
+          "value_d": 0.861988,
+          "value_u": 1.13801
+        }
+      },
+      "bin_2023": {
+        "ST": {
+          "value_d": 0.626665,
+          "value_u": 1.37333
+        }
+      }
+    },
+    "CMS_btag_fixedWP_bc_uncorrelated_2016preVFP": {
+      "bin_2016preVFP": {
+        "Others": {
+          "value_d": 0.862446,
+          "value_u": 1.13755
+        }
+      }
+    },
+    "CMS_eff_m_trigger_2022": {
+      "bin_2022": {
+        "Others": {
+          "value_d": 0.865215,
+          "value_u": 1.13479
+        }
+      }
+    },
+    "CMS_pileup_2016postVFP": {
+      "bin_2016postVFP": {
+        "ST": {
+          "value_d": 1.10116,
+          "value_u": 0.895012
+        }
+      }
+    },
+    "CMS_pileup_2016preVFP": {
+      "bin_2016preVFP": {
+        "ST": {
+          "value_d": 1.11844,
+          "value_u": 0.872506
+        }
+      }
+    },
+    "CMS_pileup_2017": {
+      "bin_2017": {
+        "Others": {
+          "value_d": 1e-06,
+          "value_u": 8.75732
+        }
+      }
+    },
+    "CMS_pileup_2022": {
+      "bin_2022": {
+        "Others": {
+          "value_d": 2.13747,
+          "value_u": 1e-06
+        },
+        "ST": {
+          "value_d": 1.23571,
+          "value_u": 0.770068
+        }
+      }
+    },
+    "CMS_pileup_2022EE": {
+      "bin_2022EE": {
+        "ST": {
+          "value_d": 0.667655,
+          "value_u": 1.27672
+        }
+      }
+    },
+    "CMS_pileup_2023": {
+      "bin_2023": {
+        "Others": {
+          "value_d": 0.941655,
+          "value_u": 1.12341
+        },
+        "ST": {
+          "value_d": 1.12486,
+          "value_u": 0.878778
+        }
+      }
+    },
+    "CMS_pileup_2023BPix": {
+      "bin_2023BPix": {
+        "Others": {
+          "value_d": 1.1243,
+          "value_u": 0.893691
+        },
+        "ST": {
+          "value_d": 1.19072,
+          "value_u": 0.827837
+        }
+      }
+    },
+    "CMS_scale_m_2017": {
+      "bin_2017": {
+        "Others": {
+          "value_d": 1.0,
+          "value_u": 1e-06
+        }
+      }
+    },
+    "QCDscale_ren_ttbar": {
+      "bin_2016postVFP": {
+        "tt": {
+          "value_d": 1.1166,
+          "value_u": 0.899698
+        }
+      },
+      "bin_2016preVFP": {
+        "tt": {
+          "value_d": 1.12675,
+          "value_u": 0.893752
+        }
+      },
+      "bin_2017": {
+        "tt": {
+          "value_d": 1.12075,
+          "value_u": 0.897431
+        }
+      }
+    }
+  }
+}
+
+[SAVED] /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/validation_M70.json
+[SAVED] /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/validation_M70.log
+
+[DONE] review outputs: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70

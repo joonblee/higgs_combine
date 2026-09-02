@@ -1,0 +1,353 @@
+[REVIEW CONFIG]
+{
+  "alpha_internal_unit": 0.0004119195853095905,
+  "card": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-70_Run2Run3.txt",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_16_0_0",
+  "existing_expected_median_alpha95": 0.000605006890923461,
+  "existing_expected_median_r95": 1.46875,
+  "mass": 70.0,
+  "scram_arch": "el9_amd64_gcc13",
+  "target": "Run2Run3",
+  "tasks": [
+    "hybrid"
+  ]
+}
+
+========================================================================================
+[TASK] hybrid | target=Run2Run3 | M=70
+========================================================================================
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70 && text2workspace.py /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-70_Run2Run3.txt -m 70 -o workspace_Run2Run3_M70.root)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70 && combine -M GenerateOnly /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --saveToys -n .ReviewAsimov_Run2Run3_M70)
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is GenerateOnly
+[HYBRID GRID] asymptotic exp0 r95=1.46875; points=29; range=[0.29375, 4.40625]; toys/point=500; parallel=29
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 0.440625 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12347 -n .ReviewHybridGrid_Run2Run3_M70_p001)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 0.5875 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12348 -n .ReviewHybridGrid_Run2Run3_M70_p002)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 0.29375 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12346 -n .ReviewHybridGrid_Run2Run3_M70_p000)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 0.734375 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12349 -n .ReviewHybridGrid_Run2Run3_M70_p003)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 0.88125 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12350 -n .ReviewHybridGrid_Run2Run3_M70_p004)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 1.028125 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12351 -n .ReviewHybridGrid_Run2Run3_M70_p005)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 1.175 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12352 -n .ReviewHybridGrid_Run2Run3_M70_p006)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 1.46875 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12354 -n .ReviewHybridGrid_Run2Run3_M70_p008)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 1.321875 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12353 -n .ReviewHybridGrid_Run2Run3_M70_p007)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 1.615625 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12355 -n .ReviewHybridGrid_Run2Run3_M70_p009)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 1.7625 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12356 -n .ReviewHybridGrid_Run2Run3_M70_p010)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 1.909375 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12357 -n .ReviewHybridGrid_Run2Run3_M70_p011)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 2.05625 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12358 -n .ReviewHybridGrid_Run2Run3_M70_p012)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 2.203125 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12359 -n .ReviewHybridGrid_Run2Run3_M70_p013)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 2.35 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12360 -n .ReviewHybridGrid_Run2Run3_M70_p014)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 2.496875 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12361 -n .ReviewHybridGrid_Run2Run3_M70_p015)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 2.64375 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12362 -n .ReviewHybridGrid_Run2Run3_M70_p016)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 2.790625 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12363 -n .ReviewHybridGrid_Run2Run3_M70_p017)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 2.9375 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12364 -n .ReviewHybridGrid_Run2Run3_M70_p018)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 3.23125 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12366 -n .ReviewHybridGrid_Run2Run3_M70_p020)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 3.084375 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12365 -n .ReviewHybridGrid_Run2Run3_M70_p019)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 3.378125 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12367 -n .ReviewHybridGrid_Run2Run3_M70_p021)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 3.525 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12368 -n .ReviewHybridGrid_Run2Run3_M70_p022)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 3.671875 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12369 -n .ReviewHybridGrid_Run2Run3_M70_p023)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 3.81875 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12370 -n .ReviewHybridGrid_Run2Run3_M70_p024)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 3.965625 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12371 -n .ReviewHybridGrid_Run2Run3_M70_p025)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 4.1125 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12372 -n .ReviewHybridGrid_Run2Run3_M70_p026)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 4.259375 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12373 -n .ReviewHybridGrid_Run2Run3_M70_p027)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --singlePoint 4.40625 --saveHybridResult --saveToys --clsAcc 0 -T 500 -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 -s 12374 -n .ReviewHybridGrid_Run2Run3_M70_p028)
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12358
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12365
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12350
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12351
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12370
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12368
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12347
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12353
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12354
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12373
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12359
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12355
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12363
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12374
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12346
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12349
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12357
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12371
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12369
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12364
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12360
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12352
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12366
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12367
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12362
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+>>> Random number generator seed is 12372
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12361
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12348
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 12356
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+[WARNING] Minimization finished with status 1 (covariance matrix forced positive definite), this could indicate a problem with the minimum!
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0.705056 +/- 0.0509401
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0.734756 +/- 0.0585251
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0.337349 +/- 0.0353441
+
+ -- Hybrid New -- 
+CLs = 0.206044 +/- 0.0246585
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0.743243 +/- 0.0667223
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0.00925926 +/- 0.00536461
+
+ -- Hybrid New -- 
+CLs = 0.696667 +/- 0.0627697
+
+ -- Hybrid New -- 
+CLs = 0.0331325 +/- 0.0101017
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0.00986842 +/- 0.00572446
+
+ -- Hybrid New -- 
+CLs = 0.45625 +/- 0.0441157
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0.0106383 +/- 0.00532594
+
+ -- Hybrid New -- 
+CLs = 0.152597 +/- 0.0237698
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0.00304878 +/- 0.00305212
+
+ -- Hybrid New -- 
+CLs = 0.09375 +/- 0.0177466
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0 +/- 0
+
+ -- Hybrid New -- 
+CLs = 0.0416667 +/- 0.0117662
+
+ -- Hybrid New -- 
+CLs = 0.480337 +/- 0.040428
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70 && hadd -f /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid_Run2Run3_M70.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p000.HybridNew.mH70.12346.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p001.HybridNew.mH70.12347.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p002.HybridNew.mH70.12348.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p003.HybridNew.mH70.12349.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p004.HybridNew.mH70.12350.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p005.HybridNew.mH70.12351.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p006.HybridNew.mH70.12352.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p007.HybridNew.mH70.12353.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p008.HybridNew.mH70.12354.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p009.HybridNew.mH70.12355.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p010.HybridNew.mH70.12356.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p011.HybridNew.mH70.12357.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p012.HybridNew.mH70.12358.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p013.HybridNew.mH70.12359.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p014.HybridNew.mH70.12360.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p015.HybridNew.mH70.12361.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p016.HybridNew.mH70.12362.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p017.HybridNew.mH70.12363.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p018.HybridNew.mH70.12364.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p019.HybridNew.mH70.12365.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p020.HybridNew.mH70.12366.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p021.HybridNew.mH70.12367.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p022.HybridNew.mH70.12368.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p023.HybridNew.mH70.12369.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p024.HybridNew.mH70.12370.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p025.HybridNew.mH70.12371.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p026.HybridNew.mH70.12372.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p027.HybridNew.mH70.12373.root /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p028.HybridNew.mH70.12374.root)
+Info in <hadd>: target file: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid_Run2Run3_M70.root
+Info in <hadd>: compression setting for all output: 101
+hadd Source file 1: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p000.HybridNew.mH70.12346.root
+hadd Source file 2: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p001.HybridNew.mH70.12347.root
+hadd Source file 3: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p002.HybridNew.mH70.12348.root
+hadd Source file 4: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p003.HybridNew.mH70.12349.root
+hadd Source file 5: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p004.HybridNew.mH70.12350.root
+hadd Source file 6: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p005.HybridNew.mH70.12351.root
+hadd Source file 7: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p006.HybridNew.mH70.12352.root
+hadd Source file 8: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p007.HybridNew.mH70.12353.root
+hadd Source file 9: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p008.HybridNew.mH70.12354.root
+hadd Source file 10: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p009.HybridNew.mH70.12355.root
+hadd Source file 11: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p010.HybridNew.mH70.12356.root
+hadd Source file 12: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p011.HybridNew.mH70.12357.root
+hadd Source file 13: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p012.HybridNew.mH70.12358.root
+hadd Source file 14: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p013.HybridNew.mH70.12359.root
+hadd Source file 15: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p014.HybridNew.mH70.12360.root
+hadd Source file 16: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p015.HybridNew.mH70.12361.root
+hadd Source file 17: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p016.HybridNew.mH70.12362.root
+hadd Source file 18: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p017.HybridNew.mH70.12363.root
+hadd Source file 19: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p018.HybridNew.mH70.12364.root
+hadd Source file 20: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p019.HybridNew.mH70.12365.root
+hadd Source file 21: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p020.HybridNew.mH70.12366.root
+hadd Source file 22: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p021.HybridNew.mH70.12367.root
+hadd Source file 23: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p022.HybridNew.mH70.12368.root
+hadd Source file 24: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p023.HybridNew.mH70.12369.root
+hadd Source file 25: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p024.HybridNew.mH70.12370.root
+hadd Source file 26: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p025.HybridNew.mH70.12371.root
+hadd Source file 27: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p026.HybridNew.mH70.12372.root
+hadd Source file 28: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p027.HybridNew.mH70.12373.root
+hadd Source file 29: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid/higgsCombine.ReviewHybridGrid_Run2Run3_M70_p028.HybridNew.mH70.12374.root
+hadd Target path: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid_Run2Run3_M70.root:/
+hadd Target path: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid_Run2Run3_M70.root:/toys
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70 && combine -M HybridNew /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --LHCmode LHC-limits --readHybridResults --grid=/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_grid_Run2Run3_M70.root --noUpdateGrid -D /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/higgsCombine.ReviewAsimov_Run2Run3_M70.GenerateOnly.mH70.123456.root:toys/toy_asimov --rMin 0 --rMax 100 --plot=/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_cls_scan_Run2Run3_M70.png -n .ReviewHybridAsimovLimit_Run2Run3_M70)
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> using the Profile Likelihood test statistic modified for upper limits (Q_LHC)
+>>> Method used is HybridNew
+Info in <TCanvas::Print>: png file /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_cls_scan_Run2Run3_M70.png has been created
+
+ -- Hybrid New -- 
+Limit: r < 1.7435 +/- 0.0295071 @ 95% CL
+
+[HYBRID COMPARISON]
+{
+  "alpha_internal_unit": 0.0004119195853095905,
+  "asymptotic_expected_median_alpha95": 0.000605006890923461,
+  "comparison_type": "HybridNew CLs limit on pre-fit B-only Asimov dataset vs AsymptoticLimits exp0",
+  "existing_asymptotic_expected_median_r95": 1.46875,
+  "hybrid_asimov_alpha95": 0.00071818229179092,
+  "hybrid_asimov_r95": 1.743501201214185,
+  "hybrid_grid_points": 29,
+  "hybrid_grid_r_max": 4.40625,
+  "hybrid_grid_r_min": 0.29375,
+  "hybrid_over_asymptotic": 1.1870646476351898,
+  "hybrid_parallel_jobs": 29,
+  "hybrid_toys_per_grid_point": 500,
+  "mass": 70.0,
+  "target": "Run2Run3"
+}
+[SAVED] /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_comparison_M70.json
+[SAVED] /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/hybrid_cls_scan_Run2Run3_M70.png
+
+[DONE] review outputs: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70

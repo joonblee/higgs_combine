@@ -1,0 +1,62 @@
+[REVIEW CONFIG]
+{
+  "alpha_internal_unit": 0.0004119195853095905,
+  "card": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-70_Run2Run3.txt",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_16_0_0",
+  "existing_expected_median_alpha95": 0.000605006890923461,
+  "existing_expected_median_r95": 1.46875,
+  "mass": 70.0,
+  "scram_arch": "el9_amd64_gcc13",
+  "target": "Run2Run3",
+  "tasks": [
+    "bias"
+  ]
+}
+
+========================================================================================
+[TASK] bias | target=Run2Run3 | M=70
+========================================================================================
+[WORKSPACE] reuse /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/workspace_Run2Run3_M70.root
+[BIAS] reuse completed fit for r=0: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/bias/higgsCombine.ReviewBiasFit_Run2Run3_M70_r0.MultiDimFit.mH70.123456.root
+[BIAS] reuse completed fit for r=1.46875: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/bias/higgsCombine.ReviewBiasFit_Run2Run3_M70_r1p46875.MultiDimFit.mH70.123456.root
+[BIAS] reuse completed fit for r=2.9375: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/bias/higgsCombine.ReviewBiasFit_Run2Run3_M70_r2p9375.MultiDimFit.mH70.123456.root
+
+[BIAS SUMMARY]
+[
+  {
+    "fit_file": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/bias/higgsCombine.ReviewBiasFit_Run2Run3_M70_r0.MultiDimFit.mH70.123456.root",
+    "injected_alpha": 0.0,
+    "injected_r": 0.0,
+    "mean_bias_r": -0.2935006896258264,
+    "mean_fitted_r": -0.2935006896258264,
+    "multiplier_of_existing_expected_r95": 0.0,
+    "n_best_fits_read": 992,
+    "n_toys_requested": 500,
+    "std_fitted_r": 0.7509339195468805
+  },
+  {
+    "fit_file": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/bias/higgsCombine.ReviewBiasFit_Run2Run3_M70_r1p46875.MultiDimFit.mH70.123456.root",
+    "injected_alpha": 0.000605006890923461,
+    "injected_r": 1.46875,
+    "mean_bias_r": -0.2532201236716636,
+    "mean_fitted_r": 1.2155298763283364,
+    "multiplier_of_existing_expected_r95": 1.0,
+    "n_best_fits_read": 992,
+    "n_toys_requested": 500,
+    "std_fitted_r": 0.8299778563342828
+  },
+  {
+    "fit_file": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/bias/higgsCombine.ReviewBiasFit_Run2Run3_M70_r2p9375.MultiDimFit.mH70.123456.root",
+    "injected_alpha": 0.001210013781846922,
+    "injected_r": 2.9375,
+    "mean_bias_r": -0.30104409695822554,
+    "mean_fitted_r": 2.6364559030417745,
+    "multiplier_of_existing_expected_r95": 2.0,
+    "n_best_fits_read": 984,
+    "n_toys_requested": 500,
+    "std_fitted_r": 0.9137691645174466
+  }
+]
+[SAVED] /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70/bias/bias_summary_Run2Run3_M70.json
+
+[DONE] review outputs: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/Run2Run3/M70
