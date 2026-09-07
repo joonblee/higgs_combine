@@ -3,8 +3,8 @@
   "alpha_internal_unit": 8.005935406497654e-07,
   "card": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-20_Run2Run3.txt",
   "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_16_0_0",
-  "existing_expected_median_alpha95": 1.4510757924276998e-05,
-  "existing_expected_median_r95": 18.125,
+  "existing_expected_median_alpha95": 1.2409199880071364e-05,
+  "existing_expected_median_r95": 15.5,
   "mass": 20.0,
   "scram_arch": "el9_amd64_gcc13",
   "target": "Run2Run3",
@@ -21,6 +21,14 @@
   import pkg_resources as pr
 [SetFlag] Changing value of flag "check-negative-bins-on-import" from 1 to 0
 [SetFlag] Changing value of flag "workspaces-use-clone" from 0 to 1
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2017
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2018
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2022
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2022EE
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2023
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2023BPix
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2017
@@ -36,23 +44,7 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
 >>>There were no warnings of type  'up/down templates vary the yield in the same direction'
 >>>There were no warnings of type  'up/down templates are identical'
 >>>There were no warnings of type  'At least one of the up/down systematic uncertainty templates is empty'
->>>There were  36 warnings of type  'Uncertainty has normalisation effect of more than 10.0%'
-    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP there were  1  such warnings
-        In bin  bin_2016postVFP the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP there were  1  such warnings
-        In bin  bin_2016preVFP the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2017 there were  1  such warnings
-        In bin  bin_2017 the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2018 there were  1  such warnings
-        In bin  bin_2018 the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2022 there were  1  such warnings
-        In bin  bin_2022 the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE there were  1  such warnings
-        In bin  bin_2022EE the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2023 there were  1  such warnings
-        In bin  bin_2023 the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix there were  1  such warnings
-        In bin  bin_2023BPix the affected processes are:  ["DY"]
+>>>There were  29 warnings of type  'Uncertainty has normalisation effect of more than 10.0%'
     For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2016postVFP there were  1  such warnings
         In bin  bin_2016postVFP the affected processes are:  ["Others"]
     For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2016preVFP there were  1  such warnings
@@ -77,24 +69,24 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         In bin  bin_2023 the affected processes are:  ["ST"]
     For uncertainty CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix there were  1  such warnings
         In bin  bin_2023BPix the affected processes are:  ["ST"]
-    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP there were  1  such warnings
-        In bin  bin_2016postVFP the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP there were  1  such warnings
-        In bin  bin_2016preVFP the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2017 there were  1  such warnings
+    For uncertainty CMS_NPS26009_NFModel_DY_BJetOS_13TeV there were  1  such warnings
         In bin  bin_2017 the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2018 there were  1  such warnings
-        In bin  bin_2018 the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2022 there were  1  such warnings
-        In bin  bin_2022 the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2022EE there were  1  such warnings
+    For uncertainty CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV there were  3  such warnings
         In bin  bin_2022EE the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2023 there were  1  such warnings
         In bin  bin_2023 the affected processes are:  ["DY"]
-    For uncertainty CMS_NPS26009_NFStat_DY_BJetOS_2023BPix there were  1  such warnings
         In bin  bin_2023BPix the affected processes are:  ["DY"]
     For uncertainty CMS_NPS26009_QCDscale_ren_singleTop there were  1  such warnings
         In bin  bin_2023BPix the affected processes are:  ["ST"]
+    For uncertainty CMS_NPS26009_bckgNorm_QCD_BJetOS_2016preVFP there were  1  such warnings
+        In bin  bin_2016preVFP the affected processes are:  ["QCD"]
+    For uncertainty CMS_NPS26009_bckgNorm_QCD_BJetOS_2017 there were  1  such warnings
+        In bin  bin_2017 the affected processes are:  ["QCD"]
+    For uncertainty CMS_NPS26009_bckgNorm_QCD_BJetOS_2022 there were  1  such warnings
+        In bin  bin_2022 the affected processes are:  ["QCD"]
+    For uncertainty CMS_NPS26009_bckgNorm_QCD_BJetOS_2023 there were  1  such warnings
+        In bin  bin_2023 the affected processes are:  ["QCD"]
+    For uncertainty CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix there were  1  such warnings
+        In bin  bin_2023BPix the affected processes are:  ["QCD"]
     For uncertainty CMS_pileup_2017 there were  1  such warnings
         In bin  bin_2017 the affected processes are:  ["Others"]
     For uncertainty CMS_pileup_2022EE there were  2  such warnings
@@ -116,70 +108,6 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
 [VALIDATION JSON]
 {
   "largeNormEff": {
-    "CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP": {
-      "bin_2016postVFP": {
-        "DY": {
-          "value_d": 0.593408,
-          "value_u": 1.41079
-        }
-      }
-    },
-    "CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP": {
-      "bin_2016preVFP": {
-        "DY": {
-          "value_d": 0.573508,
-          "value_u": 1.4318
-        }
-      }
-    },
-    "CMS_NPS26009_LightJetStat_DY_BJetOS_2017": {
-      "bin_2017": {
-        "DY": {
-          "value_d": 0.740279,
-          "value_u": 1.25972
-        }
-      }
-    },
-    "CMS_NPS26009_LightJetStat_DY_BJetOS_2018": {
-      "bin_2018": {
-        "DY": {
-          "value_d": 0.774911,
-          "value_u": 1.22697
-        }
-      }
-    },
-    "CMS_NPS26009_LightJetStat_DY_BJetOS_2022": {
-      "bin_2022": {
-        "DY": {
-          "value_d": 0.312676,
-          "value_u": 1.72033
-        }
-      }
-    },
-    "CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE": {
-      "bin_2022EE": {
-        "DY": {
-          "value_d": 0.593039,
-          "value_u": 1.41834
-        }
-      }
-    },
-    "CMS_NPS26009_LightJetStat_DY_BJetOS_2023": {
-      "bin_2023": {
-        "DY": {
-          "value_d": 0.514336,
-          "value_u": 1.48936
-        }
-      }
-    },
-    "CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix": {
-      "bin_2023BPix": {
-        "DY": {
-          "value_d": 0.391627,
-          "value_u": 1.62537
-        }
-      }
-    },
     "CMS_NPS26009_MCstat_other_BJetOS_2016postVFP": {
       "bin_2016postVFP": {
         "Others": {
@@ -276,67 +204,31 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         }
       }
     },
-    "CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP": {
-      "bin_2016postVFP": {
-        "DY": {
-          "value_d": 0.89345,
-          "value_u": 1.10655
-        }
-      }
-    },
-    "CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP": {
-      "bin_2016preVFP": {
-        "DY": {
-          "value_d": 0.740338,
-          "value_u": 1.25966
-        }
-      }
-    },
-    "CMS_NPS26009_NFStat_DY_BJetOS_2017": {
+    "CMS_NPS26009_NFModel_DY_BJetOS_13TeV": {
       "bin_2017": {
         "DY": {
-          "value_d": 0.827915,
-          "value_u": 1.17208
+          "value_d": 0.75534,
+          "value_u": 1.24466
         }
       }
     },
-    "CMS_NPS26009_NFStat_DY_BJetOS_2018": {
-      "bin_2018": {
-        "DY": {
-          "value_d": 0.839375,
-          "value_u": 1.16062
-        }
-      }
-    },
-    "CMS_NPS26009_NFStat_DY_BJetOS_2022": {
-      "bin_2022": {
-        "DY": {
-          "value_d": 1e-06,
-          "value_u": 2.12494
-        }
-      }
-    },
-    "CMS_NPS26009_NFStat_DY_BJetOS_2022EE": {
+    "CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV": {
       "bin_2022EE": {
         "DY": {
-          "value_d": 0.65425,
-          "value_u": 1.34575
+          "value_d": 0.826072,
+          "value_u": 1.17393
         }
-      }
-    },
-    "CMS_NPS26009_NFStat_DY_BJetOS_2023": {
+      },
       "bin_2023": {
         "DY": {
-          "value_d": 0.892757,
-          "value_u": 1.10724
+          "value_d": 0.811175,
+          "value_u": 1.18882
         }
-      }
-    },
-    "CMS_NPS26009_NFStat_DY_BJetOS_2023BPix": {
+      },
       "bin_2023BPix": {
         "DY": {
-          "value_d": 0.703318,
-          "value_u": 1.29668
+          "value_d": 0.75872,
+          "value_u": 1.24128
         }
       }
     },
@@ -345,6 +237,46 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         "ST": {
           "value_d": 1.06637,
           "value_u": 0.890589
+        }
+      }
+    },
+    "CMS_NPS26009_bckgNorm_QCD_BJetOS_2016preVFP": {
+      "bin_2016preVFP": {
+        "QCD": {
+          "value_d": 0.857951,
+          "value_u": 1.16557
+        }
+      }
+    },
+    "CMS_NPS26009_bckgNorm_QCD_BJetOS_2017": {
+      "bin_2017": {
+        "QCD": {
+          "value_d": 0.891478,
+          "value_u": 1.12173
+        }
+      }
+    },
+    "CMS_NPS26009_bckgNorm_QCD_BJetOS_2022": {
+      "bin_2022": {
+        "QCD": {
+          "value_d": 0.797762,
+          "value_u": 1.25351
+        }
+      }
+    },
+    "CMS_NPS26009_bckgNorm_QCD_BJetOS_2023": {
+      "bin_2023": {
+        "QCD": {
+          "value_d": 0.704612,
+          "value_u": 1.41922
+        }
+      }
+    },
+    "CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix": {
+      "bin_2023BPix": {
+        "QCD": {
+          "value_d": 0.823398,
+          "value_u": 1.21448
         }
       }
     },
