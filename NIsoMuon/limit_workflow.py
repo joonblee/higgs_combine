@@ -18,9 +18,12 @@ Uncertainty policy in this revision
   Gaussian uncertainty on the absolute QCD yield via a constrained rateParam.
   No QCD_stat is derived from the fitted functional template.  QCD_stat is
   retained only in QCD-MC mode.
-* Data-driven DY uses the constant-NF estimate.  DY_NFStat and
-  DY_LightJetStat are read from the explicitly separated templates; no generic
-  DY_stat term is constructed from the nominal histogram error.
+* Data-driven DY uses a constant aMC@NLO B/light normalization factor
+  measured in 11--80 GeV and applied to the background-subtracted light-jet
+  data source.  LightJetStat comes from that source Sumw2 error; the full aMC
+  finite-MC NF uncertainty is a Gaussian-constrained rateParam; and the
+  symmetric aMC@NLO-vs-MG-LO NF difference is a separate modelling nuisance.
+  No generic DY_stat term is constructed.
 * Generic inclusive tt_xsec and ST_xsec nuisances are removed.  Generator PDF,
   alpha_s, and renormalisation/factorisation-scale weights are used for their
   corresponding theory sources, while a separate ttbar top-mass normalisation
@@ -219,15 +222,13 @@ QCD_SYST: Dict[str, Tuple[str, str]] = {
 # it is not interpreted as a physical upper bound.
 QCD_ADDITIVE_RANGE_NSIGMA = 10.0
 
-# Nominal data-driven DY treatment: constant normalisation factor (NF).
-# The ROOT producer retains TFDown/TFUp directory names for compatibility,
-# but these templates represent the NF numerator-statistics uncertainty.
-DY_NF_SYST: Tuple[str, str, str] = ("DY_NFStat", "TFDown", "TFUp")
-DY_LIGHTJET_STAT_SYST: Tuple[str, str, str] = (
-    "DY_LightJetStat", "LightJetStatDown", "LightJetStatUp"
-)
+# Primitive data-driven DY inputs from dy_bkg_estimation.py.
+DY_AUX_SOURCE_PATH = "DYAux/LightJetSource"
+DY_AUX_NF_AMC_PATH = "DYAux/NF_aMC"
+DY_AUX_NF_MG_PATH = "DYAux/NF_MG"
+DY_NF_RATEPARAM_NSIGMA = 10.0
 DATA_DRIVEN_DY_NUISANCES: Tuple[str, ...] = (
-    "DY_NFStat", "DY_LightJetStat"
+    "DY_LightJetStat", "DY_NFModel"
 )
 
 # PDF configuration used by the simulated tt and single-top samples.
@@ -297,6 +298,12 @@ class ChannelResult:
     nuisances: Dict[str, Dict[str, str]]
     qcd_shape_sigma_down: Optional[float] = None
     qcd_shape_sigma_up: Optional[float] = None
+    dy_lightjet_yield: Optional[float] = None
+    dy_lightjet_error: Optional[float] = None
+    dy_nf_amc: Optional[float] = None
+    dy_nf_amc_error: Optional[float] = None
+    dy_nf_mg: Optional[float] = None
+    dy_nf_model_rel: Optional[float] = None
     warnings: List[str] = field(default_factory=list)
 
 
@@ -1205,6 +1212,12 @@ def build_channels_for_mass(
         low, high = mass_window(args, year, mass)
         signal_file = files_by_year.get(year, "")
         raw_nominal: Dict[str, YieldResult] = {}
+        dy_lightjet_yield: Optional[float] = None
+        dy_lightjet_error: Optional[float] = None
+        dy_nf_amc: Optional[float] = None
+        dy_nf_amc_error: Optional[float] = None
+        dy_nf_mg: Optional[float] = None
+        dy_nf_model_rel: Optional[float] = None
 
         data_file = os.path.join(root_dir(args, year), "data.root")
         data_result = read_required(
@@ -1216,6 +1229,61 @@ def build_channels_for_mass(
             if process == "sig" and not signal_file:
                 audit.add("nominal/sig", year, False)
                 result = None
+            elif process == "DY" and args.dy_method == "data-driven":
+                filename = file_for_process(
+                    args, year, process, signal_file, "nominal"
+                )
+                source = read_required(
+                    reader, audit, "nominal/DY_lightjet_source", year,
+                    filename, DY_AUX_SOURCE_PATH, low, high
+                )
+                nf_amc_result = read_required(
+                    reader, audit, "nominal/DY_NF_aMC", year,
+                    filename, DY_AUX_NF_AMC_PATH, 0.0, 1.0
+                )
+                nf_mg_result = read_required(
+                    reader, audit, "nominal/DY_NF_MG", year,
+                    filename, DY_AUX_NF_MG_PATH, 0.0, 1.0
+                )
+
+                if source is None or nf_amc_result is None or nf_mg_result is None:
+                    result = None
+                else:
+                    dy_lightjet_yield = max(float(source.value), args.rate_floor)
+                    dy_lightjet_error = max(float(source.error), 0.0)
+                    dy_nf_amc = float(nf_amc_result.value)
+                    dy_nf_amc_error = max(float(nf_amc_result.error), 0.0)
+                    dy_nf_mg = float(nf_mg_result.value)
+                    if dy_nf_amc <= 0.0 or not math.isfinite(dy_nf_amc):
+                        raise WorkflowError(
+                            f"Non-positive/invalid DY aMC NF in {year}: {dy_nf_amc}"
+                        )
+                    if dy_nf_mg <= 0.0 or not math.isfinite(dy_nf_mg):
+                        raise WorkflowError(
+                            f"Non-positive/invalid DY MG NF in {year}: {dy_nf_mg}"
+                        )
+                    dy_nf_model_rel = abs(dy_nf_mg / dy_nf_amc - 1.0)
+                    dy_value = dy_lightjet_yield * dy_nf_amc
+                    dy_error = math.sqrt(
+                        (dy_nf_amc * dy_lightjet_error) ** 2
+                        + (dy_lightjet_yield * dy_nf_amc_error) ** 2
+                    )
+                    result = YieldResult(
+                        dy_value, dy_error, source.first_bin, source.last_bin
+                    )
+
+                    # Audit that the primitive factorization reproduces the
+                    # historical final central histogram written by the producer.
+                    legacy = reader.integral(filename, hist_path(args.region), low, high)
+                    if legacy is not None:
+                        denom = max(abs(dy_value), 1.0e-12)
+                        rel_diff = abs(float(legacy.value) - dy_value) / denom
+                        if rel_diff > 1.0e-6:
+                            warnings.append(
+                                "DYAux factorization does not reproduce the nominal "
+                                f"DY histogram: primitive={dy_value:.6g}, "
+                                f"nominal={legacy.value:.6g}, rel={rel_diff:.3g}."
+                            )
             else:
                 filename = file_for_process(args, year, process, signal_file, "nominal")
                 result = read_required(
@@ -1397,46 +1465,30 @@ def build_channels_for_mass(
                     args.ignore_rel_below,
                 )
 
-        # Data-driven DY: fixed constant-NF treatment.  The NF numerator and
-        # light-jet source/denominator statistical terms are stored separately.
+        # Data-driven DY:
+        #   final yield = pre-NF background-subtracted light-jet data * aMC NF.
+        # LightJetStat is the source Sumw2 term in this counting window.
+        # NFStat is emitted below as a Gaussian-constrained positive rateParam.
+        # NFModel is the symmetric aMC@NLO-vs-MG-LO NF difference.
         if args.dy_method == "data-driven":
-            dy_file = file_for_process(args, year, "DY", signal_file, "dy")
-
-            nf_name, nf_down_suffix, nf_up_suffix = DY_NF_SYST
-            nf_down = read_required(
-                reader, audit, f"{nf_name}/DY", f"{year}:Down",
-                dy_file, hist_path(syst_region(args, nf_down_suffix)), low, high
-            )
-            nf_up = read_required(
-                reader, audit, f"{nf_name}/DY", f"{year}:Up",
-                dy_file, hist_path(syst_region(args, nf_up_suffix)), low, high
-            )
-            nuis[nf_name] = {p: "-" for p in PROCESSES}
-            nuis[nf_name]["DY"] = lnn_from_down_up(
-                raw_nominal["DY"].value,
-                nf_down.value if nf_down else None,
-                nf_up.value if nf_up else None,
-                args.ratio_floor,
-                args.ignore_rel_below,
-            )
-
-            light_name, light_down_suffix, light_up_suffix = DY_LIGHTJET_STAT_SYST
-            light_down = read_required(
-                reader, audit, f"{light_name}/DY", f"{year}:Down",
-                dy_file, hist_path(syst_region(args, light_down_suffix)), low, high
-            )
-            light_up = read_required(
-                reader, audit, f"{light_name}/DY", f"{year}:Up",
-                dy_file, hist_path(syst_region(args, light_up_suffix)), low, high
-            )
+            light_name = "DY_LightJetStat"
             nuis[light_name] = {p: "-" for p in PROCESSES}
-            nuis[light_name]["DY"] = lnn_from_down_up(
-                raw_nominal["DY"].value,
-                light_down.value if light_down else None,
-                light_up.value if light_up else None,
+            nuis[light_name]["DY"] = lnn_from_symmetric_error(
+                dy_lightjet_yield or 0.0,
+                dy_lightjet_error or 0.0,
                 args.ratio_floor,
                 args.ignore_rel_below,
             )
+
+            model_name = "DY_NFModel"
+            nuis[model_name] = {p: "-" for p in PROCESSES}
+            rel_model = dy_nf_model_rel or 0.0
+            if rel_model >= args.ignore_rel_below and rel_model > 0.0:
+                kd = max(1.0 - rel_model, args.ratio_floor)
+                ku = 1.0 + rel_model
+                nuis[model_name]["DY"] = (
+                    f"{format_kappa(kd)}/{format_kappa(ku)}"
+                )
 
         # Finite-template statistics from stored TH1 Sumw2 errors.  Data-driven
         # QCD and DY are excluded by construction to avoid duplicate terms.
@@ -1618,6 +1670,12 @@ def build_channels_for_mass(
             nuisances=nuis,
             qcd_shape_sigma_down=qcd_shape_sigma_down,
             qcd_shape_sigma_up=qcd_shape_sigma_up,
+            dy_lightjet_yield=dy_lightjet_yield,
+            dy_lightjet_error=dy_lightjet_error,
+            dy_nf_amc=dy_nf_amc,
+            dy_nf_amc_error=dy_nf_amc_error,
+            dy_nf_mg=dy_nf_mg,
+            dy_nf_model_rel=dy_nf_model_rel,
             warnings=warnings,
         )
 
@@ -1771,6 +1829,9 @@ def nuisance_global_name(local: str, year: str) -> str:
         return f"CMS_NPS26009_NFStat_DY_BJetOS_{year}"
     if local == "DY_LightJetStat":
         return f"CMS_NPS26009_LightJetStat_DY_BJetOS_{year}"
+    if local == "DY_NFModel":
+        energy = "13TeV" if year in RUN2_ERAS else "13p6TeV"
+        return f"CMS_NPS26009_NFModel_DY_BJetOS_{energy}"
 
     # Finite-template statistical terms remain decorrelated by process and era.
     if local.endswith("_stat"):
@@ -1877,6 +1938,9 @@ def write_datacard(
             # The constrained rateParam below is the absolute QCD yield, so the
             # base process rate must be unity.
             return 1.0
+        if args.dy_method == "data-driven" and process == "DY":
+            # The constrained NF rateParam below multiplies this pre-NF source.
+            return max(channel.dy_lightjet_yield or 0.0, args.rate_floor)
         return channel.rates[process]
 
     lines: List[str] = [
@@ -1928,7 +1992,7 @@ def write_datacard(
         "# CMS_NPS26009_topmass_ttbar_BJetOS = asymmetric ttbar normalisation from top-mass dependence of the NNLO+NNLL reference cross section",
         "# b tagging = BTV fixed-WP HF/LF x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)",
         "# data-driven QCD: QCD_norm is lnN; QCD_shape is an additive absolute-yield Gaussian rateParam; no fitted-template QCD_stat",
-        "# data-driven DY: constant NF + analysis-specific NF/source-stat nuisances; no DY_stat",
+        "# data-driven DY: light-jet data source x aMC NF; NFStat=Gaussian rateParam, LightJetStat=source Sumw2, NFModel=aMC-vs-MG; no generic DY_stat",
         f"# PDF set = {PDF_SET_NAME}; PDFError0..99 use symmetric-Hessian quadrature",
         "# generator scale: separate paired muF/muR nuisances; no 7-point envelope",
         "# simultaneous muR/muF pair is validation-only; antipodal pairs are excluded",
@@ -1959,6 +2023,32 @@ def write_datacard(
         values = values_by_name[name]
         if any(value != "-" for value in values):
             lines.append(pad_row([name, "lnN", *values]))
+
+    # Gaussian-constrained positive aMC@NLO normalization factors.
+    if args.dy_method == "data-driven":
+        lines.append("# Data-driven DY aMC NF: positive Gaussian-constrained rateParams")
+        for channel in channels:
+            nf = channel.dy_nf_amc
+            nf_error = channel.dy_nf_amc_error
+            if nf is None or nf <= 0.0:
+                raise WorkflowError(f"Missing/non-positive DY aMC NF for {channel.year}.")
+            if nf_error is None or nf_error <= 0.0:
+                raise WorkflowError(f"Missing/non-positive DY NFStat for {channel.year}.")
+            upper = max(
+                nf + DY_NF_RATEPARAM_NSIGMA * nf_error,
+                2.0 * nf,
+                1.0e-6,
+            )
+            nuisance_name = nuisance_global_name("DY_NFStat", channel.year)
+            bin_name = f"bin_{channel.year}"
+            lines.append(
+                f"{nuisance_name} rateParam {bin_name} DY "
+                f"{format_number(nf)} [0,{format_number(upper)}]"
+            )
+            lines.append(
+                f"{nuisance_name} param "
+                f"{format_number(nf)} {format_number(nf_error)}"
+            )
 
     # Additive QCD functional-form uncertainty.  The QCD process has base
     # rate=1 in these channels, so the rateParam value itself is the absolute
