@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Standalone NIsoMuon Run-2/Run-3 counting-limit workflow, revision timestamp 20260826_0541.
+Standalone NIsoMuon Run-2/Run-3 counting-limit workflow, background-interface revision 20260907.
 
 This ONE file performs all stages:
   1. read ROOT histograms and audit all required inputs;
@@ -226,6 +226,12 @@ QCD_ADDITIVE_RANGE_NSIGMA = 10.0
 DY_AUX_SOURCE_PATH = "DYAux/LightJetSource"
 DY_AUX_NF_AMC_PATH = "DYAux/NF_aMC"
 DY_AUX_NF_MG_PATH = "DYAux/NF_MG"
+DY_AUX_NF_MODEL_PATH = "DYAux/NFModelRel"
+DY_AUX_NF_AMC_INPUTS_PATH = "DYAux/NFInputs_aMC"
+DY_AUX_NF_MG_INPUTS_PATH = "DYAux/NFInputs_MG"
+# Native SS/DY outputs exclude 9--11 GeV; adaptive SS bins are fit-only.
+DATA_DRIVEN_MASS_WINDOW = (11.0, 80.0)
+BACKGROUND_CONTRACT = "SKPlotMaker-NF-SS-20260907-v2-zeroDY"
 DY_NF_RATEPARAM_NSIGMA = 10.0
 DATA_DRIVEN_DY_NUISANCES: Tuple[str, ...] = (
     "DY_LightJetStat", "DY_NFModel"
@@ -937,6 +943,11 @@ def mass_window(args: argparse.Namespace, year: str, mass: float) -> Tuple[float
     sigma = resolution if args.absolute_resolution else mass * resolution
     low = max(SEARCH_MASS_MIN, mass - args.n_sigma * sigma)
     high = min(SEARCH_MASS_MAX, mass + args.n_sigma * sigma)
+    if args.dy_method == "data-driven" or args.qcd_method == "data-driven":
+        # Use the same supported interval for data, signal and every background.
+        # MC-only cross-checks retain the existing SEARCH_MASS_MIN setting.
+        low = max(low, DATA_DRIVEN_MASS_WINDOW[0])
+        high = min(high, DATA_DRIVEN_MASS_WINDOW[1])
     if not high > low:
         raise WorkflowError(
             f"Empty signal window for {year}, M-{mass:g}: [{low:g},{high:g}] GeV"
@@ -1196,6 +1207,256 @@ def add_nuisance_quality_warnings(
 # Build one mass point from ROOT inputs
 # -------------------------------------------------------------------------------------------------
 
+# Background input contract: SKPlotMaker a67efb7 (NF DY and SS-data QCD).
+def _background_check(args, audit, warnings, key, year, ok, detail):
+    """Record a failed background-contract check; never hide it in strict mode."""
+    audit.add(key, year, bool(ok))
+    if not ok:
+        message = f"{year}: {detail}"
+        warnings.append(message)
+        if args.strict:
+            raise WorkflowError(message)
+    return bool(ok)
+
+
+def _background_close(value, reference):
+    # Relative tolerance is important for the very small high-mass QCD tail.
+    return (
+        math.isfinite(value) and math.isfinite(reference)
+        and math.isclose(value, reference, rel_tol=1.0e-6, abs_tol=1.0e-300)
+    )
+
+
+def _background_aux_values(reader, args, audit, warnings, year, filename, path, labels):
+    """Read the labelled, one-dimensional DYAux schema written by the producer."""
+    root_file = reader._file(filename)
+    hist = root_file.Get(path) if root_file else None
+    present = hist is not None and bool(hist)
+    if not _background_check(
+        args, audit, warnings, f"background/schema/{path}", year,
+        present and hist.GetDimension() == 1 and hist.GetNbinsX() == len(labels),
+        f"Missing or incompatible {filename}:{path}; regenerate NF DY templates.",
+    ):
+        return None
+    actual_labels = tuple(str(hist.GetXaxis().GetBinLabel(i)) for i in range(1, len(labels) + 1))
+    if not _background_check(
+        args, audit, warnings, f"background/labels/{path}", year,
+        actual_labels == tuple(labels),
+        f"Unexpected labels in {path}: {actual_labels!r}, expected {tuple(labels)!r}.",
+    ):
+        return None
+    values = tuple(float(hist.GetBinContent(i)) for i in range(1, len(labels) + 1))
+    if not all(math.isfinite(value) for value in values):
+        raise WorkflowError(f"{year}: non-finite DYAux values in {filename}:{path}.")
+    return values
+
+
+def _audit_dy_background_inputs(
+    reader, args, audit, warnings, year, filename, low, high, source, nf_amc, nf_mg
+):
+    """Validate the NF factorisation before any numerical rate floor is applied.
+
+    These are input-integrity checks, not additional nuisance parameters.
+    NFStat is common to every mass window of one era; LightJetStat is the
+    quadrature Sumw2 uncertainty of Data-QCD-Top-Others in the selected window.
+    """
+    for label, result in (("LightJetSource", source), ("NF_aMC", nf_amc), ("NF_MG", nf_mg)):
+        if not (
+            math.isfinite(result.value) and math.isfinite(result.error)
+            and result.error >= 0.0
+        ):
+            raise WorkflowError(f"{year}: invalid value/error in DYAux/{label}.")
+    if nf_amc.value <= 0.0 or nf_mg.value <= 0.0 or nf_amc.error <= 0.0:
+        raise WorkflowError(f"{year}: DY requires positive aMC/MG NFs and a positive NFStat width.")
+    _background_check(
+        args, audit, warnings, "background/DY_source_nonnegative", year, source.value >= 0.0,
+        f"DY LightJetSource integral is {source.value:g} in [{low:g},{high:g}] GeV. "
+        "Negative source yields must be clamped to zero by the DY producer before "
+        "building the statistical model.",
+    )
+
+    nominal = read_required(
+        reader, audit, "nominal/DY_central", year,
+        filename, hist_path(args.region), low, high,
+    )
+    _background_check(
+        args, audit, warnings, "background/DY_factorisation", year,
+        nominal is not None and _background_close(nominal.value, source.value * nf_amc.value),
+        "DYAux/LightJetSource * NF_aMC does not reproduce the nominal DY yield "
+        f"in [{low:g},{high:g}] GeV; regenerate the DY file instead of mixing inputs.",
+    )
+    _background_check(
+        args, audit, warnings, "background/DY_source_error", year,
+        nominal is not None and _background_close(nominal.error, source.error * nf_amc.value),
+        "The nominal DY histogram error must contain LightJetStat only; "
+        "NFStat must remain separate in DYAux/NF_aMC.",
+    )
+
+    for path, label in ((DY_AUX_NF_AMC_PATH, "NF_aMC"), (DY_AUX_NF_MG_PATH, "NF_MG")):
+        _background_aux_values(reader, args, audit, warnings, year, filename, path, (label,))
+    model = _background_aux_values(
+        reader, args, audit, warnings, year, filename, DY_AUX_NF_MODEL_PATH, ("NFModelRel",),
+    )
+    expected_model = abs(nf_mg.value / nf_amc.value - 1.0)
+    if model is not None:
+        _background_check(
+            args, audit, warnings, "background/DY_NFModel", year,
+            model[0] >= 0.0 and _background_close(model[0], expected_model),
+            f"DYAux/NFModelRel={model[0]:g}, but |NF_MG/NF_aMC-1|={expected_model:g}.",
+        )
+
+    labels = ("BJetYield", "BJetError", "LightJetYield", "LightJetError", "WindowLow", "WindowHigh")
+    for tag, factor, path in (
+        ("aMC", nf_amc, DY_AUX_NF_AMC_INPUTS_PATH),
+        ("MG", nf_mg, DY_AUX_NF_MG_INPUTS_PATH),
+    ):
+        values = _background_aux_values(
+            reader, args, audit, warnings, year, filename, path, labels,
+        )
+        if values is None:
+            continue
+        b, b_error, light, light_error, window_low, window_high = values
+        _background_check(
+            args, audit, warnings, f"background/DY_NFWindow_{tag}", year,
+            _background_close(window_low, DATA_DRIVEN_MASS_WINDOW[0])
+            and _background_close(window_high, DATA_DRIVEN_MASS_WINDOW[1]),
+            f"DY {tag} NF was extracted in [{window_low:g},{window_high:g}] GeV, "
+            "not the production interval [11,80] GeV.",
+        )
+        if not _background_check(
+            args, audit, warnings, f"background/DY_NFInputs_{tag}", year,
+            b > 0.0 and light > 0.0 and b_error >= 0.0 and light_error >= 0.0,
+            f"Invalid primitive B/light yields or errors in {path}.",
+        ):
+            continue
+        expected_nf = b / light
+        expected_error = math.hypot(b_error / light, expected_nf * (light_error / light))
+        _background_check(
+            args, audit, warnings, f"background/DY_NFValue_{tag}", year,
+            _background_close(factor.value, expected_nf),
+            f"DY {tag} NF={factor.value:g} does not equal B/light={expected_nf:g}.",
+        )
+        _background_check(
+            args, audit, warnings, f"background/DY_NFError_{tag}", year,
+            _background_close(factor.error, expected_error),
+            f"DY {tag} NFStat={factor.error:g} does not reproduce the full "
+            f"finite-MC propagation from B/light inputs ({expected_error:g}).",
+        )
+
+
+def _audit_qcd_background_central(reader, args, audit, warnings, year, filename, low, high, nominal):
+    syst_nominal = read_required(
+        reader, audit, "background/QCD_RunSyst_central", year,
+        filename, hist_path(args.region), low, high,
+    )
+    _background_check(
+        args, audit, warnings, "background/QCD_central_consistency", year,
+        syst_nominal is not None and _background_close(syst_nominal.value, nominal.value),
+        "Nominal and RunSyst QCD central integrals disagree. Regenerate ss-data "
+        "templates; do not combine a new central prediction with old variations.",
+    )
+    if not math.isfinite(nominal.value) or nominal.value < 0.0:
+        raise WorkflowError(f"{year}: invalid fitted QCD central yield {nominal.value!r}.")
+    _background_check(
+        args, audit, warnings, "background/QCD_template_error", year,
+        nominal.error == 0.0 and syst_nominal is not None and syst_nominal.error == 0.0,
+        "SS fitted-template errors must be zero for the current QCD_norm/QCD_shape-only model.",
+    )
+
+
+def _audit_qcd_background_variation(args, audit, warnings, year, name, nominal, down, up):
+    if down is None or up is None:
+        return
+    if not all(math.isfinite(value) and value >= 0.0 for value in (nominal, down.value, up.value)):
+        raise WorkflowError(f"{year}: non-finite/negative {name} QCD template integral.")
+    _background_check(
+        args, audit, warnings, f"background/{name}_bracketing", year,
+        (down.value <= nominal or _background_close(down.value, nominal))
+        and (up.value >= nominal or _background_close(up.value, nominal)),
+        f"{name} does not bracket QCD nominal: Down={down.value:g}, "
+        f"central={nominal:g}, Up={up.value:g}.",
+    )
+
+
+def _qcd_background_norm_lnn(args, audit, warnings, year, nominal, down, up):
+    """Preserve producer NormDown/Up ratios without clipping them with ratio_floor.
+
+    The high-mass central already contains R_data(low)*R_MC(high)/R_MC(low).
+    Do NOT apply that transfer factor again here, and do NOT add a QCD stat term.
+    """
+    if down is None or up is None:
+        return "-"
+    if nominal == 0.0:
+        _background_check(
+            args, audit, warnings, "background/QCD_zero_norm", year,
+            down.value == 0.0 and up.value == 0.0,
+            "A zero QCD nominal with non-zero Norm variations cannot be encoded as lnN.",
+        )
+        return "-"
+    kd, ku = down.value / nominal, up.value / nominal
+    if not (math.isfinite(kd) and math.isfinite(ku) and kd > 0.0 and ku > 0.0):
+        raise WorkflowError(f"{year}: QCD_norm requires positive finite Down/Up ratios.")
+    _background_check(
+        args, audit, warnings, "background/QCD_norm_logsymmetry", year,
+        abs(math.log(kd) + math.log(ku)) <= 1.0e-6,
+        f"QCD NormDown/Up are not reciprocal ({kd:g}/{ku:g}); "
+        "regenerate the latest log-symmetric ss-data templates.",
+    )
+    if max(abs(kd - 1.0), abs(ku - 1.0)) < args.ignore_rel_below:
+        return "-"
+    return f"{format_kappa(kd)}/{format_kappa(ku)}"
+
+
+def _validate_background_card(args, card):
+    """Reject pre-update data-driven cards before any old outputs are removed."""
+    if args.dy_method == "mc" and args.qcd_method == "mc":
+        return
+    text = Path(card).read_text()
+    required_lines = {
+        f"# background_contract = {BACKGROUND_CONTRACT}",
+        f"# background_methods = DY:{args.dy_method};QCD:{args.qcd_method}",
+    }
+    if not required_lines.issubset(set(text.splitlines())):
+        raise WorkflowError(
+            f"{card}: missing/mismatched current background contract. Rebuild "
+            "cards with --stage cards (or --stage all) from the regenerated "
+            "DY/QCD ROOT files before running Combine. Do not relabel old cards."
+        )
+    rows = [line.split() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if args.dy_method == "data-driven":
+        for row in rows:
+            if len(row) > 1 and row[1] == "lnN" and ("_NFStat_DY_" in row[0] or "_MCstat_DY_" in row[0]):
+                raise WorkflowError(f"{card}: obsolete/duplicate DY statistical lnN row: {row[0]}.")
+        bins = next((row[1:] for row in rows if row[0] == "bin"), [])
+        if not bins:
+            raise WorkflowError(f"{card}: no channel bins found.")
+        for bin_name in bins:
+            year = bin_name[4:] if bin_name.startswith("bin_") else bin_name
+            if year not in YEARS:
+                raise WorkflowError(f"{card}: unknown channel {bin_name}.")
+            nf_name = nuisance_global_name("DY_NFStat", year)
+            has_rate = any(len(row) >= 5 and row[:4] == [nf_name, "rateParam", bin_name, "DY"] for row in rows)
+            has_constraint = any(len(row) >= 4 and row[:2] == [nf_name, "param"] for row in rows)
+            if not (has_rate and has_constraint):
+                light_name = nuisance_global_name("DY_LightJetStat", year)
+                has_zero_rate = any(
+                    len(row) >= 5 and row[:4] == [light_name, "rateParam", bin_name, "DY"]
+                    for row in rows
+                )
+                has_zero_constraint = any(
+                    len(row) >= 4 and row[:2] == [light_name, "param"]
+                    for row in rows
+                )
+                if not (has_zero_rate and has_zero_constraint):
+                    raise WorkflowError(
+                        f"{card}: DY needs either NFStat rateParam+param or zero-source "
+                        f"additive LightJetStat rateParam+param for {year}."
+                    )
+    if args.qcd_method == "data-driven":
+        if any(len(row) > 1 and row[1] == "lnN" and "_MCstat_QCD_" in row[0] for row in rows):
+            raise WorkflowError(f"{card}: a fitted-template QCD MCstat nuisance is not part of the current model.")
+
+
 def build_channels_for_mass(
     reader: RootReader,
     args: argparse.Namespace,
@@ -1249,6 +1510,10 @@ def build_channels_for_mass(
                 if source is None or nf_amc_result is None or nf_mg_result is None:
                     result = None
                 else:
+                    _audit_dy_background_inputs(
+                        reader, args, audit, warnings, year, filename, low, high,
+                        source, nf_amc_result, nf_mg_result,
+                    )
                     dy_lightjet_yield = max(float(source.value), args.rate_floor)
                     dy_lightjet_error = max(float(source.error), 0.0)
                     dy_nf_amc = float(nf_amc_result.value)
@@ -1272,18 +1537,8 @@ def build_channels_for_mass(
                         dy_value, dy_error, source.first_bin, source.last_bin
                     )
 
-                    # Audit that the primitive factorization reproduces the
-                    # historical final central histogram written by the producer.
-                    legacy = reader.integral(filename, hist_path(args.region), low, high)
-                    if legacy is not None:
-                        denom = max(abs(dy_value), 1.0e-12)
-                        rel_diff = abs(float(legacy.value) - dy_value) / denom
-                        if rel_diff > 1.0e-6:
-                            warnings.append(
-                                "DYAux factorization does not reproduce the nominal "
-                                f"DY histogram: primitive={dy_value:.6g}, "
-                                f"nominal={legacy.value:.6g}, rel={rel_diff:.3g}."
-                            )
+                    # Central/error closure and the full DYAux schema were
+                    # audited above, using the signed source before flooring.
             else:
                 filename = file_for_process(args, year, process, signal_file, "nominal")
                 result = read_required(
@@ -1413,6 +1668,10 @@ def build_channels_for_mass(
         # No finite-template or fitted-function QCD_stat nuisance is constructed.
         if args.qcd_method == "data-driven":
             qcd_file = file_for_process(args, year, "QCD", signal_file, "qcd")
+            _audit_qcd_background_central(
+                reader, args, audit, warnings, year, qcd_file, low, high,
+                raw_nominal["QCD"],
+            )
             for syst_name, (down_suffix, up_suffix) in QCD_SYST.items():
                 down = read_required(
                     reader, audit, f"{syst_name}/QCD", f"{year}:Down",
@@ -1423,6 +1682,10 @@ def build_channels_for_mass(
                     qcd_file, hist_path(syst_region(args, up_suffix)), low, high
                 )
 
+                _audit_qcd_background_variation(
+                    args, audit, warnings, year, syst_name,
+                    raw_nominal["QCD"].value, down, up,
+                )
                 if syst_name == "QCD_shape":
                     if down is not None and up is not None:
                         nominal_qcd = raw_rates["QCD"]
@@ -1444,8 +1707,11 @@ def build_channels_for_mass(
 
                         sigma_down = max(nominal_qcd - down_qcd, 0.0)
                         sigma_up = max(up_qcd - nominal_qcd, 0.0)
-                        relative_size = max(sigma_down, sigma_up) / max(
-                            abs(nominal_qcd), args.rate_floor
+                        width = max(sigma_down, sigma_up)
+                        reference = max(abs(nominal_qcd), args.rate_floor)
+                        relative_size = (
+                            width / reference if reference > 0.0
+                            else (math.inf if width > 0.0 else 0.0)
                         )
 
                         if (
@@ -1457,12 +1723,9 @@ def build_channels_for_mass(
                     continue
 
                 nuis[syst_name] = {p: "-" for p in PROCESSES}
-                nuis[syst_name]["QCD"] = lnn_from_down_up(
-                    raw_nominal["QCD"].value,
-                    down.value if down else None,
-                    up.value if up else None,
-                    args.ratio_floor,
-                    args.ignore_rel_below,
+                nuis[syst_name]["QCD"] = _qcd_background_norm_lnn(
+                    args, audit, warnings, year, raw_nominal["QCD"].value,
+                    down, up,
                 )
 
         # Data-driven DY:
@@ -1473,17 +1736,25 @@ def build_channels_for_mass(
         if args.dy_method == "data-driven":
             light_name = "DY_LightJetStat"
             nuis[light_name] = {p: "-" for p in PROCESSES}
-            nuis[light_name]["DY"] = lnn_from_symmetric_error(
-                dy_lightjet_yield or 0.0,
-                dy_lightjet_error or 0.0,
-                args.ratio_floor,
-                args.ignore_rel_below,
-            )
+            source_yield = dy_lightjet_yield or 0.0
+            source_error = dy_lightjet_error or 0.0
+            # A zero source cannot support a multiplicative lnN.  Its finite
+            # Sumw2 uncertainty is emitted below as an additive absolute-yield
+            # Gaussian rateParam with sigma = NF_aMC * sigma(source).
+            if source_yield > 0.0:
+                nuis[light_name]["DY"] = lnn_from_symmetric_error(
+                    source_yield,
+                    source_error,
+                    args.ratio_floor,
+                    args.ignore_rel_below,
+                )
 
             model_name = "DY_NFModel"
             nuis[model_name] = {p: "-" for p in PROCESSES}
             rel_model = dy_nf_model_rel or 0.0
-            if rel_model >= args.ignore_rel_below and rel_model > 0.0:
+            # NFModel is multiplicative and has no first-order effect when the
+            # pre-NF source is exactly zero, so it is disabled in that channel.
+            if source_yield > 0.0 and rel_model >= args.ignore_rel_below and rel_model > 0.0:
                 kd = max(1.0 - rel_model, args.ratio_floor)
                 ku = 1.0 + rel_model
                 nuis[model_name]["DY"] = (
@@ -1939,8 +2210,15 @@ def write_datacard(
             # base process rate must be unity.
             return 1.0
         if args.dy_method == "data-driven" and process == "DY":
-            # The constrained NF rateParam below multiplies this pre-NF source.
-            return max(channel.dy_lightjet_yield or 0.0, args.rate_floor)
+            source_yield = channel.dy_lightjet_yield or 0.0
+            source_error = channel.dy_lightjet_error or 0.0
+            nf = channel.dy_nf_amc or 0.0
+            if source_yield == 0.0 and source_error > 0.0 and nf > 0.0:
+                # The zero-source LightJetStat rateParam below is the absolute DY
+                # yield, so the base process rate must be unity.
+                return 1.0
+            # Otherwise the constrained NF rateParam multiplies the pre-NF source.
+            return max(source_yield, args.rate_floor)
         return channel.rates[process]
 
     lines: List[str] = [
@@ -1958,6 +2236,8 @@ def write_datacard(
         "-" * 130,
         f"# mass M-{label}, target {target}",
         f"# limit_parameter = {args.parameter}",
+        f"# background_contract = {BACKGROUND_CONTRACT}",
+        f"# background_methods = DY:{args.dy_method};QCD:{args.qcd_method}",
     ]
 
     raw_total = sum(ch.raw_rates["sig"] for ch in channels)
@@ -1992,7 +2272,7 @@ def write_datacard(
         "# CMS_NPS26009_topmass_ttbar_BJetOS = asymmetric ttbar normalisation from top-mass dependence of the NNLO+NNLL reference cross section",
         "# b tagging = BTV fixed-WP HF/LF x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)",
         "# data-driven QCD: QCD_norm is lnN; QCD_shape is an additive absolute-yield Gaussian rateParam; no fitted-template QCD_stat",
-        "# data-driven DY: light-jet data source x aMC NF; NFStat=Gaussian rateParam, LightJetStat=source Sumw2, NFModel=aMC-vs-MG; no generic DY_stat",
+        "# data-driven DY: light-jet data source x aMC NF; positive source: LightJetStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: LightJetStat=additive Gaussian, NFStat/NFModel disabled",
         f"# PDF set = {PDF_SET_NAME}; PDFError0..99 use symmetric-Hessian quadrature",
         "# generator scale: separate paired muF/muR nuisances; no 7-point envelope",
         "# simultaneous muR/muF pair is validation-only; antipodal pairs are excluded",
@@ -2034,6 +2314,10 @@ def write_datacard(
                 raise WorkflowError(f"Missing/non-positive DY aMC NF for {channel.year}.")
             if nf_error is None or nf_error <= 0.0:
                 raise WorkflowError(f"Missing/non-positive DY NFStat for {channel.year}.")
+            if (channel.dy_lightjet_yield or 0.0) == 0.0:
+                # Multiplying a zero source by a varied NF still gives zero.
+                # The finite source uncertainty is handled additively below.
+                continue
             upper = max(
                 nf + DY_NF_RATEPARAM_NSIGMA * nf_error,
                 2.0 * nf,
@@ -2050,10 +2334,37 @@ def write_datacard(
                 f"{format_number(nf)} {format_number(nf_error)}"
             )
 
+    # Zero-source DY LightJetStat: absolute Gaussian uncertainty.  The DY
+    # process has base rate=1 only for these channels, so this rateParam is the
+    # absolute DY yield.  NFStat and NFModel are deliberately absent here.
+    if args.dy_method == "data-driven":
+        additive_dy_lines: List[str] = []
+        for channel in channels:
+            source_yield = channel.dy_lightjet_yield or 0.0
+            source_error = channel.dy_lightjet_error or 0.0
+            nf = channel.dy_nf_amc or 0.0
+            if source_yield != 0.0 or source_error <= 0.0 or nf <= 0.0:
+                continue
+            sigma = abs(nf) * source_error
+            if sigma <= 0.0 or not math.isfinite(sigma):
+                continue
+            upper = max(10.0 * sigma, 1.0e-6)
+            nuisance_name = nuisance_global_name("DY_LightJetStat", channel.year)
+            bin_name = f"bin_{channel.year}"
+            additive_dy_lines.append(
+                f"{nuisance_name} rateParam {bin_name} DY 0 [0,{format_number(upper)}]"
+            )
+            additive_dy_lines.append(
+                f"{nuisance_name} param 0 {format_number(sigma)}"
+            )
+        if additive_dy_lines:
+            lines.append("# Additive Gaussian DY LightJetStat for zero central source")
+            lines.extend(additive_dy_lines)
+
     # Additive QCD functional-form uncertainty.  The QCD process has base
     # rate=1 in these channels, so the rateParam value itself is the absolute
-    # QCD event yield.  The same parameter receives an asymmetric Gaussian
-    # constraint in event-yield units.
+    # QCD event yield.  The same parameter receives a symmetric Gaussian
+    # constraint with sigma=max(sigma_down,sigma_up), in event-yield units.
     if args.qcd_method == "data-driven":
         additive_lines: List[str] = []
         for channel in channels:
@@ -3209,6 +3520,10 @@ def run_target(args: argparse.Namespace, target: str) -> None:
     tag = tag_for(args, target)
     observed_limit_outputs: List[Path] = []
     expected_limit_outputs: List[Path] = []
+
+    # Preflight all cards for this target before cleaning or executing a mass.
+    for card in cards:
+        _validate_background_card(args, card)
 
     for card in cards:
         label, mass = extract_mass_from_card(card, target)
