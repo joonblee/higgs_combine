@@ -2077,13 +2077,15 @@ def nuisance_global_name(local: str, year: str) -> str:
     if local in by_era_exp:
         return f"{by_era_exp[local]}_{year}"
     if local == "pu":
-        return f"CMS_NPS26009_pileup_{run_group(year)}"
+        energy = "13TeV" if year in RUN2_ERAS else "13p6TeV"
+        return f"CMS_pileup_{energy}"
     if local == "mu_trig_sf":
         return f"CMS_NPS26009_eff_m_trigger_{year}"
     if local == "mu_id_sf":
         return f"CMS_NPS26009_eff_m_id_{run_group(year)}"
     if local == "mu_scale":
-        return f"CMS_NPS26009_scale_m_{run_group(year)}"
+        energy = "13TeV" if year in RUN2_ERAS else "13p6TeV"
+        return f"CMS_scale_m_{energy}"
 
     # The current L1 ECAL/muon prefiring nuisances are decorrelated between
     # 2016preVFP, 2016postVFP, 2017, and 2018.  The master common source has only a
