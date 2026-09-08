@@ -1,0 +1,58 @@
+name: Temporary nuisance-name refinement
+
+on:
+  push:
+    paths:
+      - .github/workflows/tmp_refine_nuisance_names.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refine standard Run-level nuisance names
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('NIsoMuon/limit_workflow.py')
+          s = p.read_text()
+          old = '''    if local == "pu":
+        return f"CMS_NPS26009_pileup_{run_group(year)}"
+    if local == "mu_trig_sf":
+        return f"CMS_NPS26009_eff_m_trigger_{year}"
+    if local == "mu_id_sf":
+        return f"CMS_NPS26009_eff_m_id_{run_group(year)}"
+    if local == "mu_scale":
+        return f"CMS_NPS26009_scale_m_{run_group(year)}"
+'''
+          new = '''    if local == "pu":
+        energy = "13TeV" if year in RUN2_ERAS else "13p6TeV"
+        return f"CMS_pileup_{energy}"
+    if local == "mu_trig_sf":
+        return f"CMS_NPS26009_eff_m_trigger_{year}"
+    if local == "mu_id_sf":
+        return f"CMS_NPS26009_eff_m_id_{run_group(year)}"
+    if local == "mu_scale":
+        energy = "13TeV" if year in RUN2_ERAS else "13p6TeV"
+        return f"CMS_scale_m_{energy}"
+'''
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected block once, found {s.count(old)}')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          python3 -m py_compile NIsoMuon/limit_workflow.py
+          git diff --check
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add NIsoMuon/limit_workflow.py
+          git commit -m "Use standard Run-level pileup and muon-scale names"
+          git push origin HEAD:main
