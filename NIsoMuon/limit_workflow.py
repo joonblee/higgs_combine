@@ -2049,39 +2049,41 @@ def nuisance_global_name(local: str, year: str) -> str:
     if local == "tt_mass":
         return "CMS_NPS26009_topmass_ttbar_BJetOS"
 
-    # BTV fixed-WP.  The official uncorrelated names can be used verbatim.
-    # The correlated pieces are intentionally split between Run 2 and Run 3 in
-    # this analysis, so they need analysis-specific names to avoid accidentally
-    # correlating the two calibration campaigns in a full combination.
+    # BTV fixed-WP.  SKFlat/SKNano use the inclusive light-flavour
+    # calibration and the combined heavy-flavour calibration.  The POG-provided
+    # correlated components are shared within a Run, while the uncorrelated
+    # components remain independent for every data-taking era.
     if local == "btagSFbc_correlated":
         energy = "13TeV" if year in RUN2_ERAS else "13p6TeV"
-        return f"CMS_NPS26009_btag_fixedWP_bc_correlated_{energy}"
+        return f"CMS_NPS26009_btag_fixedWP_comb_bc_correlated_{energy}"
     if local == "btagSFlight_correlated":
         energy = "13TeV" if year in RUN2_ERAS else "13p6TeV"
-        return f"CMS_NPS26009_btag_fixedWP_light_correlated_{energy}"
+        return f"CMS_NPS26009_btag_fixedWP_incl_light_correlated_{energy}"
     if local == "btagSFbc_uncorrelated":
-        return f"CMS_btag_fixedWP_bc_uncorrelated_{year}"
+        return f"CMS_btag_fixedWP_comb_bc_uncorrelated_{year}"
     if local == "btagSFlight_uncorrelated":
-        return f"CMS_btag_fixedWP_light_uncorrelated_{year}"
+        return f"CMS_btag_fixedWP_incl_light_uncorrelated_{year}"
 
-    # Common experimental sources. Keep the CMS systematic stem consistent
-    # across all data-taking eras. The era suffix preserves the intended
-    # decorrelation, including the 2016 preVFP/postVFP split.
-    common_exp = {
+    # Experimental correlation model.  Keep the era-specific Up/Down responses
+    # from the input histograms; only the nuisance identity determines the fit
+    # correlation.  Pileup, muon ID, and muon momentum scale/resolution are
+    # correlated across eras within Run 2 or within Run 3.  Muon trigger, JES,
+    # and JER remain decorrelated by era.  Run 2 and Run 3 are independent for
+    # the Run-correlated detector terms.
+    by_era_exp = {
         "jer": "CMS_res_j",
         "jes": "CMS_scale_j",
-        "pu": "CMS_pileup",
     }
-    if local in common_exp:
-        return f"{common_exp[local]}_{year}"
-
-    muon_exp = {
-        "mu_trig_sf": "CMS_eff_m_trigger",
-        "mu_id_sf": "CMS_eff_m_id",
-        "mu_scale": "CMS_scale_m",
-    }
-    if local in muon_exp:
-        return f"{muon_exp[local]}_{year}"
+    if local in by_era_exp:
+        return f"{by_era_exp[local]}_{year}"
+    if local == "pu":
+        return f"CMS_NPS26009_pileup_{run_group(year)}"
+    if local == "mu_trig_sf":
+        return f"CMS_NPS26009_eff_m_trigger_{year}"
+    if local == "mu_id_sf":
+        return f"CMS_NPS26009_eff_m_id_{run_group(year)}"
+    if local == "mu_scale":
+        return f"CMS_NPS26009_scale_m_{run_group(year)}"
 
     # The current L1 ECAL/muon prefiring nuisances are decorrelated between
     # 2016preVFP, 2016postVFP, 2017, and 2018.  The master common source has only a
@@ -2270,7 +2272,8 @@ def write_datacard(
     lines.extend([
         "# uncertainty_policy = explicit data-driven terms; no generic tt_xsec/ST_xsec",
         "# CMS_NPS26009_topmass_ttbar_BJetOS = asymmetric ttbar normalisation from top-mass dependence of the NNLO+NNLL reference cross section",
-        "# b tagging = BTV fixed-WP HF/LF x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)",
+        "# experimental correlations = pileup/muon ID/muon scale by Run; muon trigger/JES/JER by era",
+        "# b tagging = BTV fixed-WP comb_bc/incl_light x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)",
         "# data-driven QCD: QCD_norm is lnN; QCD_shape is an additive absolute-yield Gaussian rateParam; no fitted-template QCD_stat",
         "# data-driven DY: light-jet data source x aMC NF; positive source: LightJetStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: LightJetStat=additive Gaussian, NFStat/NFModel disabled",
         f"# PDF set = {PDF_SET_NAME}; PDFError0..99 use symmetric-Hessian quadrature",
@@ -3811,7 +3814,11 @@ def print_configuration(args: argparse.Namespace) -> None:
     if args.qcd_method == "data-driven":
         print("[CONFIG] data-driven QCD_stat=disabled")
     print(
-        "[CONFIG] btag=BTV fixed-WP; HF/LF separated; "
+        "[CONFIG] experimental correlations: PU/muon ID/muon scale by Run; "
+        "muon trigger/JES/JER by era"
+    )
+    print(
+        "[CONFIG] btag=BTV fixed-WP comb_bc/incl_light; HF/LF separated; "
         "corr shared within Run2 or within Run3 and independent between runs; "
         "uncorr decorrelated by era"
     )
