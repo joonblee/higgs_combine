@@ -120,34 +120,29 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         In bin  bin_2023 the affected processes are:  ["QCD"]
     For uncertainty CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix there were  1  such warnings
         In bin  bin_2023BPix the affected processes are:  ["QCD"]
-    For uncertainty CMS_NPS26009_btag_fixedWP_bc_correlated_13TeV there were  2  such warnings
+    For uncertainty CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13TeV there were  2  such warnings
         In bin  bin_2016preVFP the affected processes are:  ["Others"]
         In bin  bin_2017 the affected processes are:  ["Others"]
-    For uncertainty CMS_NPS26009_btag_fixedWP_bc_correlated_13p6TeV there were  5  such warnings
+    For uncertainty CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13p6TeV there were  5  such warnings
         In bin  bin_2022 the affected processes are:  ["Others", "ST", "Zprime", "tt"]
         In bin  bin_2022EE the affected processes are:  ["Zprime"]
+    For uncertainty CMS_NPS26009_eff_m_trigger_2022 there were  1  such warnings
+        In bin  bin_2022 the affected processes are:  ["Others"]
     For uncertainty CMS_NPS26009_pdf_NNPDF31 there were  2  such warnings
         In bin  bin_2017 the affected processes are:  ["ST"]
         In bin  bin_2023 the affected processes are:  ["ST"]
-    For uncertainty CMS_btag_fixedWP_bc_uncorrelated_2016preVFP there were  1  such warnings
+    For uncertainty CMS_btag_fixedWP_comb_bc_uncorrelated_2016preVFP there were  1  such warnings
         In bin  bin_2016preVFP the affected processes are:  ["Others"]
-    For uncertainty CMS_eff_m_trigger_2022 there were  1  such warnings
-        In bin  bin_2022 the affected processes are:  ["Others"]
-    For uncertainty CMS_pileup_2016postVFP there were  1  such warnings
+    For uncertainty CMS_pileup_13TeV there were  3  such warnings
         In bin  bin_2016postVFP the affected processes are:  ["ST"]
-    For uncertainty CMS_pileup_2016preVFP there were  1  such warnings
         In bin  bin_2016preVFP the affected processes are:  ["ST"]
-    For uncertainty CMS_pileup_2017 there were  1  such warnings
         In bin  bin_2017 the affected processes are:  ["Others"]
-    For uncertainty CMS_pileup_2022 there were  2  such warnings
+    For uncertainty CMS_pileup_13p6TeV there were  7  such warnings
         In bin  bin_2022 the affected processes are:  ["Others", "ST"]
-    For uncertainty CMS_pileup_2022EE there were  1  such warnings
         In bin  bin_2022EE the affected processes are:  ["ST"]
-    For uncertainty CMS_pileup_2023 there were  2  such warnings
         In bin  bin_2023 the affected processes are:  ["Others", "ST"]
-    For uncertainty CMS_pileup_2023BPix there were  2  such warnings
         In bin  bin_2023BPix the affected processes are:  ["Others", "ST"]
-    For uncertainty CMS_scale_m_2017 there were  1  such warnings
+    For uncertainty CMS_scale_m_13TeV there were  1  such warnings
         In bin  bin_2017 the affected processes are:  ["Others"]
     For uncertainty QCDscale_ren_ttbar there were  3  such warnings
         In bin  bin_2016postVFP the affected processes are:  ["tt"]
@@ -474,7 +469,7 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         }
       }
     },
-    "CMS_NPS26009_btag_fixedWP_bc_correlated_13TeV": {
+    "CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13TeV": {
       "bin_2016preVFP": {
         "Others": {
           "value_d": 0.853557,
@@ -488,7 +483,7 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         }
       }
     },
-    "CMS_NPS26009_btag_fixedWP_bc_correlated_13p6TeV": {
+    "CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13p6TeV": {
       "bin_2022": {
         "Others": {
           "value_d": 0.884274,
@@ -514,6 +509,14 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         }
       }
     },
+    "CMS_NPS26009_eff_m_trigger_2022": {
+      "bin_2022": {
+        "Others": {
+          "value_d": 0.865215,
+          "value_u": 1.13479
+        }
+      }
+    },
     "CMS_NPS26009_pdf_NNPDF31": {
       "bin_2017": {
         "ST": {
@@ -528,7 +531,7 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         }
       }
     },
-    "CMS_btag_fixedWP_bc_uncorrelated_2016preVFP": {
+    "CMS_btag_fixedWP_comb_bc_uncorrelated_2016preVFP": {
       "bin_2016preVFP": {
         "Others": {
           "value_d": 0.862446,
@@ -536,31 +539,19 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         }
       }
     },
-    "CMS_eff_m_trigger_2022": {
-      "bin_2022": {
-        "Others": {
-          "value_d": 0.865215,
-          "value_u": 1.13479
-        }
-      }
-    },
-    "CMS_pileup_2016postVFP": {
+    "CMS_pileup_13TeV": {
       "bin_2016postVFP": {
         "ST": {
           "value_d": 1.10116,
           "value_u": 0.895012
         }
-      }
-    },
-    "CMS_pileup_2016preVFP": {
+      },
       "bin_2016preVFP": {
         "ST": {
           "value_d": 1.11844,
           "value_u": 0.872506
         }
-      }
-    },
-    "CMS_pileup_2017": {
+      },
       "bin_2017": {
         "Others": {
           "value_d": 1e-06,
@@ -568,7 +559,7 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         }
       }
     },
-    "CMS_pileup_2022": {
+    "CMS_pileup_13p6TeV": {
       "bin_2022": {
         "Others": {
           "value_d": 2.13747,
@@ -578,17 +569,13 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
           "value_d": 1.23571,
           "value_u": 0.770068
         }
-      }
-    },
-    "CMS_pileup_2022EE": {
+      },
       "bin_2022EE": {
         "ST": {
           "value_d": 0.667655,
           "value_u": 1.27672
         }
-      }
-    },
-    "CMS_pileup_2023": {
+      },
       "bin_2023": {
         "Others": {
           "value_d": 0.941655,
@@ -598,9 +585,7 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
           "value_d": 1.12486,
           "value_u": 0.878778
         }
-      }
-    },
-    "CMS_pileup_2023BPix": {
+      },
       "bin_2023BPix": {
         "Others": {
           "value_d": 1.1243,
@@ -612,7 +597,7 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         }
       }
     },
-    "CMS_scale_m_2017": {
+    "CMS_scale_m_13TeV": {
       "bin_2017": {
         "Others": {
           "value_d": 1.0,
