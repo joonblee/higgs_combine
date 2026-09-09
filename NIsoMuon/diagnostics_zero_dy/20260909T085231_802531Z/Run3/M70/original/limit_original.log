@@ -1,0 +1,17 @@
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+Will use a-priori instead of a-posteriori expected background.
+>>> Method used is AsymptoticLimits
+[#0] ERROR:Eval -- RooAbsReal::logEvalError(model_s) evaluation error, 
+ origin       : RooFit::Detail::RooFixedProdPdf::model_s[ ]
+ message      : getLogVal() top-level p.d.f not greater than zero
+ server values: !servers=(modelObs_s = 0)
+
+ -- AsymptoticLimits ( CLs ) --
+Expected  2.5%: r < 0.2278
+Expected 16.0%: r < 0.3109
+Expected 50.0%: r < 0.4486
+Expected 84.0%: r < 0.6604
+Expected 97.5%: r < 0.9408
+
