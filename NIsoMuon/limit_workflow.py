@@ -2060,9 +2060,9 @@ def nuisance_global_name(local: str, year: str) -> str:
         energy = "13TeV" if year in RUN2_ERAS else "13p6TeV"
         return f"CMS_NPS26009_btag_fixedWP_incl_light_correlated_{energy}"
     if local == "btagSFbc_uncorrelated":
-        return f"CMS_btag_fixedWP_comb_bc_uncorrelated_{year}"
+        return f"CMS_btag_fixedWP_bc_uncorrelated_{year}"
     if local == "btagSFlight_uncorrelated":
-        return f"CMS_btag_fixedWP_incl_light_uncorrelated_{year}"
+        return f"CMS_btag_fixedWP_light_uncorrelated_{year}"
 
     # Experimental correlation model.  Keep the era-specific Up/Down responses
     # from the input histograms; only the nuisance identity determines the fit
