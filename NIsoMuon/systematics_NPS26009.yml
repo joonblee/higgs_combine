@@ -69,7 +69,7 @@ QCDscale_ren_ttbar:
 
 'CMS_NPS26009_bckgShape_QCD_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: custom
-  description: 'QCD functional-form uncertainty propagated as an additive Gaussian uncertainty on the absolute QCD yield, treated independently by data-taking era.'
+  description: 'QCD functional-form uncertainty implemented as a non-negative, unit-scaled Gaussian-constrained rate parameter for the absolute QCD yield, treated independently by data-taking era.'
 
 'CMS_NPS26009_NFStat_DY_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: custom
@@ -77,7 +77,7 @@ QCDscale_ren_ttbar:
 
 'CMS_NPS26009_LightJetStat_DY_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: custom
-  description: 'Finite-statistics uncertainty of the light-jet control-region input to the data-driven Drell-Yan prediction, treated independently by data-taking era.'
+  description: 'Finite-statistics uncertainty of the light-jet control-region input to the data-driven Drell-Yan prediction, treated independently by data-taking era. For a zero control-source prediction it is implemented as a non-negative, unit-scaled additive Gaussian rate parameter.'
 
 'CMS_NPS26009_NFModel_DY_BJetOS_(13TeV|13p6TeV)':
   class: custom

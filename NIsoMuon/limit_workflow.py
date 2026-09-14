@@ -2202,6 +2202,30 @@ def write_datacard(
         (ich, process) for ich in range(len(channels)) for process in PROCESSES
     ]
 
+    def qcd_additive_sigma_card(channel: ChannelResult) -> float:
+        """Return the absolute QCD-shape width used to scale its rateParam.
+
+        The physical QCD yield is represented as sigma * theta, with theta
+        of order unity.  This avoids fitting tiny absolute-yield parameters
+        directly while preserving the original Gaussian likelihood.
+        """
+        sigma_down = channel.qcd_shape_sigma_down
+        sigma_up = channel.qcd_shape_sigma_up
+        if sigma_down is None or sigma_up is None:
+            raise WorkflowError(
+                f"{channel.year}: missing QCD additive-shape uncertainty."
+            )
+
+        nominal_qcd = channel.raw_rates["QCD"]
+        width_scale = max(
+            nominal_qcd,
+            sigma_down,
+            sigma_up,
+            args.rate_floor,
+        )
+        width_floor = max(args.rate_floor, 1.0e-12 * width_scale)
+        return max(sigma_down, sigma_up, width_floor)
+
     def card_rate(ich: int, process: str) -> float:
         channel = channels[ich]
         if (
@@ -2210,17 +2234,23 @@ def write_datacard(
             and channel.qcd_shape_sigma_down is not None
             and channel.qcd_shape_sigma_up is not None
         ):
-            # The constrained rateParam below is the absolute QCD yield, so the
-            # base process rate must be unity.
-            return 1.0
+            # Use the absolute 1-sigma QCD-shape width as the base rate so the
+            # constrained rateParam is dimensionless and O(1).
+            return qcd_additive_sigma_card(channel)
         if args.dy_method == "data-driven" and process == "DY":
             source_yield = channel.dy_lightjet_yield or 0.0
             source_error = channel.dy_lightjet_error or 0.0
             nf = channel.dy_nf_amc or 0.0
             if source_yield == 0.0 and source_error > 0.0 and nf > 0.0:
-                # The zero-source LightJetStat rateParam below is the absolute DY
-                # yield, so the base process rate must be unity.
-                return 1.0
+                # For a zero-source DY prediction, use the absolute 1-sigma
+                # LightJetStat width as the base rate.  The rateParam below is
+                # then a non-negative dimensionless O(1) parameter.
+                sigma = abs(nf) * source_error
+                if sigma <= 0.0 or not math.isfinite(sigma):
+                    raise WorkflowError(
+                        f"{channel.year}: invalid zero-source DY LightJetStat width."
+                    )
+                return sigma
             # Otherwise the constrained NF rateParam multiplies the pre-NF source.
             return max(source_yield, args.rate_floor)
         return channel.rates[process]
@@ -2276,8 +2306,8 @@ def write_datacard(
         "# CMS_NPS26009_topmass_ttbar_BJetOS = asymmetric ttbar normalisation from top-mass dependence of the NNLO+NNLL reference cross section",
         "# experimental correlations = pileup/muon ID/muon scale by Run; muon trigger/JES/JER by era",
         "# b tagging = BTV fixed-WP comb_bc/incl_light x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)",
-        "# data-driven QCD: QCD_norm is lnN; QCD_shape is an additive absolute-yield Gaussian rateParam; no fitted-template QCD_stat",
-        "# data-driven DY: light-jet data source x aMC NF; positive source: LightJetStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: LightJetStat=additive Gaussian, NFStat/NFModel disabled",
+        "# data-driven QCD: QCD_norm is lnN; QCD_shape is a non-negative unit-scaled additive Gaussian rateParam; no fitted-template QCD_stat",
+        "# data-driven DY: light-jet data source x aMC NF; positive source: LightJetStat=lnN, NFStat=positive Gaussian rateParam, NFModel=lnN; zero source: LightJetStat=non-negative unit-scaled additive Gaussian, NFStat/NFModel disabled",
         f"# PDF set = {PDF_SET_NAME}; PDFError0..99 use symmetric-Hessian quadrature",
         "# generator scale: separate paired muF/muR nuisances; no 7-point envelope",
         "# simultaneous muR/muF pair is validation-only; antipodal pairs are excluded",
@@ -2336,12 +2366,14 @@ def write_datacard(
             )
             lines.append(
                 f"{nuisance_name} param "
-                f"{format_number(nf)} {format_number(nf_error)}"
+                f"{format_number(nf)} {format_number(nf_error)} "
+                f"[0,{format_number(upper)}]"
             )
 
-    # Zero-source DY LightJetStat: absolute Gaussian uncertainty.  The DY
-    # process has base rate=1 only for these channels, so this rateParam is the
-    # absolute DY yield.  NFStat and NFModel are deliberately absent here.
+    # Zero-source DY LightJetStat: non-negative unit-scaled additive Gaussian.
+    # The process base rate is sigma_events, so theta=1 corresponds to a
+    # +1-sigma absolute DY yield.  NFStat and NFModel are absent because a
+    # multiplicative variation of an exactly zero source remains zero.
     if args.dy_method == "data-driven":
         additive_dy_lines: List[str] = []
         for channel in channels:
@@ -2353,23 +2385,21 @@ def write_datacard(
             sigma = abs(nf) * source_error
             if sigma <= 0.0 or not math.isfinite(sigma):
                 continue
-            upper = max(10.0 * sigma, 1.0e-6)
             nuisance_name = nuisance_global_name("DY_LightJetStat", channel.year)
             bin_name = f"bin_{channel.year}"
             additive_dy_lines.append(
-                f"{nuisance_name} rateParam {bin_name} DY 0 [0,{format_number(upper)}]"
+                f"{nuisance_name} rateParam {bin_name} DY 0 [0,10]"
             )
             additive_dy_lines.append(
-                f"{nuisance_name} param 0 {format_number(sigma)}"
+                f"{nuisance_name} param 0 1 [0,10]"
             )
         if additive_dy_lines:
-            lines.append("# Additive Gaussian DY LightJetStat for zero central source")
+            lines.append("# Non-negative unit-scaled additive Gaussian DY LightJetStat for zero central source")
             lines.extend(additive_dy_lines)
 
-    # Additive QCD functional-form uncertainty.  The QCD process has base
-    # rate=1 in these channels, so the rateParam value itself is the absolute
-    # QCD event yield.  The same parameter receives a symmetric Gaussian
-    # constraint with sigma=max(sigma_down,sigma_up), in event-yield units.
+    # Additive QCD functional-form uncertainty.  Scale the absolute QCD
+    # yield by sigma_card so the fitted rateParam is dimensionless with a
+    # unit Gaussian width.  The lower bound enforces a non-negative QCD yield.
     if args.qcd_method == "data-driven":
         additive_lines: List[str] = []
         for channel in channels:
@@ -2379,38 +2409,30 @@ def write_datacard(
                 continue
 
             nominal_qcd = channel.raw_rates["QCD"]
-            width_scale = max(
-                nominal_qcd,
-                sigma_down,
-                sigma_up,
-                args.rate_floor,
-            )
-            width_floor = max(args.rate_floor, 1.0e-12 * width_scale)
-            sigma_down_card = max(sigma_down, width_floor)
-            sigma_up_card = max(sigma_up, width_floor)
-            sigma_card = max(sigma_down_card, sigma_up_card)
-
+            sigma_card = qcd_additive_sigma_card(channel)
             upper_range = max(
                 nominal_qcd + QCD_ADDITIVE_RANGE_NSIGMA * sigma_card,
                 2.0 * nominal_qcd,
                 10.0 * args.rate_floor,
             )
+            nominal_scaled = nominal_qcd / sigma_card
+            upper_scaled = upper_range / sigma_card
             nuisance_name = nuisance_global_name("QCD_shape", channel.year)
             bin_name = f"bin_{channel.year}"
 
             additive_lines.append(
                 f"{nuisance_name} rateParam {bin_name} QCD "
-                f"{format_number(nominal_qcd)} "
-                f"[0,{format_number(upper_range)}]"
+                f"{format_number(nominal_scaled)} "
+                f"[0,{format_number(upper_scaled)}]"
             )
             additive_lines.append(
                 f"{nuisance_name} param "
-                f"{format_number(nominal_qcd)} "
-                f"{format_number(sigma_card)}"
+                f"{format_number(nominal_scaled)} 1 "
+                f"[0,{format_number(upper_scaled)}]"
             )
 
         if additive_lines:
-            lines.append("# Additive Gaussian QCD functional-form uncertainty")
+            lines.append("# Non-negative unit-scaled additive Gaussian QCD functional-form uncertainty")
             lines.extend(additive_lines)
 
     warnings = [f"{ch.year}: {warning}" for ch in channels for warning in ch.warnings]

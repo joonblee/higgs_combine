@@ -3,7 +3,7 @@
 # M20 + M70
 #
 # Assumption:
-#   /data6/Users/joonblee/higgs_combine/NIsoMuon/combine_review.py
+#   /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/combine_review.py
 #   already exists.
 #
 # nproc = 48
@@ -184,6 +184,7 @@ python3 combine_review.py 20 \
     --bias-multipliers 0,1,2 \
     --r-min -2 \
     --r-max 100 \
+    --force \
     > review_logs/bias_M20.log 2>&1 &
 PID1=$!
 
@@ -193,6 +194,7 @@ python3 combine_review.py 70 \
     --bias-multipliers 0,1,2 \
     --r-min -2 \
     --r-max 100 \
+    --force \
     > review_logs/bias_M70.log 2>&1 &
 PID2=$!
 
