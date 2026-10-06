@@ -15,9 +15,13 @@ Uncertainty policy in this revision
 -----------------------------------
 * Data-driven QCD has QCD_norm and QCD_shape only.  QCD_norm remains a
   multiplicative lnN nuisance, while QCD_shape is propagated as an additive
-  Gaussian uncertainty on the absolute QCD yield via a constrained rateParam.
-  No QCD_stat is derived from the fitted functional template.  QCD_stat is
-  retained only in QCD-MC mode.
+  Gaussian uncertainty on the absolute QCD yield via the yield formula.
+  QCDStat/metadata supplies the retained SS covariance and transfer statistics.
+  A separate additive QCD_stat Gaussian uses sigma_NFstat + sigma_SSfitStat,
+  a conservative first-order bound for their unknown cross-correlation.
+  QCD yield = max(0, shape-yield parameter + statistical shift), times norm lnN.
+  Keep qcd_stat_uncertainty.py beside this script; regenerate per-era SS ROOT
+  files and cards before running the updated model. Older cards are rejected.
 * Data-driven DY uses a constant aMC@NLO B/light normalization factor
   measured in 11--80 GeV and applied to the background-subtracted light-jet
   data source.  LightJetStat comes from that source Sumw2 error; the full aMC
@@ -105,6 +109,8 @@ values are physical alpha_qZ'.
 """
 
 from __future__ import annotations
+
+from qcd_stat_uncertainty import read_qcd_stat_metadata, qcd_window_statistics, whole_bin_window
 
 import argparse
 import csv
@@ -223,7 +229,7 @@ QCD_SYST: Dict[str, Tuple[str, str]] = {
     "QCD_shape": ("ShapeDown", "ShapeUp"),
 }
 
-# QCD_shape is represented by an absolute-yield Gaussian rateParam rather than
+# QCD_shape is represented by an absolute-yield Gaussian parameter rather than
 # lnN.  This is only a generous numerical range for the fitted yield parameter;
 # it is not interpreted as a physical upper bound.
 QCD_ADDITIVE_RANGE_NSIGMA = 10.0
@@ -237,7 +243,7 @@ DY_AUX_NF_AMC_INPUTS_PATH = "DYAux/NFInputs_aMC"
 DY_AUX_NF_MG_INPUTS_PATH = "DYAux/NFInputs_MG"
 # Native SS/DY outputs exclude 9--11 GeV; adaptive SS bins are fit-only.
 DATA_DRIVEN_MASS_WINDOW = (11.0, 80.0)
-BACKGROUND_CONTRACT = "SKPlotMaker-NF-SS-20260907-v2-zeroDY"
+BACKGROUND_CONTRACT = "SKPlotMaker-NF-SS-20261007-v3-QCDStat"
 DY_NF_RATEPARAM_NSIGMA = 10.0
 DATA_DRIVEN_DY_NUISANCES: Tuple[str, ...] = (
     "DY_LightJetStat", "DY_NFModel"
@@ -310,6 +316,9 @@ class ChannelResult:
     nuisances: Dict[str, Dict[str, str]]
     qcd_shape_sigma_down: Optional[float] = None
     qcd_shape_sigma_up: Optional[float] = None
+    qcd_stat_sigma: Optional[float] = None
+    qcd_nf_stat_sigma: Optional[float] = None
+    qcd_fit_stat_sigma: Optional[float] = None
     dy_lightjet_yield: Optional[float] = None
     dy_lightjet_error: Optional[float] = None
     dy_nf_amc: Optional[float] = None
@@ -683,6 +692,18 @@ class RootReader:
         result = YieldResult(value, float(err.value), first, last)
         self.integral_cache[key] = result
         return result
+
+    def qcd_statistics(self, filename, template_path, low, high, era, nominal):
+        f = self._file(filename)
+        try:
+            metadata = read_qcd_stat_metadata(f, era, template_path)
+            hist = f.Get(template_path)
+            if not hist:
+                raise ValueError("Missing QCD central histogram.")
+            effective_low, effective_high = whole_bin_window(hist, low, high)
+            return qcd_window_statistics(metadata, effective_low, effective_high, nominal)
+        except (ValueError, KeyError, TypeError, OverflowError) as exc:
+            raise WorkflowError(f"{era}: {filename}: {exc}") from exc
 
 
 def root_dir(args: argparse.Namespace, year: str, collection: str = "") -> str:
@@ -1236,7 +1257,7 @@ def add_nuisance_quality_warnings(
 # Build one mass point from ROOT inputs
 # -------------------------------------------------------------------------------------------------
 
-# Background input contract: SKPlotMaker a67efb7 (NF DY and SS-data QCD).
+# Background input contract: NF DY and SS-data QCD with QCDStat/metadata.
 def _background_check(args, audit, warnings, key, year, ok, detail):
     """Record a failed background-contract check; never hide it in strict mode."""
     audit.add(key, year, bool(ok))
@@ -1389,7 +1410,7 @@ def _audit_qcd_background_central(reader, args, audit, warnings, year, filename,
     _background_check(
         args, audit, warnings, "background/QCD_template_error", year,
         nominal.error == 0.0 and syst_nominal is not None and syst_nominal.error == 0.0,
-        "SS fitted-template errors must be zero for the current QCD_norm/QCD_shape-only model.",
+        "SS fitted-template errors must be zero; correlated QCD statistics are read from QCDStat/metadata.",
     )
 
 
@@ -1411,7 +1432,7 @@ def _qcd_background_norm_lnn(args, audit, warnings, year, nominal, down, up):
     """Preserve producer NormDown/Up ratios without clipping them with ratio_floor.
 
     The high-mass central already contains R_data(low)*R_MC(high)/R_MC(low).
-    Do NOT apply that transfer factor again here, and do NOT add a QCD stat term.
+    Do NOT apply that transfer factor again here. QCD statistics are read separately.
     """
     if down is None or up is None:
         return "-"
@@ -1484,6 +1505,15 @@ def _validate_background_card(args, card):
     if args.qcd_method == "data-driven":
         if any(len(row) > 1 and row[1] == "lnN" and "_MCstat_QCD_" in row[0] for row in rows):
             raise WorkflowError(f"{card}: a fitted-template QCD MCstat nuisance is not part of the current model.")
+        for bin_name in next((row[1:] for row in rows if row[0] == "bin"), []):
+            year = bin_name[4:] if bin_name.startswith("bin_") else bin_name
+            stat_name = nuisance_global_name("QCD_stat", year)
+            yield_name = f"CMS_NPS26009_yield_QCD_BJetOS_{year}"
+            if not any(row[:2] == [stat_name, "param"] for row in rows):
+                raise WorkflowError(f"{card}: missing dedicated QCD statistical constraint for {year}; rebuild cards.")
+            if not any(len(row) == 6 and row[:4] == [yield_name, "rateParam", bin_name, "QCD"]
+                       and row[4] == "max(0,@0+@1)" and stat_name in row[5].split(",") for row in rows):
+                raise WorkflowError(f"{card}: QCD statistical constraint is not connected to its yield in {year}.")
 
 
 def build_channels_for_mass(
@@ -1602,6 +1632,9 @@ def build_channels_for_mass(
         nuis: Dict[str, Dict[str, str]] = {}
         qcd_shape_sigma_down: Optional[float] = None
         qcd_shape_sigma_up: Optional[float] = None
+        qcd_stat_sigma: Optional[float] = None
+        qcd_nf_stat_sigma: Optional[float] = None
+        qcd_fit_stat_sigma: Optional[float] = None
 
         # Luminosity affects simulation-normalised processes only.
         nuis.update(luminosity_nuisances(year, args))
@@ -1694,13 +1727,22 @@ def build_channels_for_mass(
         # to an additive Gaussian uncertainty in the absolute QCD yield.  This
         # avoids exponential lnN extrapolation when the nominal QCD rate tends
         # to zero but the analytic-function envelope has a finite absolute size.
-        # No finite-template or fitted-function QCD_stat nuisance is constructed.
+        # One QCD_stat Gaussian uses the conservative NF-stat + fit-stat bound.
         if args.qcd_method == "data-driven":
             qcd_file = file_for_process(args, year, "QCD", signal_file, "qcd")
             _audit_qcd_background_central(
                 reader, args, audit, warnings, year, qcd_file, low, high,
                 raw_nominal["QCD"],
             )
+            qcd_statistics = reader.qcd_statistics(
+                qcd_file, hist_path(args.region), low, high, year, raw_nominal["QCD"].value
+            )
+            qcd_stat_sigma = qcd_statistics["sigma_stat_bound"]
+            qcd_nf_stat_sigma = qcd_statistics["sigma_nf_stat"]
+            qcd_fit_stat_sigma = qcd_statistics["sigma_fit_stat"]
+            audit.add("QCD_stat/metadata", year, True)
+            print(f"[QCD STAT] {year} M-{label}: NF={qcd_nf_stat_sigma:.6g}, "
+                  f"SS-fit={qcd_fit_stat_sigma:.6g}, conservative bound={qcd_stat_sigma:.6g}")
             for syst_name, (down_suffix, up_suffix) in QCD_SYST.items():
                 down = read_required(
                     reader, audit, f"{syst_name}/QCD", f"{year}:Down",
@@ -1970,6 +2012,9 @@ def build_channels_for_mass(
             nuisances=nuis,
             qcd_shape_sigma_down=qcd_shape_sigma_down,
             qcd_shape_sigma_up=qcd_shape_sigma_up,
+            qcd_stat_sigma=qcd_stat_sigma,
+            qcd_nf_stat_sigma=qcd_nf_stat_sigma,
+            qcd_fit_stat_sigma=qcd_fit_stat_sigma,
             dy_lightjet_yield=dy_lightjet_yield,
             dy_lightjet_error=dy_lightjet_error,
             dy_nf_amc=dy_nf_amc,
@@ -2124,6 +2169,8 @@ def nuisance_global_name(local: str, year: str) -> str:
         return f"CMS_NPS26009_bckgNorm_QCD_BJetOS_{year}"
     if local == "QCD_shape":
         return f"CMS_NPS26009_bckgShape_QCD_BJetOS_{year}"
+    if local == "QCD_stat":
+        return f"CMS_NPS26009_stat_QCD_BJetOS_{year}"
     if local == "DY_NFStat":
         return f"CMS_NPS26009_NFStat_DY_BJetOS_{year}"
     if local == "DY_LightJetStat":
@@ -2231,8 +2278,7 @@ def write_datacard(
         if (
             args.qcd_method == "data-driven"
             and process == "QCD"
-            and channel.qcd_shape_sigma_down is not None
-            and channel.qcd_shape_sigma_up is not None
+            and channel.qcd_stat_sigma is not None
         ):
             # The constrained rateParam below is the absolute QCD yield, so the
             # base process rate must be unity.
@@ -2301,7 +2347,8 @@ def write_datacard(
         "# CMS_NPS26009_topmass_ttbar_BJetOS = asymmetric ttbar normalisation from top-mass dependence of the NNLO+NNLL reference cross section",
         "# experimental correlations = pileup/muon ID/muon scale by Run; muon trigger/JES/JER by era",
         "# b tagging = BTV fixed-WP comb_bc/incl_light x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)",
-        "# data-driven QCD: QCD_norm is lnN; QCD_shape is an additive absolute-yield Gaussian rateParam; no fitted-template QCD_stat",
+        "# data-driven QCD: QCD_norm is lnN; QCD_shape and QCD_stat are additive Gaussians on the absolute yield",
+        "# QCD_stat sigma = sigma_NFstat + sigma_SSfitStat: conservative first-order bound; their cross-covariance is unknown",
         "# data-driven DY: light-jet data source x aMC NF; positive source: LightJetStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: LightJetStat=additive Gaussian, NFStat/NFModel disabled",
         f"# PDF set = {PDF_SET_NAME}; PDFError0..99 use symmetric-Hessian quadrature",
         "# generator scale: separate paired muF/muR nuisances; no 7-point envelope",
@@ -2391,56 +2438,40 @@ def write_datacard(
             lines.append("# Additive Gaussian DY LightJetStat for zero central source")
             lines.extend(additive_dy_lines)
 
-    # Additive QCD functional-form uncertainty.  The QCD process has base
-    # rate=1 in these channels, so the rateParam value itself is the absolute
-    # QCD event yield.  The same parameter receives a symmetric Gaussian
-    # constraint with sigma=max(sigma_down,sigma_up), in event-yield units.
+    # One yield modifier adds shape and statistical shifts, rather than
+    # multiplying two absolute-yield rateParams. Norm lnN still multiplies it.
     if args.qcd_method == "data-driven":
-        additive_lines: List[str] = []
+        lines.append("# QCD yield = max(0, shape-yield parameter + statistical shift)")
         for channel in channels:
-            sigma_down = channel.qcd_shape_sigma_down
-            sigma_up = channel.qcd_shape_sigma_up
-            if sigma_down is None or sigma_up is None:
-                continue
-
+            if channel.qcd_stat_sigma is None:
+                raise WorkflowError(f"{channel.year}: missing QCD statistical propagation; regenerate templates and cards.")
             nominal_qcd = channel.raw_rates["QCD"]
-            width_scale = max(
-                nominal_qcd,
-                sigma_down,
-                sigma_up,
-                args.rate_floor,
-            )
+            sigma_down = channel.qcd_shape_sigma_down or 0.0
+            sigma_up = channel.qcd_shape_sigma_up or 0.0
+            width_scale = max(nominal_qcd, sigma_down, sigma_up, args.rate_floor)
             width_floor = max(args.rate_floor, 1.0e-12 * width_scale)
-            sigma_down_card = max(sigma_down, width_floor)
-            sigma_up_card = max(sigma_up, width_floor)
-            sigma_card = max(sigma_down_card, sigma_up_card)
-
-            upper_range = max(
-                nominal_qcd + QCD_ADDITIVE_RANGE_NSIGMA * sigma_card,
-                2.0 * nominal_qcd,
-                10.0 * args.rate_floor,
-            )
-            nuisance_name = nuisance_global_name("QCD_shape", channel.year)
-            bin_name = f"bin_{channel.year}"
-
-            additive_lines.append(
-                f"{nuisance_name} rateParam {bin_name} QCD "
-                f"{format_number(nominal_qcd)} "
-                f"[0,{format_number(upper_range)}]"
-            )
-            additive_lines.append(
-                f"{nuisance_name} param "
-                f"{format_number(nominal_qcd)} "
-                f"{format_number(sigma_card)}"
-            )
-
-        if additive_lines:
-            lines.append("# Additive Gaussian QCD functional-form uncertainty")
-            lines.extend(additive_lines)
+            sigma_shape = max(sigma_down, sigma_up, width_floor)
+            sigma_stat = max(channel.qcd_stat_sigma, args.rate_floor, 1e-280)
+            shape_upper = max(nominal_qcd + QCD_ADDITIVE_RANGE_NSIGMA * sigma_shape,
+                              2.0 * nominal_qcd, 10.0 * args.rate_floor)
+            stat_range = QCD_ADDITIVE_RANGE_NSIGMA * sigma_stat
+            shape_name = nuisance_global_name("QCD_shape", channel.year)
+            stat_name = nuisance_global_name("QCD_stat", channel.year)
+            yield_name = f"CMS_NPS26009_yield_QCD_BJetOS_{channel.year}"
+            lines.extend([
+                f"# {channel.year} QCD NF-stat={format_number(channel.qcd_nf_stat_sigma or 0.0)}; "
+                f"SS-fit-stat={format_number(channel.qcd_fit_stat_sigma or 0.0)}; "
+                f"stat-bound={format_number(channel.qcd_stat_sigma)}",
+                f"{shape_name} param {format_number(nominal_qcd)} {format_number(sigma_shape)} "
+                f"[0,{format_number(shape_upper)}]",
+                f"{stat_name} param 0 {format_number(sigma_stat)} "
+                f"[-{format_number(stat_range)},{format_number(stat_range)}]",
+                f"{yield_name} rateParam bin_{channel.year} QCD max(0,@0+@1) {shape_name},{stat_name}",
+            ])
 
     if args.mode == "blind":
         # Reconstruct the prefit expectation from the serialized model, including
-        # numeric rateParam initial values. This avoids both integer rounding and
+        # numeric/formula rateParam nominal values. This avoids integer rounding and
         # tiny differences from formatting DY normalization factors in the card.
         _, _, nominal_backgrounds = counting_card_observation_signal_background(
             path, card_text="\n".join(lines)
@@ -2533,14 +2564,26 @@ def clean_card_targets(args: argparse.Namespace) -> None:
 def build_cards(args: argparse.Namespace) -> List[CardInfo]:
     reader = RootReader()
     try:
-        clean_card_targets(args)
         requested_years = years_needed_for_request(args)
+        # The new statistical inputs must be present before removing old cards.
+        if args.qcd_method == "data-driven":
+            for year in requested_years:
+                metadata = []
+                for collection in ("nominal", "qcd"):
+                    filename = file_for_process(args, year, "QCD", "", collection)
+                    try:
+                        metadata.append(read_qcd_stat_metadata(reader._file(filename), year, hist_path(args.region)))
+                    except (ValueError, KeyError, TypeError, OverflowError) as exc:
+                        raise WorkflowError(f"{year}: {filename}: {exc}; existing cards were not removed.") from exc
+                if metadata[0] != metadata[1]:
+                    raise WorkflowError(f"{year}: nominal/RunSyst QCD statistical metadata differ; existing cards were not removed.")
         signal_files = scan_signal_files(args)
         masses = sorted(signal_files)
         if args.masses:
             masses = [m for m in masses if any(abs(m-r) < 1.0e-6 for r in args.masses)]
         if not masses:
             raise WorkflowError("No requested signal mass files were found.")
+        clean_card_targets(args)
         xsec_map = load_xsec_map(args) if args.parameter == "xsec" else {}
         cards: List[CardInfo] = []
 
@@ -2687,6 +2730,34 @@ def range_args(args: argparse.Namespace, card: Path) -> List[str]:
     return explicit_range_args(rmin, rmax, card)
 
 
+def counting_card_nominal_rate_params(card_text: str):
+    """Evaluate numeric modifiers and the supported QCD formula at param means.
+
+    An unsupported formula raises an error; it must never silently corrupt the
+    Asimov observation or the nominal negative-r boundary. No eval() is used.
+    """
+    rows = [line.split() for line in card_text.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")]
+    means = {row[0]: float(row[2]) for row in rows if len(row) >= 4 and row[1] == "param"}
+    modifiers = []
+    for row in rows:
+        if len(row) < 5 or row[1] != "rateParam":
+            continue
+        try:
+            nominal = float(row[4])
+        except ValueError:
+            if len(row) != 6 or row[4] != "max(0,@0+@1)":
+                raise WorkflowError(f"Unsupported nominal rateParam formula: {' '.join(row)}")
+            arguments = row[5].split(",")
+            if len(arguments) != 2 or any(name not in means for name in arguments):
+                raise WorkflowError(f"Missing Gaussian parameter means for {row[0]}")
+            nominal = max(0.0, math.fsum(means[name] for name in arguments))
+        if not math.isfinite(nominal) or nominal < 0:
+            raise WorkflowError(f"Invalid nominal rate modifier {row[0]}")
+        modifiers.append((row[2], row[3], nominal))
+    return modifiers
+
+
 def counting_card_observation_signal_background(
     card: Path,
     *,
@@ -2694,17 +2765,17 @@ def counting_card_observation_signal_background(
 ) -> Tuple[List[float], List[float], List[float]]:
     """Read nominal observation, signal, and total background yields by channel.
 
-    Numeric rateParam initial values are included when reconstructing nominal
-    yields.  This matters for the additive QCD-shape treatment, where the QCD
-    base rate is unity and the rateParam stores the nominal absolute QCD yield.
+    Numeric rateParam initial values and the QCD yield formula evaluated at
+    Gaussian parameter means are included. The QCD base rate is unity.
     """
     observations: Optional[List[float]] = None
     process_names: Optional[List[str]] = None
     rates: Optional[List[float]] = None
     bin_rows: List[List[str]] = []
-    numeric_rate_params: List[Tuple[str, str, float]] = []
+    source = card.read_text() if card_text is None else card_text
+    numeric_rate_params = counting_card_nominal_rate_params(source)
 
-    for line in (card.read_text() if card_text is None else card_text).splitlines():
+    for line in source.splitlines():
         tokens = line.split()
         if not tokens:
             continue
@@ -2718,12 +2789,6 @@ def counting_card_observation_signal_background(
             process_names = tokens[1:]
         elif tokens[0] == "rate":
             rates = [float(x) for x in tokens[1:]]
-        elif len(tokens) >= 5 and tokens[1] == "rateParam":
-            try:
-                initial_value = float(tokens[4])
-            except ValueError:
-                continue
-            numeric_rate_params.append((tokens[2], tokens[3], initial_value))
 
     if observations is None or process_names is None or rates is None:
         raise WorkflowError(f"Cannot parse counting rates from {card}")
@@ -3860,7 +3925,7 @@ def print_configuration(args: argparse.Namespace) -> None:
     if args.dy_method == "data-driven":
         print("[CONFIG] DY=constant NF; DY_NFStat + DY_LightJetStat; DY_stat=disabled")
     if args.qcd_method == "data-driven":
-        print("[CONFIG] data-driven QCD_stat=disabled")
+        print("[CONFIG] data-driven QCD_stat=NF-stat + SS-fit-stat conservative linear bound (additive Gaussian)")
     print(
         "[CONFIG] experimental correlations: PU/muon ID/muon scale by Run; "
         "muon trigger/JES/JER by era"

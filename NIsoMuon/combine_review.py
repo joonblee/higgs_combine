@@ -215,7 +215,7 @@ def parse_alpha_unit(card: Path) -> Optional[float]:
 
 
 def parse_rate_block(card: Path) -> Tuple[List[str], List[str], List[int], List[float]]:
-    """Return (bins, process_names, process_ids, rates) from a standard card."""
+    """Return nominal effective rates, including numeric/formula rateParams."""
     lines = [line.strip() for line in card.read_text().splitlines()]
     proc_name_idx = None
     for i, line in enumerate(lines):
@@ -253,6 +253,12 @@ def parse_rate_block(card: Path) -> Tuple[List[str], List[str], List[int], List[
                 rates = [float(x) for x in toks]
     if proc_ids is None or rates is None:
         raise RuntimeError(f"Could not locate process-id/rate row in {card}")
+    from limit_workflow import counting_card_nominal_rate_params
+    modifiers = counting_card_nominal_rate_params(card.read_text())
+    for i, (bin_name, process) in enumerate(zip(bins, process_names)):
+        for rate_bin, rate_process, nominal in modifiers:
+            if rate_bin in ("*", bin_name) and rate_process in ("*", process):
+                rates[i] *= nominal
     return bins, process_names, proc_ids, rates
 
 
