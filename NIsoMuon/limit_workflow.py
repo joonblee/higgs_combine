@@ -304,7 +304,7 @@ class ChannelResult:
     mass: float
     window_low: float
     window_high: float
-    observation: int
+    observation: float
     raw_rates: Dict[str, float]
     rates: Dict[str, float]
     nuisances: Dict[str, Dict[str, str]]
@@ -1509,11 +1509,15 @@ def build_channels_for_mass(
         dy_nf_mg: Optional[float] = None
         dy_nf_model_rel: Optional[float] = None
 
-        data_file = os.path.join(root_dir(args, year), "data.root")
-        data_result = read_required(
-            reader, audit, "nominal/data", year,
-            data_file, hist_path(args.region), low, high
-        )
+        # Blinded card production must not read the signal-region observation.
+        # Data-driven control-region background inputs are still read below.
+        data_result: Optional[YieldResult] = None
+        if args.mode == "unblind":
+            data_file = os.path.join(root_dir(args, year), "data.root")
+            data_result = read_required(
+                reader, audit, "nominal/data", year,
+                data_file, hist_path(args.region), low, high
+            )
 
         for process in PROCESSES:
             if process == "sig" and not signal_file:
@@ -1582,10 +1586,12 @@ def build_channels_for_mass(
         }
         bkg_sum = sum(raw_rates[p] for p in PROCESSES if p != "sig")
         if args.mode == "blind":
-            observation = int(round(bkg_sum))
+            observation = float(bkg_sum)
         elif data_result is None:
-            observation = int(round(bkg_sum))
-            warnings.append("Data is missing; background-only Asimov observation was used.")
+            raise WorkflowError(
+                f"Signal-region data are missing for unblind mode in {year}; "
+                "refusing to substitute an Asimov observation."
+            )
         else:
             observation = int(round(data_result.value))
             if abs(data_result.value - observation) > 1.0e-6:
@@ -2249,7 +2255,7 @@ def write_datacard(
         "kmax * number of nuisance parameters",
         "-" * 130,
         pad_row(["bin", *bins]),
-        pad_row(["observation", *[ch.observation for ch in channels]]),
+        pad_row(["observation", *[format_number(ch.observation) for ch in channels]]),
         "-" * 130,
         pad_row(["bin", *[bins[ich] for ich, _ in columns]]),
         pad_row(["process", *["Zprime" if process == "sig" else process for _, process in columns]]),
@@ -2431,6 +2437,21 @@ def write_datacard(
         if additive_lines:
             lines.append("# Additive Gaussian QCD functional-form uncertainty")
             lines.extend(additive_lines)
+
+    if args.mode == "blind":
+        # Reconstruct the prefit expectation from the serialized model, including
+        # numeric rateParam initial values. This avoids both integer rounding and
+        # tiny differences from formatting DY normalization factors in the card.
+        _, _, nominal_backgrounds = counting_card_observation_signal_background(
+            path, card_text="\n".join(lines)
+        )
+        lines[5] = pad_row([
+            "observation", *[format_number(value) for value in nominal_backgrounds]
+        ])
+        lines.append(
+            "# observation = unrounded prefit background-only expectation, "
+            "including rateParam initial values; signal-region data are not read"
+        )
 
     warnings = [f"{ch.year}: {warning}" for ch in channels for warning in ch.warnings]
     if warnings:
@@ -2668,6 +2689,8 @@ def range_args(args: argparse.Namespace, card: Path) -> List[str]:
 
 def counting_card_observation_signal_background(
     card: Path,
+    *,
+    card_text: Optional[str] = None,
 ) -> Tuple[List[float], List[float], List[float]]:
     """Read nominal observation, signal, and total background yields by channel.
 
@@ -2681,7 +2704,7 @@ def counting_card_observation_signal_background(
     bin_rows: List[List[str]] = []
     numeric_rate_params: List[Tuple[str, str, float]] = []
 
-    for line in card.read_text().splitlines():
+    for line in (card.read_text() if card_text is None else card_text).splitlines():
         tokens = line.split()
         if not tokens:
             continue
