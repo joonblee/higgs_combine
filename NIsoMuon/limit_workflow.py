@@ -30,6 +30,8 @@ Uncertainty policy in this revision
   nuisance covers the cross-section dependence on the assumed top-quark mass.
 * DeepJet fixed-WP uncertainties follow the BTV multi-era prescription.
 * Run-2, Run-3, and combined Run-2+Run-3 cards are supported.
+* Luminosity follows the Lumi POG Cholesky lnN prescription: three components
+  for 2016--2018 and two for 2022--2023, independent between Run 2 and Run 3.
 * Heavy-flavour (b/c) and light-flavour b-tag components are kept separate.
   Their correlated pieces are shared within Run 2 or within Run 3, while the
   uncorrelated pieces are decorrelated by era.
@@ -150,15 +152,19 @@ LUMI_FB: Dict[str, float] = {
     "2023": 17.7,
     "2023BPix": 9.5,
 }
-LUMI_LNN: Dict[str, float] = {
-    "2016preVFP": 1.012,
-    "2016postVFP": 1.012,
-    "2017": 1.023,
-    "2018": 1.025,
-    "2022": 1.014,
-    "2022EE": 1.014,
-    "2023": 1.013,
-    "2023BPix": 1.013,
+# Lumi POG multiyear datacard recommendations. Missing years have no response.
+# https://twiki.cern.ch/twiki/bin/view/CMS/LumiRecommendationsRun2
+# https://twiki.cern.ch/twiki/bin/view/CMS/LumiRecommendationsRun3
+# These coefficients already encode the Cholesky decomposition. Preserve the
+# official names across channels; Run 2 and Run 3 use independent components.
+LUMI_NUISANCES: Dict[str, Dict[str, float]] = {
+    "lumi_13TeV_1516_l": {"2016": 1.0118},
+    "lumi_13TeV_151617_l": {"2016": 1.0004, "2017": 1.0055},
+    "lumi_13TeV_15161718_l": {
+        "2016": 1.0035, "2017": 1.0061, "2018": 1.0084,
+    },
+    "lumi_1": {"2022": 1.0138, "2023": 1.0017},
+    "lumi_2": {"2023": 1.0127},
 }
 
 # The statistical interpretation is restricted to the blinded search interval.
@@ -505,6 +511,29 @@ def lumi_group(year: str) -> str:
     if year in {"2023", "2023BPix"}:
         return "2023"
     return year
+
+
+def luminosity_nuisances(
+    year: str, args: argparse.Namespace,
+) -> Dict[str, Dict[str, str]]:
+    """Return the official lnN components for simulation-normalised processes."""
+    run_group(year)  # Validate the detector era before selecting its calendar year.
+    processes = ["sig", "tt", "ST", "Others"]
+    if args.dy_method == "mc":
+        processes.append("DY")
+    if args.qcd_method == "mc":
+        processes.append("QCD")
+    result: Dict[str, Dict[str, str]] = {}
+    for name, coefficients in LUMI_NUISANCES.items():
+        kappa = coefficients.get(lumi_group(year))
+        if kappa is None:
+            continue
+        # Keep all prescribed components, including the 0.04% response, even
+        # when a generic threshold is used to prune other template variations.
+        result[name] = {process: "-" for process in PROCESSES}
+        for process in processes:
+            result[name][process] = format_kappa(kappa)
+    return result
 
 
 def tt_mass_lnn(year: str) -> Tuple[float, float]:
@@ -1569,13 +1598,7 @@ def build_channels_for_mass(
         qcd_shape_sigma_up: Optional[float] = None
 
         # Luminosity affects simulation-normalised processes only.
-        nuis["lumi"] = {p: "-" for p in PROCESSES}
-        for process in ("sig", "tt", "ST", "Others"):
-            nuis["lumi"][process] = lnn_from_single(LUMI_LNN[year], args.ignore_rel_below)
-        if args.dy_method == "mc":
-            nuis["lumi"]["DY"] = lnn_from_single(LUMI_LNN[year], args.ignore_rel_below)
-        if args.qcd_method == "mc":
-            nuis["lumi"]["QCD"] = lnn_from_single(LUMI_LNN[year], args.ignore_rel_below)
+        nuis.update(luminosity_nuisances(year, args))
 
         # Inclusive ttbar normalisation dependence on the assumed top-quark mass.
         # Scale/PDF/alpha_s components of the reference cross section are not
@@ -2025,7 +2048,7 @@ def apply_parameterisation(
 
 
 def nuisance_global_name(local: str, year: str) -> str:
-    """Return the CMS-style datacard nuisance name without changing correlations.
+    """Return the datacard nuisance name for the prescribed source correlation.
 
     Internal keys intentionally remain unchanged because they are also used to
     locate the existing ROOT templates.  Only the final datacard parameter name
@@ -2033,17 +2056,12 @@ def nuisance_global_name(local: str, year: str) -> str:
     systematics master list.  Analysis-specific sources use the CADI prefix
     CMS_NPS26009_.
 
-    The current luminosity treatment is an aggregate uncertainty correlated in
-    five year-groups (2016, 2017, 2018, 2022, 2023).  The official master list
-    uses different Run-2 and Run-3 spelling conventions.  To keep one uniform
-    year-suffix format without changing the existing correlation model, these
-    aggregate luminosity nuisances are explicitly analysis-specific.
+    Luminosity components already use the official Lumi POG names. Their
+    era-dependent lnN coefficients implement the multiyear correlation scheme.
     """
 
-    # Aggregate luminosity model: preserve the existing five correlation groups
-    # while using one uniform naming format for Run 2 and Run 3.
-    if local == "lumi":
-        return f"CMS_NPS26009_lumi_{lumi_group(year)}"
+    if local in LUMI_NUISANCES:
+        return local
 
     # One common top-mass dependence nuisance, with energy-dependent lnN values.
     if local == "tt_mass":
@@ -2156,7 +2174,7 @@ def nuisance_order(
     channels: Optional[Sequence[ChannelResult]] = None,
 ) -> List[str]:
     order: List[str] = [
-        "lumi",
+        *LUMI_NUISANCES,
         "tt_mass",
         *EXP_SYST.keys(),
         *L1_PREFIRE_SYST.keys(),
@@ -2273,6 +2291,7 @@ def write_datacard(
 
     lines.extend([
         "# uncertainty_policy = explicit data-driven terms; no generic tt_xsec/ST_xsec",
+        "# luminosity = Lumi POG Cholesky lnN components for 2016-2018 and 2022-2023; independent between Run 2 and Run 3",
         "# CMS_NPS26009_topmass_ttbar_BJetOS = asymmetric ttbar normalisation from top-mass dependence of the NNLO+NNLL reference cross section",
         "# experimental correlations = pileup/muon ID/muon scale by Run; muon trigger/JES/JER by era",
         "# b tagging = BTV fixed-WP comb_bc/incl_light x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)",

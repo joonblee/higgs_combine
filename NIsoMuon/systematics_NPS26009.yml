@@ -47,9 +47,13 @@ QCDscale_ren_ttbar:
   class: qcd_scale
   description: 'Uncertainty from variation of the QCD renormalization scale in ttbar production.'
 
-'CMS_NPS26009_lumi_(2016|2017|2018|2022|2023)':
+'lumi_13TeV_(1516|151617|15161718)_l':
   class: custom
-  description: 'Aggregate luminosity uncertainty for the indicated year group, preserving the implemented luminosity correlation model.'
+  description: 'Official Lumi POG Cholesky lnN components for the 2016-2018 combination, shared between the preVFP/postVFP periods and across years according to the recommended coefficients; independent of Run 3.'
+
+'lumi_(1|2)':
+  class: custom
+  description: 'Official Lumi POG Cholesky lnN components for the 2022-2023 combination, with the same coefficients within 2022/2022EE and 2023/2023BPix; independent of Run 2.'
 
 'CMS_l1_prefiring_(2016preVFP|2016postVFP|2017|2018)':
   class: custom
