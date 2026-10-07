@@ -311,7 +311,13 @@ def read_qcd_stat_inputs(root_file, era=None, template_path=None):
                 raise ValueError("Invalid QCDStat/" + name + " bins.")
             if name == "CentralYield" and not math.isclose(float(hist.GetBinContent(ibin)),
                     float(native.GetBinContent(ibin)), rel_tol=1e-5, abs_tol=1e-280):
-                raise ValueError("QCD statistical basis disagrees with the nominal template; regenerate matching files.")
+                raise ValueError(
+                    f"QCD statistical basis disagrees with the nominal template: bin={ibin}, "
+                    f"mass=[{axis.GetBinLowEdge(ibin):.17g},{axis.GetBinUpEdge(ibin):.17g}] GeV, "
+                    f"CentralYield={float(hist.GetBinContent(ibin)):.17g}, "
+                    f"nominal={float(native.GetBinContent(ibin)):.17g}. "
+                    "Identify this discrepancy before regenerating matching files."
+                )
         if not math.isclose(other.GetBinUpEdge(n), axis.GetBinUpEdge(n), rel_tol=0, abs_tol=1e-9):
             raise ValueError("Incompatible QCDStat/" + name + " axis.")
     return metadata, native, basis
