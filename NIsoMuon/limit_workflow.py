@@ -13,15 +13,16 @@ This ONE file performs all stages:
 
 Uncertainty policy in this revision
 -----------------------------------
-* Data-driven QCD has QCD_norm and QCD_shape only.  QCD_norm remains a
+* Data-driven QCD has QCD_norm, QCD_shape and QCD_stat.  QCD_norm remains a
   multiplicative lnN nuisance, while QCD_shape is propagated as an additive
   Gaussian uncertainty on the absolute QCD yield via the yield formula.
-  QCDStat/metadata supplies the retained SS covariance and transfer statistics.
+  QCDStat/ supplies producer-written yield derivatives and retained covariance.
+  Sum derivatives over the counting window before statistical propagation.
   A separate additive QCD_stat Gaussian uses sigma_NFstat + sigma_SSfitStat,
   a conservative first-order bound for their unknown cross-correlation.
   QCD yield = max(0, shape-yield parameter + statistical shift), times norm lnN.
-  Keep qcd_stat_uncertainty.py beside this script; regenerate per-era SS ROOT
-  files and cards before running the updated model. Older cards are rejected.
+  No separate statistical module is needed; regenerate per-era SS ROOT files
+  and cards for this storage format. Older ROOT files/cards are rejected.
 * Data-driven DY uses a constant aMC@NLO B/light normalization factor
   measured in 11--80 GeV and applied to the background-subtracted light-jet
   data source.  LightJetStat comes from that source Sumw2 error; the full aMC
@@ -110,7 +111,6 @@ values are physical alpha_qZ'.
 
 from __future__ import annotations
 
-from qcd_stat_uncertainty import read_qcd_stat_metadata, qcd_window_statistics, whole_bin_window
 
 import argparse
 import csv
@@ -243,7 +243,125 @@ DY_AUX_NF_AMC_INPUTS_PATH = "DYAux/NFInputs_aMC"
 DY_AUX_NF_MG_INPUTS_PATH = "DYAux/NFInputs_MG"
 # Native SS/DY outputs exclude 9--11 GeV; adaptive SS bins are fit-only.
 DATA_DRIVEN_MASS_WINDOW = (11.0, 80.0)
-BACKGROUND_CONTRACT = "SKPlotMaker-NF-SS-20261007-v3-QCDStat"
+QCD_STAT_SCHEMA = "NPS26009_QCDStat_v2"
+QCD_STAT_PATH = "QCDStat/metadata"
+QCD_STAT_TREATMENT = "linear_bound_unknown_nf_fit_correlation"
+QCD_STAT_BASIS = (["CentralYield"] + [f"FitGradient_{i}" for i in range(5)]
+                  + ["NFGradient_low_transfer", "NFGradient_mc_double_ratio"])
+
+def validate_qcd_stat_metadata(metadata, era=None, template_path=None):
+    if metadata.get("schema") != QCD_STAT_SCHEMA:
+        raise ValueError("Missing/obsolete QCD statistical metadata; rerun qcd_bkg_estimation.py in ss-data mode.")
+    if metadata.get("treatment") != QCD_STAT_TREATMENT:
+        raise ValueError("Unsupported QCD statistical treatment.")
+    if era is not None and metadata.get("era") != era:
+        raise ValueError("QCD statistical metadata belong to a different era.")
+    if template_path is not None and metadata.get("template_path") != template_path:
+        raise ValueError("QCD statistical metadata belong to a different histogram.")
+    fit = metadata["fit"]
+    if (fit.get("model") != "power_exp_logistic" or fit.get("coordinates") != "log(A),shape"
+            or not fit.get("reliable") or fit.get("covariance_status") != 3
+            or fit.get("boundary_parameters")):
+        raise ValueError("Reliable, interior SS central-fit covariance is required for QCD statistics.")
+    p, c = fit["parameters"], fit["covariance"]
+    if len(p) != 5 or len(c) != 5 or any(len(row) != 5 for row in c):
+        raise ValueError("Invalid QCD fit covariance dimensions.")
+    if not all(math.isfinite(v) for v in p + [v for row in c for v in row]):
+        raise ValueError("Non-finite QCD fit parameters/covariance.")
+    if p[4] <= 0 or any(c[i][i] < 0 for i in range(5)):
+        raise ValueError("Invalid QCD fit width/variance.")
+    if any(not math.isclose(c[i][j], c[j][i], rel_tol=1e-8, abs_tol=1e-15)
+           for i in range(5) for j in range(5)):
+        raise ValueError("Asymmetric QCD fit covariance.")
+    transfer = metadata["transfer_statistics"]
+    if not transfer.get("complete"):
+        raise ValueError("Incomplete QCD transfer statistics; DYAux/NF_aMC is required.")
+    for key in ("low_transfer", "mc_double_ratio", "high_transfer", "low_variance", "double_ratio_variance"):
+        if not math.isfinite(transfer[key]) or transfer[key] < 0:
+            raise ValueError("Invalid QCD transfer statistics.")
+    if transfer["low_transfer"] <= 0 or transfer["mc_double_ratio"] <= 0:
+        raise ValueError("Non-positive QCD transfer factor.")
+    if not math.isclose(transfer["high_transfer"], transfer["low_transfer"] * transfer["mc_double_ratio"], rel_tol=1e-10):
+        raise ValueError("Inconsistent low/high QCD transfer factors.")
+    if metadata.get("basis") != QCD_STAT_BASIS:
+        raise ValueError("Missing/obsolete QCD derivative basis; regenerate the SS ROOT file.")
+    return metadata
+
+
+def read_qcd_stat_inputs(root_file, era=None, template_path=None):
+    """Read producer-written derivatives and covariance; never reconstruct/refit f(m)."""
+    obj = root_file.Get(QCD_STAT_PATH) if root_file else None
+    if not obj or not hasattr(obj, "GetString"):
+        raise ValueError("Missing QCDStat/metadata; regenerate this era's NIsoMuon_SS_fit.root.")
+    metadata = validate_qcd_stat_metadata(json.loads(str(obj.GetString())), era, template_path)
+    native = root_file.Get(metadata["template_path"])
+    if not native or not hasattr(native, "GetNbinsX"):
+        raise ValueError("Missing QCD central histogram.")
+    basis = [root_file.Get("QCDStat/" + name) for name in QCD_STAT_BASIS]
+    n, axis = native.GetNbinsX(), native.GetXaxis()
+    for name, hist in zip(QCD_STAT_BASIS, basis):
+        if not hist or not hasattr(hist, "GetNbinsX") or hist.GetNbinsX() != n:
+            raise ValueError("Missing/incompatible QCDStat/" + name + "; regenerate the SS ROOT file.")
+        other = hist.GetXaxis()
+        for ibin in range(1, n + 1):
+            if (not math.isclose(other.GetBinLowEdge(ibin), axis.GetBinLowEdge(ibin), rel_tol=0, abs_tol=1e-9)
+                    or not math.isfinite(float(hist.GetBinContent(ibin)))):
+                raise ValueError("Invalid QCDStat/" + name + " bins.")
+            if name == "CentralYield" and not math.isclose(float(hist.GetBinContent(ibin)),
+                    float(native.GetBinContent(ibin)), rel_tol=1e-5, abs_tol=1e-280):
+                raise ValueError("QCD statistical basis disagrees with the nominal template; regenerate matching files.")
+        if not math.isclose(other.GetBinUpEdge(n), axis.GetBinUpEdge(n), rel_tol=0, abs_tol=1e-9):
+            raise ValueError("Incompatible QCDStat/" + name + " axis.")
+    return metadata, native, basis
+
+
+def read_qcd_stat_metadata(root_file, era=None, template_path=None):
+    # Preflight validates all required ROOT objects before old cards are removed.
+    return read_qcd_stat_inputs(root_file, era, template_path)[0]
+
+
+def whole_bin_window(hist, low, high):
+    axis, n = hist.GetXaxis(), hist.GetNbinsX()
+    low, high = max(low, axis.GetXmin()), min(high, axis.GetXmax())
+    if high <= low:
+        raise ValueError("Empty QCD statistical window.")
+    eps = 1e-9 * max(1.0, high - low)
+    first = max(1, min(n, axis.FindFixBin(low + eps)))
+    last = max(1, min(n, axis.FindFixBin(high - eps)))
+    return float(axis.GetBinLowEdge(first)), float(axis.GetBinUpEdge(last))
+
+
+def qcd_root_window_statistics(inputs, low, high, nominal=None):
+    """Sum derivatives first, then propagate covariance over whole native bins."""
+    metadata, native, basis = inputs
+    if not (math.isfinite(low) and math.isfinite(high) and low < high):
+        raise ValueError("Invalid QCD statistical window edges.")
+    low, high = whole_bin_window(native, low, high)
+    axis, n = native.GetXaxis(), native.GetNbinsX()
+    eps = 1e-9 * max(1.0, high - low)
+    first = max(1, min(n, axis.FindFixBin(low + eps)))
+    last = max(1, min(n, axis.FindFixBin(high - eps)))
+    values = [math.fsum(float(hist.GetBinContent(i)) for i in range(first, last + 1))
+              for hist in basis]
+    central, gradient = values[0], values[1:6]
+    covariance, transfer = metadata["fit"]["covariance"], metadata["transfer_statistics"]
+    terms = [gradient[i] * covariance[i][j] * gradient[j] for i in range(5) for j in range(5)]
+    variance = math.fsum(terms)
+    if not math.isfinite(variance) or variance < -1e-10 * max(math.fsum(map(abs, terms)), 1e-300):
+        raise ValueError("Invalid propagated QCD fit variance.")
+    nf_variance = (values[6] ** 2 * transfer["low_variance"]
+                   + values[7] ** 2 * transfer["double_ratio_variance"])
+    if nominal is not None and not math.isclose(central, nominal, rel_tol=1e-5, abs_tol=1e-280):
+        raise ValueError("QCD statistical basis disagrees with the nominal template; regenerate matching files.")
+    nf, fit = math.sqrt(nf_variance), math.sqrt(max(variance, 0.0))
+    if not all(math.isfinite(v) for v in (central, nf, fit, nf + fit)):
+        raise ValueError("Non-finite propagated QCD statistics.")
+    return dict(central=central, sigma_nf_stat=nf, sigma_fit_stat=fit, gradient=gradient,
+                sigma_stat_bound=nf + fit, stat_quadrature_assuming_independent=math.hypot(nf, fit),
+                treatment=QCD_STAT_TREATMENT, effective_low=low, effective_high=high)
+
+
+BACKGROUND_CONTRACT = "SKPlotMaker-NF-SS-20261007-v4-QCDStatROOT"
 DY_NF_RATEPARAM_NSIGMA = 10.0
 DATA_DRIVEN_DY_NUISANCES: Tuple[str, ...] = (
     "DY_LightJetStat", "DY_NFModel"
@@ -696,12 +814,8 @@ class RootReader:
     def qcd_statistics(self, filename, template_path, low, high, era, nominal):
         f = self._file(filename)
         try:
-            metadata = read_qcd_stat_metadata(f, era, template_path)
-            hist = f.Get(template_path)
-            if not hist:
-                raise ValueError("Missing QCD central histogram.")
-            effective_low, effective_high = whole_bin_window(hist, low, high)
-            return qcd_window_statistics(metadata, effective_low, effective_high, nominal)
+            inputs = read_qcd_stat_inputs(f, era, template_path)
+            return qcd_root_window_statistics(inputs, low, high, nominal)
         except (ValueError, KeyError, TypeError, OverflowError) as exc:
             raise WorkflowError(f"{era}: {filename}: {exc}") from exc
 

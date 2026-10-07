@@ -1,13 +1,17 @@
 # higgs_combine
 
 The NIsoMuon counting workflow is in `NIsoMuon/limit_workflow.py`; review tasks
-are in `NIsoMuon/combine_review.py`. Keep `qcd_stat_uncertainty.py` beside them.
+are in `NIsoMuon/combine_review.py`. Both are self-contained; no separate
+`qcd_stat_uncertainty.py` module or execution is required.
 
 The data-driven QCD model now includes a separate additive statistical shift in
 addition to the existing Norm (`lnN`) and functional-form (`param`) uncertainties.
-Each era's updated SKPlotMaker SS production must provide `QCDStat/metadata` in
-`NIsoMuon_SS_fit.root`. The full fit covariance is propagated over each actual
-counting window. NF-stat + SS-fit-stat is used as a conservative first-order
+Each era's updated SKPlotMaker SS producer computes the statistical derivatives
+in `qcd_bkg_estimation.py` and saves `QCDStat/metadata` (`NPS26009_QCDStat_v2`),
+`CentralYield`, `FitGradient_0` through `FitGradient_4`, and the two `NFGradient_*`
+histograms in `NIsoMuon_SS_fit.root`. The workflow sums these yield derivatives
+over each actual counting window and propagates the stored full covariance;
+it does not reconstruct or refit the SS function. NF-stat + SS-fit-stat is used as a conservative first-order
 linear bound because their shared-SS cross-covariance is unknown.
 
 The rate is `max(0, shape-yield parameter + statistical shift)` times Norm lnN,
@@ -16,7 +20,8 @@ and central-template consistency are required even without `--strict`.
 Blinded observations remain the unrounded nominal background-only expectation;
 formula parameters are evaluated at their Gaussian means without reading SR data.
 
-Run the per-era SS producer sequentially first (adaptive binning, target effective
+Regenerate ROOT files for this storage format; metadata-only older files are
+rejected. Run the per-era SS producer sequentially first (adaptive binning, target effective
 count 10, maximum width 5 GeV), then in `NIsoMuon`:
 
 ```bash
