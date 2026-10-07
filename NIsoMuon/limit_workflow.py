@@ -17,6 +17,8 @@ Uncertainty policy in this revision
   multiplicative lnN nuisance, while QCD_shape is propagated as an additive
   Gaussian uncertainty on the absolute QCD yield via the yield formula.
   QCDStat/ supplies producer-written yield derivatives and retained covariance.
+  Covariance status 2 or 3 is accepted, including boundary solutions. Where
+  needed, Minuit2 regularises the covariance to be positive definite.
   Sum derivatives over the counting window before statistical propagation.
   A separate additive QCD_stat Gaussian uses sigma_NFstat + sigma_SSfitStat,
   a conservative first-order bound for their unknown cross-correlation.
@@ -260,9 +262,9 @@ def validate_qcd_stat_metadata(metadata, era=None, template_path=None):
         raise ValueError("QCD statistical metadata belong to a different histogram.")
     fit = metadata["fit"]
     if (fit.get("model") != "power_exp_logistic" or fit.get("coordinates") != "log(A),shape"
-            or not fit.get("reliable") or fit.get("covariance_status") != 3
-            or fit.get("boundary_parameters")):
-        raise ValueError("Reliable, interior SS central-fit covariance is required for QCD statistics.")
+            or not fit.get("usable", fit.get("reliable"))
+            or fit.get("covariance_status") not in (2, 3)):
+        raise ValueError("Usable SS central-fit covariance (status 2 or 3) is required for QCD statistics.")
     p, c = fit["parameters"], fit["covariance"]
     if len(p) != 5 or len(c) != 5 or any(len(row) != 5 for row in c):
         raise ValueError("Invalid QCD fit covariance dimensions.")
@@ -358,6 +360,9 @@ def qcd_root_window_statistics(inputs, low, high, nominal=None):
         raise ValueError("Non-finite propagated QCD statistics.")
     return dict(central=central, sigma_nf_stat=nf, sigma_fit_stat=fit, gradient=gradient,
                 sigma_stat_bound=nf + fit, stat_quadrature_assuming_independent=math.hypot(nf, fit),
+                covariance_status=metadata["fit"]["covariance_status"],
+                covariance_regularised=(metadata["fit"]["covariance_status"] == 2),
+                boundary_parameters=list(metadata["fit"].get("boundary_parameters", [])),
                 treatment=QCD_STAT_TREATMENT, effective_low=low, effective_high=high)
 
 
@@ -1856,7 +1861,10 @@ def build_channels_for_mass(
             qcd_fit_stat_sigma = qcd_statistics["sigma_fit_stat"]
             audit.add("QCD_stat/metadata", year, True)
             print(f"[QCD STAT] {year} M-{label}: NF={qcd_nf_stat_sigma:.6g}, "
-                  f"SS-fit={qcd_fit_stat_sigma:.6g}, conservative bound={qcd_stat_sigma:.6g}")
+                  f"SS-fit={qcd_fit_stat_sigma:.6g}, conservative bound={qcd_stat_sigma:.6g}, "
+                  f"cov={qcd_statistics['covariance_status']}, "
+                  f"regularised={int(qcd_statistics['covariance_regularised'])}, "
+                  f"boundary={','.join(qcd_statistics['boundary_parameters']) or 'none'}")
             for syst_name, (down_suffix, up_suffix) in QCD_SYST.items():
                 down = read_required(
                     reader, audit, f"{syst_name}/QCD", f"{year}:Down",

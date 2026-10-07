@@ -13,6 +13,9 @@ histograms in `NIsoMuon_SS_fit.root`. The workflow sums these yield derivatives
 over each actual counting window and propagates the stored full covariance;
 it does not reconstruct or refit the SS function. NF-stat + SS-fit-stat is used as a conservative first-order
 linear bound because their shared-SS cross-covariance is unknown.
+Covariance status 2 or 3 is accepted, including boundary solutions such as
+`n = 0`. Where needed, Minuit2 regularises the covariance to be positive definite.
+The workflow uses the saved matrix directly and reports its status and boundaries.
 
 The rate is `max(0, shape-yield parameter + statistical shift)` times Norm lnN,
 with base QCD rate 1. Central fits and yields are retained. Statistical metadata
