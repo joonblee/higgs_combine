@@ -23,6 +23,12 @@ and central-template consistency are required even without `--strict`.
 Blinded observations remain the unrounded nominal background-only expectation;
 formula parameters are evaluated at their Gaussian means without reading SR data.
 
+The generated formula is `max(0.0,@0+@1)`: the floating-point zero avoids an
+ambiguous `TMath::Max` overload in ROOT. Rebuild cards containing `max(0,@0+@1)`
+with `--stage cards` or `--stage all`; existing QCD ROOT files need no rerun.
+Combine command failures stop immediately. Adaptive rMax expansion is based on
+the collected limit output, rather than a non-zero command exit status.
+
 Regenerate ROOT files for this storage format; metadata-only older files are
 rejected. Run the per-era SS producer sequentially first (adaptive binning, target effective
 count 10, maximum width 5 GeV), then in `NIsoMuon`:

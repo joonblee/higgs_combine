@@ -1631,8 +1631,8 @@ def _validate_background_card(args, card):
             if not any(row[:2] == [stat_name, "param"] for row in rows):
                 raise WorkflowError(f"{card}: missing dedicated QCD statistical constraint for {year}; rebuild cards.")
             if not any(len(row) == 6 and row[:4] == [yield_name, "rateParam", bin_name, "QCD"]
-                       and row[4] == "max(0,@0+@1)" and stat_name in row[5].split(",") for row in rows):
-                raise WorkflowError(f"{card}: QCD statistical constraint is not connected to its yield in {year}.")
+                       and row[4] == "max(0.0,@0+@1)" and stat_name in row[5].split(",") for row in rows):
+                raise WorkflowError(f"{card}: QCD statistical constraint is missing or uses an obsolete yield formula in {year}; rebuild cards with --stage cards (or --stage all).")
 
 
 def build_channels_for_mass(
@@ -2588,7 +2588,7 @@ def write_datacard(
                 f"[0,{format_number(shape_upper)}]",
                 f"{stat_name} param 0 {format_number(sigma_stat)} "
                 f"[-{format_number(stat_range)},{format_number(stat_range)}]",
-                f"{yield_name} rateParam bin_{channel.year} QCD max(0,@0+@1) {shape_name},{stat_name}",
+                f"{yield_name} rateParam bin_{channel.year} QCD max(0.0,@0+@1) {shape_name},{stat_name}",
             ])
 
     if args.mode == "blind":
@@ -2868,7 +2868,7 @@ def counting_card_nominal_rate_params(card_text: str):
         try:
             nominal = float(row[4])
         except ValueError:
-            if len(row) != 6 or row[4] != "max(0,@0+@1)":
+            if len(row) != 6 or row[4] not in {"max(0.0,@0+@1)", "max(0,@0+@1)"}:
                 raise WorkflowError(f"Unsupported nominal rateParam formula: {' '.join(row)}")
             arguments = row[5].split(",")
             if len(arguments) != 2 or any(name not in means for name in arguments):
@@ -3226,6 +3226,12 @@ def run_asymptotic(
             )
 
             status = run_command(command, outdir, allow_failure=True)
+            if status != 0:
+                raise WorkflowError(
+                    f"AsymptoticLimits for {target} M-{label} failed with "
+                    f"Combine exit status {status}. Check the preceding Combine "
+                    "output; a command failure is not evidence that rMax is too small."
+                )
             matches = sorted(
                 outdir.glob(
                     f"higgsCombine.{fit_tag}.AsymptoticLimits.mH*.root"
@@ -3246,10 +3252,11 @@ def run_asymptotic(
                     args.limit_r_expand_threshold,
                     blind_expected,
                 )
-            elif status != 0:
-                reason = f"Combine exited with status {status}"
             else:
-                reason = "AsymptoticLimits ROOT output is missing"
+                raise WorkflowError(
+                    f"AsymptoticLimits for {target} M-{label} produced no ROOT "
+                    "output. Check the preceding Combine output."
+                )
 
             if not needs_expansion and matches:
                 print(
