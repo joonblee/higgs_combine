@@ -131,6 +131,7 @@ import subprocess
 import sys
 from collections import defaultdict
 from collections.abc import MutableMapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -3516,12 +3517,22 @@ def run_asymptotic(
                 f"cap={rmax_cap:.6g}"
             )
 
-            status = run_command(command, outdir, allow_failure=True)
+            log_path = None
+            if getattr(args, "jobs", 1) > 1:
+                log_path = outdir / f"combine_{fit_tag}_attempt{attempt+1}.log"
+                print(f"[LIMIT-LOG] {target} M-{label}: {log_path}", flush=True)
+            status = run_command(
+                command, outdir, allow_failure=True, stdout_path=log_path
+            )
             if status != 0:
+                output_hint = (
+                    f"Check {log_path}" if log_path is not None
+                    else "Check the preceding Combine output"
+                )
                 raise WorkflowError(
                     f"AsymptoticLimits for {target} M-{label} failed with "
-                    f"Combine exit status {status}. Check the preceding Combine "
-                    "output; a command failure is not evidence that rMax is too small."
+                    f"Combine exit status {status}. {output_hint}; "
+                    "a command failure is not evidence that rMax is too small."
                 )
             matches = sorted(
                 outdir.glob(
@@ -4047,13 +4058,78 @@ def collect_and_plot_limits(
     ], outdir)
 
 
+def prepare_card_run(
+    args: argparse.Namespace, card: Path, target: str, outdir: Path,
+) -> Tuple[str, float]:
+    label, mass = extract_mass_from_card(card, target)
+    clean_mass_outputs(outdir, tag_for(args, target), label, args.task)
+    rmax = effective_r_max(args, card)
+    if args.parameter == "alpha":
+        unit = alpha_unit_from_card(card)
+        print(
+            f"[{target}] M-{label}: alpha_unit={unit:.8g}, "
+            f"internal r=[{effective_r_min(args):.4g},{rmax:.4g}], "
+            f"physical alpha max={unit*rmax:.8g}"
+        )
+    else:
+        print(f"[{target}] M-{label}: r=[{effective_r_min(args):.4g},{rmax:.4g}]")
+    return label, mass
+
+
+def run_parallel_limits(args: argparse.Namespace) -> None:
+    batches: List[Tuple[str, List[Path], Path]] = []
+    # Validate every selected target before any worker removes an old output.
+    for target in selected_targets(args.target):
+        cards = cards_for_target(args, target)
+        if not cards:
+            raise WorkflowError(f"No datacards found for {target}: {card_pattern(args, target)}")
+        for card in cards:
+            _validate_background_card(args, card)
+        outdir = output_dir(args, target)
+        outdir.mkdir(parents=True, exist_ok=True)
+        batches.append((target, cards, outdir))
+
+    def run_card(target: str, card: Path, outdir: Path) -> LimitOutputs:
+        label, mass = prepare_card_run(args, card, target, outdir)
+        return run_asymptotic(args, card, target, label, mass, outdir)
+
+    job_count = sum(len(cards) for _, cards, _ in batches)
+    workers = min(args.jobs, job_count)
+    print(f"[LIMIT-JOBS] jobs={job_count}, parallel={workers}, mode={args.mode}", flush=True)
+    results: Dict[Tuple[str, Path], LimitOutputs] = {}
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(run_card, target, card, outdir): (target, card)
+            for target, cards, outdir in batches for card in cards
+        }
+        try:
+            for future in as_completed(futures):
+                target, card = futures[future]
+                results[(target, card)] = future.result()
+                print(
+                    f"[LIMIT-JOBS] completed={len(results)}/{job_count}: {target} {card.name}",
+                    flush=True,
+                )
+        except Exception:
+            for future in futures:
+                future.cancel()
+            raise
+
+    # Collection/plotting is serial, once per target, in the original card order.
+    for target, cards, outdir in batches:
+        collect_and_plot_limits(
+            args, target, cards,
+            [results[(target, card)].observed for card in cards],
+            [results[(target, card)].expected for card in cards], outdir,
+        )
+
+
 def run_target(args: argparse.Namespace, target: str) -> None:
     cards = cards_for_target(args, target)
     if not cards:
         raise WorkflowError(f"No datacards found for {target}: {card_pattern(args, target)}")
     outdir = output_dir(args, target)
     outdir.mkdir(parents=True, exist_ok=True)
-    tag = tag_for(args, target)
     observed_limit_outputs: List[Path] = []
     expected_limit_outputs: List[Path] = []
 
@@ -4062,18 +4138,7 @@ def run_target(args: argparse.Namespace, target: str) -> None:
         _validate_background_card(args, card)
 
     for card in cards:
-        label, mass = extract_mass_from_card(card, target)
-        clean_mass_outputs(outdir, tag, label, args.task)
-        rmax = effective_r_max(args, card)
-        if args.parameter == "alpha":
-            unit = alpha_unit_from_card(card)
-            print(
-                f"[{target}] M-{label}: alpha_unit={unit:.8g}, "
-                f"internal r=[{effective_r_min(args):.4g},{rmax:.4g}], "
-                f"physical alpha max={unit*rmax:.8g}"
-            )
-        else:
-            print(f"[{target}] M-{label}: r=[{effective_r_min(args):.4g},{rmax:.4g}]")
+        label, mass = prepare_card_run(args, card, target, outdir)
 
         if args.task in {"limits", "all"}:
             result = run_asymptotic(args, card, target, label, mass, outdir)
@@ -4103,8 +4168,11 @@ def run_combine(args: argparse.Namespace) -> None:
             "FitDiagnostics use the physical lower bound r>=0."
         )
 
-    for target in selected_targets(args.target):
-        run_target(args, target)
+    if getattr(args, "jobs", 1) > 1:
+        run_parallel_limits(args)
+    else:
+        for target in selected_targets(args.target):
+            run_target(args, target)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -4203,6 +4271,13 @@ def build_parser() -> argparse.ArgumentParser:
     xsec.add_argument("--signal-reference-xsec-pb", type=float, default=None)
 
     combine = parser.add_argument_group("Combine controls")
+    combine.add_argument(
+        "--jobs", type=int, default=1,
+        help=(
+            "Maximum concurrent mass/target jobs for --task limits; default: 1. "
+            "Blind and observed fits for one card run sequentially."
+        ),
+    )
     combine.add_argument("--r-min", type=float, default=None)
     combine.add_argument("--r-max", type=float, default=None)
     combine.add_argument(
@@ -4272,6 +4347,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def validate_args(args: argparse.Namespace) -> None:
+    if args.jobs < 1:
+        raise WorkflowError("--jobs must be at least 1.")
+    if args.jobs > 1 and args.task != "limits":
+        raise WorkflowError("--jobs > 1 requires --task limits; use --impact-parallel for impacts.")
     if args.n_sigma <= 0.0:
         raise WorkflowError("--n-sigma must be positive.")
     if args.alpha_card_yield <= 0.0:
@@ -4337,6 +4416,8 @@ def validate_args(args: argparse.Namespace) -> None:
 def print_configuration(args: argparse.Namespace) -> None:
     print("[CONFIG] workflow_tag=20260826_0541")
     print(f"[CONFIG] stage={args.stage}, task={args.task}")
+    if args.task == "limits":
+        print(f"[CONFIG] limit jobs={args.jobs}")
     print(f"[CONFIG] target={args.target}, parameter={args.parameter}, mode={args.mode}")
     print(f"[CONFIG] base_dir={args.base_dir}")
     print(f"[CONFIG] region={args.region}")
