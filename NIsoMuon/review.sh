@@ -19,7 +19,7 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 command -v combine
 command -v text2workspace.py
 command -v combineTool.py
-combine --version
+# Combine v11 prints its version banner during diagnostics; it has no --version option.
 python3 -c 'import ROOT; print("[ROOT]", ROOT.gROOT.GetVersion())'
 
 # A unique directory prevents reuse of workspaces or toys from the old model.
