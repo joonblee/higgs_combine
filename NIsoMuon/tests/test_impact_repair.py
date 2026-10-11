@@ -2,6 +2,7 @@
 import copy
 import json
 import math
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -87,6 +88,85 @@ class ImpactRepairTests(unittest.TestCase):
                 patch.object(w, "alpha_unit_from_card", return_value=1.):
             w.prepare_card_run(args, Path("card.txt"), "Run2", Path("output"))
         clean.assert_not_called()
+
+    def test_resume_reuses_three_scans_and_retries_only_missing_conditional_fit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            args = w.build_parser().parse_args(["--stage", "run", "--task", "impacts"])
+            names = ["tiny", "jer", "mcstat", "prefiring"]
+            payload = {"POIs": [{"name": "r", "fit": [-1., 0., 1.]}],
+                       "params": [parameter(n, [-1., 0., 0.]) for n in names]}
+            internal = out / "impacts.json"
+            internal.write_text(json.dumps(payload))
+            workspace = out / "workspace.root"
+            workspace.write_bytes(b"workspace")
+            initial = out / "higgsCombine_initialFit_.Impacts_Run2_alpha_M70.MultiDimFit.mH70.root"
+            initial.write_bytes(b"initial")
+            directory = out / "impact_repair_M70"
+            directory.mkdir()
+            scans = {n: directory / f"higgsCombine_paramFit_.Impacts_Run2_alpha_M70_{n}.MultiDimFit.mH70.root"
+                     for n in names}
+            for n in names[:3]:
+                scans[n].write_bytes(b"good")
+            scans["prefiring"].write_bytes(b"incomplete")
+            attempts = []
+            def fake_run(command, cwd, **kwargs):
+                if "--doFits" in command:
+                    self.assertEqual(command[command.index("--named") + 1], "prefiring")
+                    self.assertFalse(scans["prefiring"].exists())
+                    strategy = command[command.index("--cminDefaultMinimizerStrategy") + 1]
+                    attempts.append(strategy)
+                    self.assertEqual(command[command.index("--setRobustFitStrategy") + 1], strategy)
+                    self.assertEqual(command.count("--cminFallbackAlgo"), 2)
+                    self.assertEqual(command[command.index("-v") + 1], "2")
+                    scans["prefiring"].write_bytes(b"good" if strategy == "1" else b"incomplete")
+                else:
+                    good = [parameter(n, [-3e-13, 0., 3e-13] if n == "tiny" else None)
+                            for n in names if scans[n].exists() and scans[n].read_bytes() == b"good"]
+                    (cwd / "retry_internal.json").write_text(json.dumps({"params": good}))
+                return 0
+            with patch.object(w, "impact_workspace_parameters", return_value={n: (-7., 7.) for n in names}), \
+                    patch.object(w, "run_command", side_effect=fake_run):
+                result = w.repair_impact_payload(args, out / "card", "Run2", "70", 70.,
+                                                out, workspace, internal, payload, -2., 10.)
+            self.assertEqual(attempts, ["2", "1"])
+            self.assertEqual(len(result["params"]), 4)
+            for n in names[:3]:
+                self.assertEqual(scans[n].read_bytes(), b"good")
+
+    def test_rebuilt_workspace_discards_old_retry_scan(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            args = w.build_parser().parse_args(["--stage", "run", "--task", "impacts"])
+            payload = {"POIs": [{"name": "r", "fit": [-1., 0., 1.]}],
+                       "params": [parameter(fit=[-1., 0., 0.])]}
+            internal = out / "impacts.json"
+            internal.write_text(json.dumps(payload))
+            workspace = out / "workspace.root"
+            workspace.write_bytes(b"new workspace")
+            (out / "higgsCombine_initialFit_.Impacts_Run2_alpha_M70.MultiDimFit.mH70.root").touch()
+            directory = out / "impact_repair_M70"
+            directory.mkdir()
+            scan = directory / "higgsCombine_paramFit_.Impacts_Run2_alpha_M70_theta.MultiDimFit.mH70.root"
+            scan.write_bytes(b"old result")
+            os.utime(scan, (1., 1.))
+            attempts = []
+            def fake_run(command, cwd, **kwargs):
+                if "--doFits" in command:
+                    attempts.append(command)
+                    self.assertFalse(scan.exists())
+                    scan.write_bytes(b"new result")
+                else:
+                    if not attempts:
+                        self.assertFalse(scan.exists())
+                    (cwd / "retry_internal.json").write_text(json.dumps({"params": [parameter()] if attempts else []}))
+                return 0
+            with patch.object(w, "impact_workspace_parameters", return_value={"theta": (-7., 7.)}), \
+                    patch.object(w, "run_command", side_effect=fake_run):
+                w.repair_impact_payload(args, out / "card", "Run2", "70", 70.,
+                                       out, workspace, internal, payload, -2., 10.)
+            self.assertEqual(len(attempts), 1)
+            self.assertEqual(scan.read_bytes(), b"new result")
 
     def test_successful_boundary_repair_retains_good_scan(self):
         with tempfile.TemporaryDirectory() as tmp:
