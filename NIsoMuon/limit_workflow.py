@@ -3751,6 +3751,202 @@ def nps_endpoint_safe_plot_impacts_script(plot_script: Path, outdir: Path) -> Pa
     return local_script
 
 
+def impact_interval_issues(payload, expected):
+    """Reject missing scans and collapsed nuisance intervals, not zero r impacts."""
+    params = payload.get("params", [])
+    names = [p.get("name") for p in params]
+    if len(names) != len(set(names)):
+        raise WorkflowError("Duplicate nuisance names in impact JSON")
+    missing = sorted(set(expected) - set(names))
+    extra = sorted(set(names) - set(expected))
+    if extra:
+        raise WorkflowError(f"Unexpected impact nuisances: {','.join(extra)}")
+    bad = {}
+    for p in params:
+        name = p["name"]
+        fit = p.get("fit", [])
+        rfit = p.get("r", [])
+        if (len(fit) != 3 or len(rfit) != 3
+                or not all(math.isfinite(x) for x in [*fit, *rfit])
+                or not fit[0] <= fit[1] <= fit[2]):
+            bad[name] = ["invalid"]
+            continue
+        sides = []
+        for side, index in (("lower", 0), ("upper", 2)):
+            if fit[index] == fit[1]:
+                endpoint = p.get("boundary_endpoints", {}).get(side, {})
+                delta = endpoint.get("deltaNLL", math.inf)
+                if (endpoint.get("value") != fit[index]
+                        or not math.isfinite(delta) or not -0.01 <= delta < 0.51):
+                    sides.append(side)
+        if sides:
+            bad[name] = sides
+    return missing, bad
+
+
+def apply_impact_boundary_endpoint(param, value, rvalue, delta_nll):
+    """Record an actual conditional fit at a truncated lower endpoint."""
+    if (not all(math.isfinite(x) for x in (value, rvalue, delta_nll))
+            or not -0.01 <= delta_nll < 0.51
+            or value > param["fit"][1]):
+        raise WorkflowError(f"Invalid boundary conditional fit for {param['name']}")
+    param["fit"][0] = value
+    param["r"][0] = rvalue
+    param["impact_r"] = max(abs(param["r"][i] - param["r"][1]) for i in (0, 2))
+    param.setdefault("boundary_endpoints", {})["lower"] = {
+        "value": value, "deltaNLL": delta_nll,
+        "method": "conditional-fit-at-physical-bound",
+    }
+
+
+def impact_workspace_parameters(workspace):
+    ROOT = RootReader().ROOT
+    source = ROOT.TFile.Open(str(workspace))
+    if not source or source.IsZombie():
+        raise WorkflowError(f"Cannot open impact workspace: {workspace}")
+    try:
+        w = source.Get("w")
+        config = w.obj("ModelConfig") if w else None
+        if not config:
+            raise WorkflowError(f"No ModelConfig in {workspace}")
+        pois = {v.GetName() for v in config.GetParametersOfInterest()}
+        variables = config.GetPdf().getParameters(config.GetObservables())
+        return {v.GetName(): (float(v.getMin()), float(v.getMax()))
+                for v in variables if v.InheritsFrom("RooRealVar")
+                and not v.isConstant() and v.GetName() not in pois}
+    finally:
+        source.Close()
+
+
+def read_boundary_impact_result(path, nuisance, bound, rmin, rmax):
+    """MultiDimFit fixed commits a second entry only after a successful profile."""
+    ROOT = RootReader().ROOT
+    source = ROOT.TFile.Open(str(path))
+    if not source or source.IsZombie():
+        raise WorkflowError(f"Missing boundary fit: {path}")
+    try:
+        tree = source.Get("limit")
+        if not tree or tree.GetEntries() != 2:
+            raise WorkflowError(f"Boundary fit did not produce both entries: {path}")
+        tree.GetEntry(1)
+        endpoint = float(getattr(tree, nuisance))
+        rvalue = float(tree.r)
+        delta = float(tree.deltaNLL)
+        if (not all(math.isfinite(x) for x in (endpoint, rvalue, delta))
+                or endpoint != bound or not rmin < rvalue < rmax
+                or not -0.01 <= delta < 0.51):
+            raise WorkflowError(
+                f"Boundary profile rejected for {nuisance}: endpoint={endpoint}, "
+                f"r={rvalue}, deltaNLL={delta}; see {path.parent / 'fit.log'}")
+        return rvalue, delta
+    finally:
+        source.Close()
+
+
+def repair_impact_payload(args, card, target, label, mass, outdir,
+                          workspace, internal_json, payload, rmin, rmax):
+    """Reuse good scans; retry failed scans and profile truncated QCD endpoints."""
+    poi = next((p for p in payload.get("POIs", []) if p.get("name") == "r"), None)
+    fit = poi.get("fit", []) if poi else []
+    if (len(fit) != 3 or not all(math.isfinite(x) for x in fit)
+            or not fit[0] <= fit[1] <= fit[2] or fit[0] == fit[2]):
+        raise WorkflowError("Missing or invalid initial POI fit in impact JSON")
+    bounds = impact_workspace_parameters(workspace)
+    missing, bad = impact_interval_issues(payload, bounds)
+    params = {p["name"]: p for p in payload["params"]}
+    boundary = [name for name, sides in bad.items()
+                if sides == ["lower"] and "_bckgShape_QCD_" in name
+                and bounds[name][0] == 0.0]
+    retry = sorted(set(missing) | (set(bad) - set(boundary)))
+    tag = tag_for(args, target)
+    name = f".Impacts_{tag}_M{label}"
+    mass_arg = format_mass_for_combine(mass)
+    # Separate retry directory preserves all original ROOT scans and logs.
+    repair_dir = outdir / f"impact_repair_M{label}"
+    repair_dir.mkdir(parents=True, exist_ok=True)
+    common = ["combineTool.py", "-M", "Impacts", "-d", str(workspace),
+              "-m", mass_arg, "-n", name, "--robustFit", "1",
+              "--cminDefaultMinimizerStrategy", "2",
+              "--cminDefaultMinimizerTolerance", "1e-4",
+              "--setRobustFitStrategy", "2", "--setRobustFitTolerance", "1e-4",
+              "--setCrossingTolerance", "1e-12", "--stepSize", "0.02",
+              *explicit_range_args(rmin, rmax, card)]
+    blind = ["-t", "-1", "--expectSignal", "0"] if args.mode == "blind" else []
+    common.extend(blind)
+    print(f"[IMPACT REPAIR] {target} M{label}: missing={len(missing)}, "
+          f"retry={len(retry)}, boundary={len(boundary)}", flush=True)
+    backup = internal_json.with_suffix(".before_repair.json")
+    if not backup.exists():
+        shutil.copy2(internal_json, backup)
+    if retry:
+        initial = f"higgsCombine_initialFit_{name}.MultiDimFit.mH{mass_arg}.root"
+        if not (outdir / initial).exists():
+            raise WorkflowError(f"Missing initial impact ROOT file: {outdir / initial}")
+        shutil.copy2(outdir / initial, repair_dir / initial)
+        for nuisance in retry:
+            stale = repair_dir / f"higgsCombine_paramFit_{name}_{nuisance}.MultiDimFit.mH{mass_arg}.root"
+            if stale.exists():
+                stale.unlink()
+        retry_cmd = [*common, "--doFits", "--named", ",".join(retry),
+                     "--parallel", str(args.impact_parallel)]
+        run_command(retry_cmd, repair_dir, stdout_path=repair_dir / "retry.log")
+        retry_json = repair_dir / "retry_internal.json"
+        if retry_json.exists():
+            retry_json.unlink()
+        run_command(["combineTool.py", "-M", "Impacts", "-d", str(workspace),
+                     "-m", mass_arg, "-n", name, "--named", ",".join(retry),
+                     "-o", retry_json.name], repair_dir,
+                    stdout_path=repair_dir / "collect.log")
+        updated = json.loads(retry_json.read_text())
+        still_missing, still_bad = impact_interval_issues(updated, retry)
+        if still_missing or still_bad:
+            raise WorkflowError(f"Impact retries failed: missing={still_missing}, "
+                                f"intervals={still_bad}; see {repair_dir / 'retry.log'}")
+        params.update({p["name"]: p for p in updated["params"]})
+    jobs = []
+    for nuisance in boundary:
+        directory = repair_dir / nuisance
+        directory.mkdir(parents=True, exist_ok=True)
+        stale = directory / f"higgsCombine.Boundary.MultiDimFit.mH{mass_arg}.root"
+        if stale.exists():
+            stale.unlink()
+        # Scan only the nuisance; r remains a floating other POI. The second
+        # tree entry is the conditional profile and its deltaNLL is relative
+        # to the unrestricted fit in the SAME Combine invocation.
+        command = ["combine", "-M", "MultiDimFit", str(workspace), "-m", mass_arg,
+                   "--algo", "fixed", "-P", nuisance, "--floatOtherPOIs", "1",
+                   "--saveInactivePOI", "1", "--fixedPointPOIs", f"{nuisance}=0",
+                   "--cminDefaultMinimizerStrategy", "2",
+                   "--cminDefaultMinimizerTolerance", "1e-4",
+                   *explicit_range_args(rmin, rmax, card), *blind,
+                   "-n", ".Boundary", "-v", "1"]
+        jobs.append((nuisance, directory, command))
+    if jobs:
+        with ThreadPoolExecutor(max_workers=min(args.impact_parallel, len(jobs))) as executor:
+            futures = {executor.submit(run_command, command, directory,
+                       stdout_path=directory / "fit.log"): nuisance
+                       for nuisance, directory, command in jobs}
+            for future in as_completed(futures):
+                future.result()
+        for nuisance, directory, _ in jobs:
+            path = directory / f"higgsCombine.Boundary.MultiDimFit.mH{mass_arg}.root"
+            rvalue, delta = read_boundary_impact_result(path, nuisance, 0.0, rmin, rmax)
+            apply_impact_boundary_endpoint(params[nuisance], 0.0, rvalue, delta)
+            print(f"[IMPACT BOUNDARY] {target} M{label} {nuisance}: "
+                  f"endpoint=0 r={rvalue:.8g} deltaNLL={delta:.8g}", flush=True)
+    payload["params"] = [params[name] for name in sorted(params)]
+    unresolved, invalid = impact_interval_issues(payload, bounds)
+    if unresolved or invalid:
+        raise WorkflowError(f"Incomplete impacts: missing={unresolved}, intervals={invalid}")
+    report = {"target": target, "mass": mass, "expected": len(bounds),
+              "present": len(params), "retried": retry, "boundary": boundary,
+              "passed": True}
+    (repair_dir / "validation.json").write_text(json.dumps(report, indent=2) + "\n")
+    internal_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    print(f"[IMPACT CHECK] {target} M{label}: {len(params)}/{len(bounds)} passed", flush=True)
+    return payload
+
+
 def run_impacts(
     args: argparse.Namespace,
     card: Path,
@@ -3766,10 +3962,13 @@ def run_impacts(
     tag = tag_for(args, target)
     name = f"Impacts_{tag}_M{label}"
     workspace = outdir / f"workspace_{tag}_M{label}.root"
-    run_command(
-        ["text2workspace.py", str(card), "-m", format_mass_for_combine(mass), "-o", workspace.name],
-        outdir,
-    )
+    if not args.repair_impacts:
+        run_command(
+            ["text2workspace.py", str(card), "-m", format_mass_for_combine(mass), "-o", workspace.name],
+            outdir,
+        )
+    elif not workspace.exists():
+        raise WorkflowError(f"--repair-impacts requires existing workspace: {workspace}")
 
     suffix = "_internal" if args.parameter == "alpha" else ""
     internal_json = outdir / f"impacts_{tag}_M{label}{suffix}.json"
@@ -3784,7 +3983,13 @@ def run_impacts(
 
     payload_internal: Optional[MutableMapping[str, Any]] = None
     completed = False
-    for attempt in range(args.impact_range_retries + 1):
+    attempts = range(args.impact_range_retries + 1) if not args.repair_impacts else []
+    if args.repair_impacts:
+        if not internal_json.exists():
+            raise WorkflowError(f"--repair-impacts requires existing JSON: {internal_json}")
+        payload_internal = json.loads(internal_json.read_text())
+        completed = True
+    for attempt in attempts:
         # Remove only MultiDimFit products from an earlier range attempt.
         for pattern in (
             f"higgsCombine_initialFit_*.MultiDimFit.mH*.root",
@@ -3869,6 +4074,11 @@ def run_impacts(
     if not completed or payload_internal is None:
         nonfatal_or_raise(args, f"Impact range retries were exhausted for {target} M-{label}.")
         return
+
+    payload_internal = repair_impact_payload(
+        args, card, target, label, mass, outdir, workspace, internal_json,
+        payload_internal, impact_rmin, impact_rmax,
+    )
 
     plot_json = internal_json
     if args.parameter == "alpha":
@@ -4085,7 +4295,8 @@ def prepare_card_run(
     args: argparse.Namespace, card: Path, target: str, outdir: Path,
 ) -> Tuple[str, float]:
     label, mass = extract_mass_from_card(card, target)
-    clean_mass_outputs(outdir, tag_for(args, target), label, args.task)
+    if not args.repair_impacts:
+        clean_mass_outputs(outdir, tag_for(args, target), label, args.task)
     rmax = effective_r_max(args, card)
     if args.parameter == "alpha":
         unit = alpha_unit_from_card(card)
@@ -4366,10 +4577,14 @@ def build_parser() -> argparse.ArgumentParser:
     combine.add_argument("--run-impacts-all-masses", dest="run_impacts_all_masses", action="store_true", default=True)
     combine.add_argument("--no-run-impacts-all-masses", dest="run_impacts_all_masses", action="store_false")
     combine.add_argument("--impact-parallel", type=int, default=1)
+    combine.add_argument("--repair-impacts", action="store_true",
+                         help="Reuse existing impact workspaces/JSON; rerun only failed scans and boundary endpoints.")
     return parser
 
 
 def validate_args(args: argparse.Namespace) -> None:
+    if args.repair_impacts and (args.stage != "run" or args.task != "impacts"):
+        raise WorkflowError("--repair-impacts requires --stage run --task impacts")
     if args.jobs < 1:
         raise WorkflowError("--jobs must be at least 1.")
     if args.jobs > 1 and args.task != "limits":
@@ -4539,3 +4754,5 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
