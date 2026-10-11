@@ -73,6 +73,8 @@ class ImpactRepairTests(unittest.TestCase):
             def fake_run(command, cwd, **kwargs):
                 if "-o" in command:
                     (cwd / "retry_internal.json").write_text(original)
+                elif "--doFits" in command:
+                    (cwd / "higgsCombine_paramFit_.Impacts_Run2_alpha_M70_theta.MultiDimFit.mH70.root").touch()
                 return 0
             with patch.object(w, "impact_workspace_parameters", return_value={"theta": (-7., 7.)}), \
                     patch.object(w, "run_command", side_effect=fake_run):
@@ -88,6 +90,66 @@ class ImpactRepairTests(unittest.TestCase):
                 patch.object(w, "alpha_unit_from_card", return_value=1.):
             w.prepare_card_run(args, Path("card.txt"), "Run2", Path("output"))
         clean.assert_not_called()
+
+    def test_empty_retry_directory_fits_before_collecting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            args = w.build_parser().parse_args(["--stage", "run", "--task", "impacts"])
+            name = "CMS_NPS26009_pdf_NNPDF31"
+            payload = {"POIs": [{"name": "r", "fit": [-1., 0., 1.]}],
+                       "params": [parameter(name, [-1., 0., 0.])]}
+            internal = out / "impacts.json"
+            internal.write_text(json.dumps(payload))
+            (out / "higgsCombine_initialFit_.Impacts_Run3_alpha_M70.MultiDimFit.mH70.root").touch()
+            calls = []
+            def fake_run(command, cwd, **kwargs):
+                calls.append("fit" if "--doFits" in command else "collect")
+                scan = cwd / f"higgsCombine_paramFit_.Impacts_Run3_alpha_M70_{name}.MultiDimFit.mH70.root"
+                if "--doFits" in command:
+                    scan.touch()
+                else:
+                    if not scan.exists():
+                        raise w.WorkflowError("ROOT cannot open the missing paramFit file")
+                    (cwd / "retry_internal.json").write_text(json.dumps({"params": [parameter(name)]}))
+                return 0
+            with patch.object(w, "impact_workspace_parameters", return_value={name: (-7., 7.)}), \
+                    patch.object(w, "run_command", side_effect=fake_run):
+                result = w.repair_impact_payload(args, out / "card", "Run3", "70", 70.,
+                                                out, out / "workspace", internal, payload, -0.5, 10.)
+            self.assertEqual(calls, ["fit", "collect"])
+            self.assertEqual(result["params"][0]["fit"], [-1., 0., 1.])
+
+    def test_partial_cache_collects_only_existing_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            args = w.build_parser().parse_args(["--stage", "run", "--task", "impacts"])
+            names = ["cached", "missing"]
+            payload = {"POIs": [{"name": "r", "fit": [-1., 0., 1.]}],
+                       "params": [parameter(n, [-1., 0., 0.]) for n in names]}
+            internal = out / "impacts.json"
+            internal.write_text(json.dumps(payload))
+            (out / "higgsCombine_initialFit_.Impacts_Run2_alpha_M70.MultiDimFit.mH70.root").touch()
+            directory = out / "impact_repair_M70"
+            directory.mkdir()
+            scans = {n: directory / f"higgsCombine_paramFit_.Impacts_Run2_alpha_M70_{n}.MultiDimFit.mH70.root"
+                     for n in names}
+            scans["cached"].touch()
+            collections = []
+            def fake_run(command, cwd, **kwargs):
+                selected = command[command.index("--named") + 1].split(",")
+                if "--doFits" in command:
+                    self.assertEqual(selected, ["missing"])
+                    scans["missing"].touch()
+                else:
+                    collections.append(selected)
+                    self.assertTrue(all(scans[n].exists() for n in selected))
+                    (cwd / "retry_internal.json").write_text(json.dumps({"params": [parameter(n) for n in selected]}))
+                return 0
+            with patch.object(w, "impact_workspace_parameters", return_value={n: (-7., 7.) for n in names}), \
+                    patch.object(w, "run_command", side_effect=fake_run):
+                w.repair_impact_payload(args, out / "card", "Run2", "70", 70.,
+                                       out, out / "workspace", internal, payload, -2., 10.)
+            self.assertEqual(collections, [["cached"], ["cached", "missing"]])
 
     def test_resume_reuses_three_scans_and_retries_only_missing_conditional_fit(self):
         with tempfile.TemporaryDirectory() as tmp:
