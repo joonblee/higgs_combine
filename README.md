@@ -94,3 +94,27 @@ collection and plotting run once per target after the batch succeeds.
 `--jobs > 1` applies to `--task limits`; impacts use `--impact-parallel`.
 
 ROOT-free statistical/card contract tests: `python3 -m unittest discover -s NIsoMuon/tests -v`.
+
+## Repairing incomplete blind impacts
+
+After a completed impact run, use `--repair-impacts` with `--stage run --task impacts` and the same `--output-base`. This preserves existing workspaces and original ROOT scans. Only missing scans and collapsed nuisance intervals are retried with strategy 2. A zero shift of the POI is permitted when the nuisance interval itself is valid.
+
+For a QCD shape lower interval truncated by its physical zero bound, the workflow runs a conditional MultiDimFit with the shape parameter fixed at zero and r floating. It records the conditional r and deltaNLL in `boundary_endpoints`; a boundary profile is accepted only if two fit entries exist, r lies inside its range, and deltaNLL is below 0.51 (0.5 plus numerical tolerance). The statistical model and datacards are unchanged.
+
+The full nuisance list is checked against the workspace. Missing scans or invalid intervals cause a non-zero exit, even when Combine collection returns zero. The original internal JSON is retained as `*.before_repair.json`. Retry logs, boundary fit ROOT files and `validation.json` are stored under each target's `impact_repair_M<mass>/` directory. JSON and impact plots are updated only after successful validation. A subsequent standalone combineTool collection from the original ROOT files does not include these repaired endpoints; use the workflow's repaired internal JSON.
+
+Example from the NIsoMuon directory after cmsenv:
+
+```bash
+python3 -u limit_workflow.py \
+  --stage run --task impacts --repair-impacts \
+  --target runs --parameter alpha --mode blind \
+  --masses 30,70 --impact-masses 30,70 \
+  --impact-parallel 40 --sigfit-dir ./sigfit_inputs \
+  --qcd-method data-driven --dy-method data-driven \
+  --allow-negative-r --r-min -5 --r-max 10 \
+  --output-base limit_outputs_impacts_retry --strict \
+  > impacts_blind_repair.log 2>&1
+```
+
+For these six selected results, success is six `[IMPACT CHECK]` lines followed by the final `[DONE]`. Failure prints an `[ERROR]` with the location of the corresponding log. This repair does not rerun AsymptoticLimits or rebuild background estimates.
