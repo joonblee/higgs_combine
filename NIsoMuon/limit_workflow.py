@@ -3907,9 +3907,20 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
         def collect_retry(log):
             if retry_json.exists():
                 retry_json.unlink()
-            run_command(["combineTool.py", "-M", "Impacts", "-d", str(workspace),
-                         "-m", mass_arg, "-n", name, "--named", ",".join(retry),
-                         "-o", retry_json.name], repair_dir, stdout_path=log)
+            # In a fresh repair directory there are no paramFit files yet.
+            # ROOT can raise on opening a missing file, before the upstream
+            # collector writes its JSON. Collect only existing files and let
+            # the interval audit mark every absent scan for fitting.
+            available = [nuisance for nuisance in retry
+                         if (repair_dir / f"higgsCombine_paramFit_{name}_{nuisance}.MultiDimFit.mH{mass_arg}.root").exists()]
+            if not available:
+                return {}, list(retry)
+            try:
+                run_command(["combineTool.py", "-M", "Impacts", "-d", str(workspace),
+                             "-m", mass_arg, "-n", name, "--named", ",".join(available),
+                             "-o", retry_json.name], repair_dir, stdout_path=log)
+            except WorkflowError as exc:
+                raise WorkflowError(f"Impact collection failed; see {log}. {exc}") from exc
             result = json.loads(retry_json.read_text())
             absent, broken = impact_interval_issues(result, retry)
             accepted = {p["name"]: p for p in result["params"] if p["name"] not in broken}
