@@ -3,16 +3,16 @@ jmax * number of backgrounds
 kmax * number of nuisance parameters
 ----------------------------------------------------------------------------------------------------------------------------------
 bin                 bin_2022            bin_2022EE          bin_2023            bin_2023BPix
-observation         28.906022705        107.115671237       52.427305283        27.060087259
+observation         28.618781443        106.854960210       52.194848614        26.950884830
 ----------------------------------------------------------------------------------------------------------------------------------
 bin                 bin_2022            bin_2022            bin_2022            bin_2022            bin_2022            bin_2022            bin_2022EE          bin_2022EE          bin_2022EE          bin_2022EE          bin_2022EE          bin_2022EE          bin_2023            bin_2023            bin_2023            bin_2023            bin_2023            bin_2023            bin_2023BPix        bin_2023BPix        bin_2023BPix        bin_2023BPix        bin_2023BPix        bin_2023BPix
 process             Zprime              QCD                 tt                  ST                  DY                  Others              Zprime              QCD                 tt                  ST                  DY                  Others              Zprime              QCD                 tt                  ST                  DY                  Others              Zprime              QCD                 tt                  ST                  DY                  Others
 process             0                   1                   2                   3                   4                   5                   0                   1                   2                   3                   4                   5                   0                   1                   2                   3                   4                   5                   0                   1                   2                   3                   4                   5
-rate                2.967232972         1.000000000         24.720648434        0.762543681         46.780745059        0.129728932         10.783964137        1.000000000         89.721804239        4.528507723         161.326477078       0.953266986         7.307329234         1.000000000         42.837723680        0.969560429         104.522287674       0.808371606         3.941473656         1.000000000         21.506383202        0.804133678         60.800486553        0.659535230
+rate                2.967232972         1.000000000         24.720648434        0.762543681         42.553980702        0.129728932         10.783964137        1.000000000         89.721804239        4.528507723         157.784489809       0.953266986         7.307329234         1.000000000         42.837723680        0.969560429         101.614561810       0.808371606         3.941473656         1.000000000         21.506383202        0.804133678         59.274472292        0.659535230
 ----------------------------------------------------------------------------------------------------------------------------------
 # mass M-30, target Run3
 # limit_parameter = alpha
-# background_contract = SKPlotMaker-NF-SS-20260907-v2-zeroDY
+# background_contract = SKPlotMaker-NF-SS-20261011-v6-SignedDYWindowCommonQCDTransport
 # background_methods = DY:data-driven;QCD:data-driven
 # Combine internal r = alpha_qZp / alpha_internal_unit.
 # alpha_qZp = r * alpha_internal_unit.
@@ -21,11 +21,14 @@ rate                2.967232972         1.000000000         24.720648434        
 # alpha_internal_signal_yield = 25
 # signal_rate_scale = 2.263027344135872e-05
 # uncertainty_policy = explicit data-driven terms; no generic tt_xsec/ST_xsec
+# luminosity = Lumi POG Cholesky lnN components for 2016-2018 and 2022-2023; independent between Run 2 and Run 3
 # CMS_NPS26009_topmass_ttbar_BJetOS = asymmetric ttbar normalisation from top-mass dependence of the NNLO+NNLL reference cross section
 # experimental correlations = pileup/muon ID/muon scale by Run; muon trigger/JES/JER by era
 # b tagging = BTV fixed-WP comb_bc/incl_light x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)
-# data-driven QCD: QCD_norm is lnN; QCD_shape is an additive absolute-yield Gaussian rateParam; no fitted-template QCD_stat
+# data-driven QCD: QCD_norm is lnN; QCD_shape and QCD_stat are additive Gaussians on the absolute yield
+# QCD_stat: common transport uses era-local low-NF+fit bounds plus a shared MC shift; legacy methods use full NF+fit bounds
 # data-driven DY: light-jet data source x aMC NF; positive source: LightJetStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: LightJetStat=additive Gaussian, NFStat/NFModel disabled
+# DY boundary: integrate signed LightJetSource first; nonpositive windows use nominal 0 with the unchanged source Sumw2 error
 # PDF set = NNPDF31_nnlo_as_0118_mc_hessian_pdfas; PDFError0..99 use symmetric-Hessian quadrature
 # generator scale: separate paired muF/muR nuisances; no 7-point envelope
 # simultaneous muR/muF pair is validation-only; antipodal pairs are excluded
@@ -33,7 +36,6 @@ rate                2.967232972         1.000000000         24.720648434        
 # 2022EE counting window [27.587418, 32.412582] GeV
 # 2023 counting window [27.563514, 32.436486] GeV
 # 2023BPix counting window [27.610428, 32.389572] GeV
-# luminosity = Lumi POG Cholesky lnN components for 2016-2018 and 2022-2023; independent between Run 2 and Run 3
 lumi_1              lnN                 1.0138              -                   1.0138              1.0138              -                   1.0138              1.0138              -                   1.0138              1.0138              -                   1.0138              1.0017              -                   1.0017              1.0017              -                   1.0017              1.0017              -                   1.0017              1.0017              -                   1.0017
 lumi_2              lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   1.0127              -                   1.0127              1.0127              -                   1.0127              1.0127              -                   1.0127              1.0127              -                   1.0127
 CMS_NPS26009_topmass_ttbar_BJetOS lnN                 -                   -                   0.973365/1.0275     -                   -                   -                   -                   -                   0.973365/1.0275     -                   -                   -                   -                   -                   0.973365/1.0275     -                   -                   -                   -                   -                   0.973365/1.0275     -                   -                   -
@@ -66,10 +68,10 @@ CMS_NPS26009_bckgNorm_QCD_BJetOS_2022 lnN                 -                   0.
 CMS_NPS26009_bckgNorm_QCD_BJetOS_2022EE lnN                 -                   -                   -                   -                   -                   -                   -                   0.964884/1.03639    -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
 CMS_NPS26009_bckgNorm_QCD_BJetOS_2023 lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.704612/1.41922    -                   -                   -                   -                   -                   -                   -                   -                   -                   -
 CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.823398/1.21448    -                   -                   -                   -
-CMS_NPS26009_LightJetStat_DY_BJetOS_2022 lnN                 -                   -                   -                   -                   0.850994/1.14901    -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
-CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.920026/1.07997    -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
-CMS_NPS26009_LightJetStat_DY_BJetOS_2023 lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.901332/1.09867    -                   -                   -                   -                   -                   -                   -
-CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.871413/1.12859    -
+CMS_NPS26009_LightJetStat_DY_BJetOS_2022 lnN                 -                   -                   -                   -                   0.836194/1.16381    -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
+CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.918231/1.08177    -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
+CMS_NPS26009_LightJetStat_DY_BJetOS_2023 lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.898509/1.10149    -                   -                   -                   -                   -                   -                   -
+CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.868103/1.1319     -
 CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV lnN                 -                   -                   -                   -                   0.920653/1.07935    -                   -                   -                   -                   -                   0.826072/1.17393    -                   -                   -                   -                   -                   0.811175/1.18882    -                   -                   -                   -                   -                   0.75872/1.24128     -
 CMS_NPS26009_MCstat_signal_BJetOS_2022 lnN                 0.96745/1.03255     -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
 CMS_NPS26009_MCstat_signal_BJetOS_2022EE lnN                 -                   -                   -                   -                   -                   -                   0.966184/1.03382    -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
@@ -102,15 +104,26 @@ CMS_NPS26009_NFStat_DY_BJetOS_2023 rateParam bin_2023 DY 0.074079535 [0,0.172756
 CMS_NPS26009_NFStat_DY_BJetOS_2023 param 0.074079535 0.009867739
 CMS_NPS26009_NFStat_DY_BJetOS_2023BPix rateParam bin_2023BPix DY 0.065344544 [0,0.177765815]
 CMS_NPS26009_NFStat_DY_BJetOS_2023BPix param 0.065344544 0.011242127
-# Additive Gaussian QCD functional-form uncertainty
-CMS_NPS26009_bckgShape_QCD_BJetOS_2022 rateParam bin_2022 QCD 0.034766160 [0,2.722716532]
-CMS_NPS26009_bckgShape_QCD_BJetOS_2022 param 0.034766160 0.268795037
-CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE rateParam bin_2022EE QCD 0.005607664 [0,12.414941579]
-CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE param 0.005607664 1.240933391
-CMS_NPS26009_bckgShape_QCD_BJetOS_2023 rateParam bin_2023 QCD 0.068687100 [0,48.364773729]
-CMS_NPS26009_bckgShape_QCD_BJetOS_2023 param 0.068687100 4.829608663
-CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix rateParam bin_2023BPix QCD 0.117055080 [0,7.183332948]
-CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix param 0.117055080 0.706627787
+# QCD yield = max(0, shape-yield parameter + era-local statistical shift + common MC shift)
+# QCD common transport Run3: 29fef3d063dfc9633af09ab4411ca11cbe42fb810d0f814a3bd3a3265b4d2aff
+CMS_NPS26009_QCD_MCTransferStat_Run3 param 0 1
+# 2022 QCD NF-stat=0.007539274; SS-fit-stat=0.057970400; stat-bound=0.064301762
+CMS_NPS26009_bckgShape_QCD_BJetOS_2022 param 0.041924150 0.324137125 [0,3.283295398]
+CMS_NPS26009_stat_QCD_BJetOS_2022 param 0 0.064157253 [-0.641572528,0.641572528]
+CMS_NPS26009_yield_QCD_BJetOS_2022 rateParam bin_2022 QCD max(0.0,@0+@1+0.004308538*@2) CMS_NPS26009_bckgShape_QCD_BJetOS_2022,CMS_NPS26009_stat_QCD_BJetOS_2022,CMS_NPS26009_QCD_MCTransferStat_Run3
+# 2022EE QCD NF-stat=0.000796562; SS-fit-stat=0.004373685; stat-bound=0.004879779
+CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE param 0.006308265 1.395971032 [0,13.966018581]
+CMS_NPS26009_stat_QCD_BJetOS_2022EE param 0 0.004836523 [-0.048365225,0.048365225]
+CMS_NPS26009_yield_QCD_BJetOS_2022EE rateParam bin_2022EE QCD max(0.0,@0+@1+0.000648299*@2) CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE,CMS_NPS26009_stat_QCD_BJetOS_2022EE,CMS_NPS26009_QCD_MCTransferStat_Run3
+# 2023 QCD NF-stat=0.006540798; SS-fit-stat=0.032825726; stat-bound=0.037032088
+CMS_NPS26009_bckgShape_QCD_BJetOS_2023 param 0.051633411 3.630509454 [0,36.356727954]
+CMS_NPS26009_stat_QCD_BJetOS_2023 param 0 0.036649940 [-0.366499399,0.366499399]
+CMS_NPS26009_yield_QCD_BJetOS_2023 rateParam bin_2023 QCD max(0.0,@0+@1+0.005306357*@2) CMS_NPS26009_bckgShape_QCD_BJetOS_2023,CMS_NPS26009_stat_QCD_BJetOS_2023,CMS_NPS26009_QCD_MCTransferStat_Run3
+# 2023BPix QCD NF-stat=0.015385517; SS-fit-stat=0.095356115; stat-bound=0.106631353
+CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix param 0.107569357 0.649365214 [0,6.601221499]
+CMS_NPS26009_stat_QCD_BJetOS_2023BPix param 0 0.106056753 [-1.060567530,1.060567530]
+CMS_NPS26009_yield_QCD_BJetOS_2023BPix rateParam bin_2023BPix QCD max(0.0,@0+@1+0.011054884*@2) CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix,CMS_NPS26009_stat_QCD_BJetOS_2023BPix,CMS_NPS26009_QCD_MCTransferStat_Run3
+# observation = unrounded prefit background-only expectation, including rateParam initial values; signal-region data are not read
 ----------------------------------------------------------------------------------------------------------------------------------
 # Warnings:
 # - 2022: jer/sig has both Down and Up ratios on the same side of unity (1.00191/1.0019) in 2022; no automatic symmetrisation was applied.
@@ -130,5 +143,3 @@ CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix param 0.117055080 0.706627787
 # - 2023: PDF_scale_ST_muF/ST has both Down and Up ratios on the same side of unity (0.890471/0.99999) in 2023; no automatic symmetrisation was applied.
 # - 2023BPix: jer/Others has both Down and Up ratios on the same side of unity (0.999961/0.999711) in 2023BPix; no automatic symmetrisation was applied.
 # - 2023BPix: mu_scale/tt has both Down and Up ratios on the same side of unity (1.00597/1.01187) in 2023BPix; no automatic symmetrisation was applied.
-
-# observation = unrounded prefit background-only expectation, including rateParam initial values; signal-region data are not read
