@@ -102,3 +102,15 @@ CMS_NPS26009_pdf_NNPDF31:
 'CMS_NPS26009_QCDscale_(fac|ren)_singleTop':
   class: custom
   description: 'Factorization- or renormalization-scale uncertainty for the single-top background, correlated across data-taking periods and independent of the corresponding ttbar scale nuisance.'
+
+'CMS_NPS26009_stat_QCD_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Era-local additive QCD statistical shift: low-NF-stat plus SS-fit-stat for common transport, or the full NF-stat plus SS-fit-stat bound for legacy transport; independent by era.'
+
+'CMS_NPS26009_yield_QCD_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Derived nonnegative QCD yield including the shape-yield parameter, era-local statistical shift and, when used, the Run-common MC transport shift; this formula is not an additional free nuisance.'
+
+'CMS_NPS26009_QCD_MCTransferStat_(Run2|Run3)':
+  class: custom
+  description: 'Standard Gaussian uncertainty of the MC transport ratio, propagated with an era-dependent yield coefficient; shared within each Run and independent between Run 2 and Run 3.'
