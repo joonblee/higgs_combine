@@ -3882,27 +3882,68 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
         initial = f"higgsCombine_initialFit_{name}.MultiDimFit.mH{mass_arg}.root"
         if not (outdir / initial).exists():
             raise WorkflowError(f"Missing initial impact ROOT file: {outdir / initial}")
-        shutil.copy2(outdir / initial, repair_dir / initial)
+        # Cached scans belong to one workspace, initial fit and POI range.
+        # For pre-manifest repair directories, accept only scans created after
+        # the workspace and initial fit; a newly rebuilt workspace invalidates
+        # these older scans before collection.
+        context = {"mode": args.mode, "rmin": rmin, "rmax": rmax,
+                   "initial_sha256": hashlib.sha256((outdir / initial).read_bytes()).hexdigest(),
+                   "workspace_sha256": (hashlib.sha256(workspace.read_bytes()).hexdigest()
+                                        if workspace.exists() else None)}
+        manifest = repair_dir / "retry_context.json"
+        previous = json.loads(manifest.read_text()) if manifest.exists() else None
+        baseline_time = max((outdir / initial).stat().st_mtime,
+                            workspace.stat().st_mtime if workspace.exists() else 0.)
         for nuisance in retry:
-            stale = repair_dir / f"higgsCombine_paramFit_{name}_{nuisance}.MultiDimFit.mH{mass_arg}.root"
-            if stale.exists():
-                stale.unlink()
-        retry_cmd = [*common, "--doFits", "--named", ",".join(retry),
-                     "--parallel", str(args.impact_parallel)]
-        run_command(retry_cmd, repair_dir, stdout_path=repair_dir / "retry.log")
+            scan = repair_dir / f"higgsCombine_paramFit_{name}_{nuisance}.MultiDimFit.mH{mass_arg}.root"
+            if scan.exists() and ((previous is not None and previous != context)
+                                  or (previous is None and scan.stat().st_mtime < baseline_time)):
+                scan.unlink()
+        manifest.write_text(json.dumps(context, indent=2, sort_keys=True) + "\n")
+        shutil.copy2(outdir / initial, repair_dir / initial)
         retry_json = repair_dir / "retry_internal.json"
-        if retry_json.exists():
-            retry_json.unlink()
-        run_command(["combineTool.py", "-M", "Impacts", "-d", str(workspace),
-                     "-m", mass_arg, "-n", name, "--named", ",".join(retry),
-                     "-o", retry_json.name], repair_dir,
-                    stdout_path=repair_dir / "collect.log")
-        updated = json.loads(retry_json.read_text())
-        still_missing, still_bad = impact_interval_issues(updated, retry)
-        if still_missing or still_bad:
-            raise WorkflowError(f"Impact retries failed: missing={still_missing}, "
-                                f"intervals={still_bad}; see {repair_dir / 'retry.log'}")
-        params.update({p["name"]: p for p in updated["params"]})
+        # Recollect existing retry ROOT scans first. Good scans from a partially
+        # failed invocation must not be discarded just because one NP is absent.
+        def collect_retry(log):
+            if retry_json.exists():
+                retry_json.unlink()
+            run_command(["combineTool.py", "-M", "Impacts", "-d", str(workspace),
+                         "-m", mass_arg, "-n", name, "--named", ",".join(retry),
+                         "-o", retry_json.name], repair_dir, stdout_path=log)
+            result = json.loads(retry_json.read_text())
+            absent, broken = impact_interval_issues(result, retry)
+            accepted = {p["name"]: p for p in result["params"] if p["name"] not in broken}
+            return accepted, sorted(set(absent) | set(broken))
+
+        accepted, pending = collect_retry(repair_dir / "collect_resume.log")
+        print(f"[IMPACT RESUME] {target} M{label}: reuse={len(accepted)}, "
+              f"remaining={len(pending)}", flush=True)
+        # Each subsequent pass scans ONLY parameters still missing or invalid.
+        # Cascade fallbacks apply to the conditional fits as well as the initial
+        # fit; doImpact prints a row even when a conditional minimisation fails.
+        for pass_index, strategy in enumerate((2, 1, 0), 1):
+            if not pending:
+                break
+            for nuisance in pending:
+                stale = repair_dir / f"higgsCombine_paramFit_{name}_{nuisance}.MultiDimFit.mH{mass_arg}.root"
+                if stale.exists():
+                    stale.unlink()
+            retry_common = list(common)
+            for option in ("--cminDefaultMinimizerStrategy", "--setRobustFitStrategy"):
+                retry_common[retry_common.index(option) + 1] = str(strategy)
+            retry_common.extend(["--cminFallbackAlgo", "Minuit2,Migrad,1:1e-4",
+                                 "--cminFallbackAlgo", "Minuit2,Migrad,0:1e-4", "-v", "2"])
+            log = repair_dir / f"retry_pass{pass_index}_strategy{strategy}.log"
+            print(f"[IMPACT RETRY] {target} M{label}: strategy={strategy}, "
+                  f"nuisances={','.join(pending)}; log={log}", flush=True)
+            retry_cmd = [*retry_common, "--doFits", "--named", ",".join(pending),
+                         "--parallel", str(args.impact_parallel)]
+            run_command(retry_cmd, repair_dir, stdout_path=log)
+            accepted, pending = collect_retry(repair_dir / f"collect_pass{pass_index}.log")
+        if pending:
+            raise WorkflowError(f"Impact retries failed for {pending}; "
+                                f"see {repair_dir / 'retry_pass3_strategy0.log'}")
+        params.update(accepted)
     jobs = []
     for nuisance in boundary:
         directory = repair_dir / nuisance
@@ -4754,5 +4795,4 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
 
