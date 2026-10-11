@@ -591,7 +591,7 @@ def qcd_root_window_statistics(inputs, low, high, nominal=None):
                 treatment=metadata["treatment"], effective_low=low, effective_high=high)
 
 
-BACKGROUND_CONTRACT = "SKPlotMaker-NF-SS-20261008-v5-CommonQCDTransport"
+BACKGROUND_CONTRACT = "SKPlotMaker-NF-SS-20261011-v6-SignedDYWindowCommonQCDTransport"
 DY_NF_RATEPARAM_NSIGMA = 10.0
 DATA_DRIVEN_DY_NUISANCES: Tuple[str, ...] = (
     "DY_LightJetStat", "DY_NFModel"
@@ -1652,7 +1652,7 @@ def _background_aux_values(reader, args, audit, warnings, year, filename, path, 
 def _audit_dy_background_inputs(
     reader, args, audit, warnings, year, filename, low, high, source, nf_amc, nf_mg
 ):
-    """Validate the NF factorisation before any numerical rate floor is applied.
+    """Validate signed NF inputs before the physical counting-window boundary.
 
     These are input-integrity checks, not additional nuisance parameters.
     NFStat is common to every mass window of one era; LightJetStat is the
@@ -1666,12 +1666,10 @@ def _audit_dy_background_inputs(
             raise WorkflowError(f"{year}: invalid value/error in DYAux/{label}.")
     if nf_amc.value <= 0.0 or nf_mg.value <= 0.0 or nf_amc.error <= 0.0:
         raise WorkflowError(f"{year}: DY requires positive aMC/MG NFs and a positive NFStat width.")
-    _background_check(
-        args, audit, warnings, "background/DY_source_nonnegative", year, source.value >= 0.0,
-        f"DY LightJetSource integral is {source.value:g} in [{low:g},{high:g}] GeV. "
-        "Negative source yields must be clamped to zero by the DY producer before "
-        "building the statistical model.",
-    )
+    # Negative subtracted fine bins must cancel with positive bins before the
+    # window is integrated. Check closure against the signed ROOT prediction;
+    # a nonpositive window is mapped to zero only after these input checks.
+    audit.add("background/DY_source_finite", year, True)
 
     nominal = read_required(
         reader, audit, "nominal/DY_central", year,
@@ -1818,11 +1816,16 @@ def _validate_background_card(args, card):
     if not required_lines.issubset(set(text.splitlines())):
         raise WorkflowError(
             f"{card}: missing/mismatched current background contract. Rebuild "
-            "cards with --stage cards (or --stage all) from the regenerated "
-            "DY/QCD ROOT files before running Combine. Do not relabel old cards."
+            "cards with --stage cards (or --stage all) from the current "
+            "DY/QCD ROOT inputs before running Combine. Do not relabel old cards."
         )
     rows = [line.split() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if args.dy_method == "data-driven":
+        rate_row = next((row[1:] for row in rows if row[0] == "rate"), [])
+        process_row = next((row[1:] for row in rows if row[0] == "process"
+                            and any(not re.fullmatch(r"[-+]?\d+", x) for x in row[1:])), [])
+        process_bins = next((row[1:] for row in reversed(rows)
+                             if row[0] == "bin" and len(row[1:]) == len(rate_row)), [])
         for row in rows:
             if len(row) > 1 and row[1] == "lnN" and ("_NFStat_DY_" in row[0] or "_MCstat_DY_" in row[0]):
                 raise WorkflowError(f"{card}: obsolete/duplicate DY statistical lnN row: {row[0]}.")
@@ -1846,10 +1849,14 @@ def _validate_background_card(args, card):
                     len(row) >= 4 and row[:2] == [light_name, "param"]
                     for row in rows
                 )
-                if not (has_zero_rate and has_zero_constraint):
+                fixed_zero = any(
+                    b == bin_name and p == "DY" and float(rate) == 0.0
+                    for b, p, rate in zip(process_bins, process_row, rate_row)
+                )
+                if not ((has_zero_rate and has_zero_constraint) or fixed_zero):
                     raise WorkflowError(
                         f"{card}: DY needs either NFStat rateParam+param or zero-source "
-                        f"additive LightJetStat rateParam+param for {year}."
+                        f"additive LightJetStat rateParam+param (or a fixed zero rate) for {year}."
                     )
     if args.qcd_method == "data-driven":
         if any(len(row) > 1 and row[1] == "lnN" and "_MCstat_QCD_" in row[0] for row in rows):
@@ -1942,7 +1949,11 @@ def build_channels_for_mass(
                         reader, args, audit, warnings, year, filename, low, high,
                         source, nf_amc_result, nf_mg_result,
                     )
-                    dy_lightjet_yield = max(float(source.value), args.rate_floor)
+                    # Apply the physical boundary to the integrated window,
+                    # never to the producer's individual signed bins.
+                    dy_lightjet_yield = (
+                        max(float(source.value), args.rate_floor) if source.value > 0.0 else 0.0
+                    )
                     dy_lightjet_error = max(float(source.error), 0.0)
                     dy_nf_amc = float(nf_amc_result.value)
                     dy_nf_amc_error = max(float(nf_amc_result.error), 0.0)
@@ -1964,6 +1975,12 @@ def build_channels_for_mass(
                     result = YieldResult(
                         dy_value, dy_error, source.first_bin, source.last_bin
                     )
+                    if source.value <= 0.0:
+                        print(
+                            f"[DY WINDOW] {year} M-{label}: signed source={source.value:.6g}, "
+                            f"source error={dy_lightjet_error:.6g}, nominal=0, "
+                            f"additive LightJetStat={dy_nf_amc*dy_lightjet_error:.6g}"
+                        )
 
                     # Central/error closure and the full DYAux schema were
                     # audited above, using the signed source before flooring.
@@ -1979,6 +1996,10 @@ def build_channels_for_mass(
             process: max(raw_nominal[process].value, args.rate_floor)
             for process in PROCESSES
         }
+        if args.dy_method == "data-driven" and dy_lightjet_yield == 0.0:
+            # Numerical floors must not turn a zero physical DY yield into a
+            # positive nominal or change the blinded background expectation.
+            raw_rates["DY"] = 0.0
         bkg_sum = sum(raw_rates[p] for p in PROCESSES if p != "sig")
         if args.mode == "blind":
             observation = float(bkg_sum)
@@ -2668,10 +2689,11 @@ def write_datacard(
             source_yield = channel.dy_lightjet_yield or 0.0
             source_error = channel.dy_lightjet_error or 0.0
             nf = channel.dy_nf_amc or 0.0
-            if source_yield == 0.0 and source_error > 0.0 and nf > 0.0:
-                # The zero-source LightJetStat rateParam below is the absolute DY
-                # yield, so the base process rate must be unity.
-                return 1.0
+            if source_yield == 0.0:
+                if source_error > 0.0 and nf > 0.0:
+                    # The additive rateParam is the absolute yield; base rate=1.
+                    return 1.0
+                return 0.0
             # Otherwise the constrained NF rateParam multiplies the pre-NF source.
             return max(source_yield, args.rate_floor)
         return channel.rates[process]
@@ -2731,6 +2753,7 @@ def write_datacard(
         "# data-driven QCD: QCD_norm is lnN; QCD_shape and QCD_stat are additive Gaussians on the absolute yield",
         "# QCD_stat: common transport uses era-local low-NF+fit bounds plus a shared MC shift; legacy methods use full NF+fit bounds",
         "# data-driven DY: light-jet data source x aMC NF; positive source: LightJetStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: LightJetStat=additive Gaussian, NFStat/NFModel disabled",
+        "# DY boundary: integrate signed LightJetSource first; nonpositive windows use nominal 0 with the unchanged source Sumw2 error",
         f"# PDF set = {PDF_SET_NAME}; PDFError0..99 use symmetric-Hessian quadrature",
         "# generator scale: separate paired muF/muR nuisances; no 7-point envelope",
         "# simultaneous muR/muF pair is validation-only; antipodal pairs are excluded",

@@ -4,6 +4,17 @@ The NIsoMuon counting workflow is in `NIsoMuon/limit_workflow.py`; review tasks
 are in `NIsoMuon/combine_review.py`. Both are self-contained; no separate
 `qcd_stat_uncertainty.py` module or execution is required.
 
+The DY consumer integrates the producer's signed `DYAux/LightJetSource` bins
+before imposing the nonnegative counting-window yield. If the window integral
+is nonpositive, the nominal DY yield is zero and its original source Sumw2
+uncertainty enters the additive Gaussian `LightJetStat` with width
+`NF_aMC * sigma(LightJetSource)`. NFStat and NFModel have no multiplicative
+response in these channels; a zero-width source is a fixed zero process.
+Positive-source windows retain the existing model. Signed central-yield and
+source-error closure checks run before applying this boundary. This consumer
+update requires rebuilt cards (`--stage all` or `--stage cards`); existing
+signed DY/QCD ROOT inputs need no regeneration.
+
 The data-driven QCD model includes additive statistical shifts in
 addition to the existing Norm (`lnN`) and functional-form (`param`) uncertainties.
 Each era's updated SKPlotMaker SS producer computes the statistical derivatives
