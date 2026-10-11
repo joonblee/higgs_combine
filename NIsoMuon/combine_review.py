@@ -41,6 +41,10 @@ Examples
   # Override the injected internal r explicitly
   python3 combine_review.py 20 --task sb-impacts --inject-r 18.125
 
+  # Repair only failed S+B scans in a previously completed review directory
+  python3 combine_review.py 70 --task sb-impacts --repair-sb-impacts \
+      --output-base review_outputs_updated.EXISTING --impact-parallel 20
+
   # Signal-recovery/bias toys at 0, 1, 2 times the existing median expected r95
   python3 combine_review.py 20 --task bias --bias-toys 500 --bias-multipliers 0,1,2
 
@@ -62,6 +66,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import hashlib
 import json
 import math
 import os
@@ -681,12 +686,89 @@ def impact_injection(args: argparse.Namespace, card: Path) -> Tuple[float, Optio
     return r_inj, alpha_inj
 
 
-def task_sb_impacts(args: argparse.Namespace, card: Path) -> None:
-    require_command("combineTool.py")
-    workspace = ensure_workspace(args, card)
+def sb_repair_inputs(args: argparse.Namespace, card: Path):
+    """Load the original injection without rebuilding its workspace or toys."""
     output = outdir(args)
     label = mass_label(args.mass)
-    r_inj, alpha_inj = impact_injection(args, card)
+    metadata_path = output / f"sb_impacts_metadata_M{label}.json"
+    metadata = json.loads(metadata_path.read_text())
+    if float(metadata["mass"]) != args.mass or metadata["target"] != args.target:
+        raise RuntimeError("S+B impact metadata mass/target mismatch")
+    injection = float(metadata["injected_r"])
+    if not math.isfinite(injection) or not 0 < injection < args.r_max:
+        raise RuntimeError("Invalid original S+B injection or requested r range")
+    if args.inject_r is not None and not math.isclose(args.inject_r, injection, rel_tol=1e-10, abs_tol=1e-12):
+        raise RuntimeError("Repair must preserve the original S+B signal injection")
+    if "rmax" in metadata and float(metadata["rmax"]) != args.r_max:
+        raise RuntimeError("Repair must use the original S+B rMax")
+    fingerprint = metadata.get("card_sha256")
+    if not fingerprint:
+        manifest = json.loads((Path(args.output_base) / "run_manifest.json").read_text())
+        fingerprint = manifest["cards"][label]["sha256"]
+    if hashlib.sha256(card.read_bytes()).hexdigest() != fingerprint:
+        raise RuntimeError("Current card differs from the card used for S+B impacts")
+    workspace = workspace_path(args)
+    initial = output / f"higgsCombine_initialFit_.ReviewSBImpacts_{args.target}_M{label}.MultiDimFit.mH{mass_for_combine(args.mass)}.root"
+    if not workspace.is_file() or not initial.is_file():
+        raise RuntimeError("S+B repair requires the existing workspace and initial-fit ROOT file")
+    if workspace.stat().st_mtime > initial.stat().st_mtime:
+        raise RuntimeError("S+B workspace is newer than the initial fit; rebuild the S+B impacts")
+    if metadata.get("workspace_sha256") and hashlib.sha256(workspace.read_bytes()).hexdigest() != metadata["workspace_sha256"]:
+        raise RuntimeError("S+B workspace fingerprint differs from the original fit")
+    return workspace, injection
+
+
+def repair_sb_payload(args, card, workspace, json_path, injection):
+    # Shared repair implementation, with the review's file tag and injected
+    # Asimov dataset. It validates all nuisance intervals before writing JSON.
+    import limit_workflow as workflow
+    options = argparse.Namespace(parameter="alpha", mode="blind",
+        impact_parallel=args.impact_parallel, impact_expect_signal=injection,
+        impact_fit_name=f".ReviewSBImpacts_{args.target}_M{mass_label(args.mass)}")
+    payload = json.loads(json_path.read_text())
+    poi = next((p for p in payload.get("POIs", []) if p.get("name") == "r"), {})
+    fit = poi.get("fit", [])
+    if len(fit) != 3 or not math.isclose(fit[1], injection, rel_tol=1e-4, abs_tol=1e-5):
+        raise RuntimeError("S+B impact initial POI does not match the original injection")
+    try:
+        return workflow.repair_impact_payload(
+            options, card, args.target, mass_label(args.mass), args.mass,
+            outdir(args), workspace, json_path, payload,
+            0.0, args.r_max)
+    except workflow.WorkflowError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+
+def task_sb_impacts(args: argparse.Namespace, card: Path) -> None:
+    require_command("combineTool.py")
+    output = outdir(args)
+    label = mass_label(args.mass)
+    if args.repair_sb_impacts:
+        workspace, r_inj = sb_repair_inputs(args, card)
+        unit = parse_alpha_unit(card)
+        alpha_inj = r_inj * unit if unit is not None else None
+    else:
+        workspace = ensure_workspace(args, card)
+        r_inj, alpha_inj = impact_injection(args, card)
+    metadata = {
+        "mass": args.mass,
+        "target": args.target,
+        "injected_r": r_inj,
+        "rmin": 0.0, "rmax": args.r_max,
+        "alpha_internal_unit": parse_alpha_unit(card),
+        "injected_alpha": alpha_inj,
+        "source_for_default_injection": "original S+B metadata" if args.repair_sb_impacts else
+            (str(expected_limit_json(args)) if args.inject_r is None else "--inject-r"),
+    }
+    meta_path = output / f"sb_impacts_metadata_M{label}.json"
+    if not args.dry_run:
+        metadata["card_sha256"] = hashlib.sha256(card.read_bytes()).hexdigest()
+        metadata["workspace_sha256"] = hashlib.sha256(workspace.read_bytes()).hexdigest()
+        # Preserve the dataset and input contract even if a subsequent scan or
+        # repair fails, so a partial run can be resumed without changing toys.
+        if not args.repair_sb_impacts:
+            meta_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+
     tag = f"ReviewSBImpacts_{args.target}_M{label}"
     json_path = output / f"impacts_{args.target}_M{label}_SB.json"
 
@@ -701,7 +783,7 @@ def task_sb_impacts(args: argparse.Namespace, card: Path) -> None:
         "--robustFit",
         "1",
         "--setCrossingTolerance",
-        "1e-8",
+        "1e-12",
         "--cminDefaultMinimizerStrategy",
         "1",
         "--cminDefaultMinimizerTolerance",
@@ -724,6 +806,34 @@ def task_sb_impacts(args: argparse.Namespace, card: Path) -> None:
         f".{tag}",
     ]
 
+    if args.repair_sb_impacts:
+        if args.dry_run:
+            print(f"[S+B REPAIR] would audit/retry {json_path}; injected r={r_inj:.12g}")
+            return
+        repair_sb_payload(args, card, workspace, json_path, r_inj)
+    else:
+        produce_sb_scans(args, workspace, output, label, tag, json_path, common)
+
+    if args.dry_run:
+        return
+    if not args.repair_sb_impacts:
+        repair_sb_payload(args, card, workspace, json_path, r_inj)
+    plotter = shutil.which("plotImpacts.py")
+    if plotter:
+        status = run_command(
+            [plotter, "-i", json_path.name, "-o", f"impacts_{args.target}_M{label}_SB"],
+            output,
+            log=output / f"sb_impacts_plot_M{label}.log",
+        )
+        if status != 0:
+            print("[WARNING] plotImpacts.py failed; JSON is retained.", file=sys.stderr)
+
+    meta_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+    print("\n[S+B IMPACT INJECTION]")
+    print(json.dumps(metadata, indent=2, sort_keys=True))
+
+
+def produce_sb_scans(args, workspace, output, label, tag, json_path, common):
     status = run_command(
         [*common, "--doInitialFit"],
         output,
@@ -766,31 +876,6 @@ def task_sb_impacts(args: argparse.Namespace, card: Path) -> None:
     )
     if status != 0:
         raise RuntimeError("S+B impact JSON collection failed")
-
-    if args.dry_run:
-        return
-    plotter = shutil.which("plotImpacts.py")
-    if plotter:
-        status = run_command(
-            [plotter, "-i", json_path.name, "-o", f"impacts_{args.target}_M{label}_SB"],
-            output,
-            log=output / f"sb_impacts_plot_M{label}.log",
-        )
-        if status != 0:
-            print("[WARNING] plotImpacts.py failed; JSON is retained.", file=sys.stderr)
-
-    metadata = {
-        "mass": args.mass,
-        "target": args.target,
-        "injected_r": r_inj,
-        "alpha_internal_unit": parse_alpha_unit(card),
-        "injected_alpha": alpha_inj,
-        "source_for_default_injection": str(expected_limit_json(args)) if args.inject_r is None else "--inject-r",
-    }
-    meta_path = output / f"sb_impacts_metadata_M{label}.json"
-    meta_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
-    print("\n[S+B IMPACT INJECTION]")
-    print(json.dumps(metadata, indent=2, sort_keys=True))
 
 
 def best_fit_values_from_multidimfit(root_path: Path, injected_r: float) -> Tuple[List[float], List[float]]:
@@ -1188,6 +1273,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hybrid-grid-min-factor", type=float, default=0.20)
     parser.add_argument("--hybrid-grid-max-factor", type=float, default=3.00)
     parser.add_argument("--impact-parallel", type=int, default=12)
+    parser.add_argument("--repair-sb-impacts", action="store_true",
+        help="retry only missing/invalid S+B scans in the existing output directory")
     parser.add_argument(
         "--inject-r",
         type=float,
@@ -1222,6 +1309,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         if "CMSSW_BASE" not in os.environ:
             raise RuntimeError("CMSSW_BASE is not set. cd to the CMSSW src area and run cmsenv first.")
+        if args.repair_sb_impacts and (args.tasks != ["sb-impacts"] or args.force):
+            raise RuntimeError("--repair-sb-impacts requires --task sb-impacts without --force")
+        if args.impact_parallel < 1:
+            raise RuntimeError("--impact-parallel must be positive")
         if args.scan_points < 5:
             raise RuntimeError("--scan-points must be at least 5")
         if args.scan_parallel < 1:
@@ -1241,6 +1332,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             raise RuntimeError("--r-max must be positive")
 
         card = card_path(args)
+        if args.repair_sb_impacts:
+            sb_repair_inputs(args, card)
         write_metadata(args, card)
         output = outdir(args)
         output.mkdir(parents=True, exist_ok=True)
@@ -1269,4 +1362,5 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 

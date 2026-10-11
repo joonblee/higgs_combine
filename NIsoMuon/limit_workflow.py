@@ -3854,12 +3854,14 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
     bounds = impact_workspace_parameters(workspace)
     missing, bad = impact_interval_issues(payload, bounds)
     params = {p["name"]: p for p in payload["params"]}
-    boundary = [name for name, sides in bad.items()
-                if sides == ["lower"] and "_bckgShape_QCD_" in name
-                and bounds[name][0] == 0.0]
+    def truncated_qcd(name, sides):
+        return (sides == ["lower"] and "_bckgShape_QCD_" in name
+                and bounds[name][0] == 0.0)
+
+    boundary = {name for name, sides in bad.items() if truncated_qcd(name, sides)}
     retry = sorted(set(missing) | (set(bad) - set(boundary)))
     tag = tag_for(args, target)
-    name = f".Impacts_{tag}_M{label}"
+    name = getattr(args, "impact_fit_name", f".Impacts_{tag}_M{label}")
     mass_arg = format_mass_for_combine(mass)
     # Separate retry directory preserves all original ROOT scans and logs.
     repair_dir = outdir / f"impact_repair_M{label}"
@@ -3871,7 +3873,15 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
               "--setRobustFitStrategy", "2", "--setRobustFitTolerance", "1e-4",
               "--setCrossingTolerance", "1e-12", "--stepSize", "0.02",
               *explicit_range_args(rmin, rmax, card)]
-    blind = ["-t", "-1", "--expectSignal", "0"] if args.mode == "blind" else []
+    # Review S+B impacts use the same repair logic with their original injected
+    # signal. Never substitute background-only Asimov data during a retry.
+    expected_signal = float(getattr(args, "impact_expect_signal", 0.0))
+    if not math.isfinite(expected_signal):
+        raise WorkflowError("Non-finite impact Asimov signal injection")
+    blind = (["-t", "-1", "--expectSignal", f"{expected_signal:.12g}"]
+             if args.mode == "blind" else [])
+    if args.mode == "blind" and expected_signal != 0.0:
+        blind.extend(["--setParameters", f"r={expected_signal:.12g}"])
     common.extend(blind)
     print(f"[IMPACT REPAIR] {target} M{label}: missing={len(missing)}, "
           f"retry={len(retry)}, boundary={len(boundary)}", flush=True)
@@ -3887,6 +3897,7 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
         # the workspace and initial fit; a newly rebuilt workspace invalidates
         # these older scans before collection.
         context = {"mode": args.mode, "rmin": rmin, "rmax": rmax,
+                   "expected_signal": expected_signal,
                    "initial_sha256": hashlib.sha256((outdir / initial).read_bytes()).hexdigest(),
                    "workspace_sha256": (hashlib.sha256(workspace.read_bytes()).hexdigest()
                                         if workspace.exists() else None)}
@@ -3923,8 +3934,14 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
                 raise WorkflowError(f"Impact collection failed; see {log}. {exc}") from exc
             result = json.loads(retry_json.read_text())
             absent, broken = impact_interval_issues(result, retry)
-            accepted = {p["name"]: p for p in result["params"] if p["name"] not in broken}
-            return accepted, sorted(set(absent) | set(broken))
+            # A retry may recover the upper crossing of a wholly collapsed QCD
+            # interval, leaving only its truncated lower side. Keep that scan
+            # provisionally and profile the physical endpoint below.
+            endpoints = {n for n, sides in broken.items() if truncated_qcd(n, sides)}
+            boundary.update(endpoints)
+            accepted = {p["name"]: p for p in result["params"]
+                        if p["name"] not in broken or p["name"] in endpoints}
+            return accepted, sorted(set(absent) | (set(broken) - endpoints))
 
         accepted, pending = collect_retry(repair_dir / "collect_resume.log")
         print(f"[IMPACT RESUME] {target} M{label}: reuse={len(accepted)}, "
@@ -3956,7 +3973,7 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
                                 f"see {repair_dir / 'retry_pass3_strategy0.log'}")
         params.update(accepted)
     jobs = []
-    for nuisance in boundary:
+    for nuisance in sorted(boundary):
         directory = repair_dir / nuisance
         directory.mkdir(parents=True, exist_ok=True)
         stale = directory / f"higgsCombine.Boundary.MultiDimFit.mH{mass_arg}.root"
@@ -3991,7 +4008,8 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
     if unresolved or invalid:
         raise WorkflowError(f"Incomplete impacts: missing={unresolved}, intervals={invalid}")
     report = {"target": target, "mass": mass, "expected": len(bounds),
-              "present": len(params), "retried": retry, "boundary": boundary,
+              "present": len(params), "retried": retry, "boundary": sorted(boundary),
+              "expected_signal": expected_signal, "fit_name": name,
               "passed": True}
     (repair_dir / "validation.json").write_text(json.dumps(report, indent=2) + "\n")
     internal_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")

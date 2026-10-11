@@ -1,5 +1,6 @@
 """Regression tests for missing scans, tiny intervals and physical endpoints."""
 import copy
+import hashlib
 import json
 import math
 import os
@@ -11,6 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import limit_workflow as w
+import combine_review as review
 
 
 def parameter(name="theta", fit=None, r=None):
@@ -255,6 +257,133 @@ class ImpactRepairTests(unittest.TestCase):
             fixed = next(p for p in result["params"] if p["name"] == name)
             self.assertEqual(fixed["fit"][0], 0.)
             self.assertEqual(fixed["r"][0], 0.3)
+
+    def test_sb_retry_recovers_upper_crossing_then_profiles_lower_endpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            args = w.build_parser().parse_args(["--stage", "run", "--task", "impacts"])
+            args.impact_expect_signal = 1.25
+            args.impact_fit_name = ".ReviewSBImpacts_Run2Run3_M70"
+            qcd = "CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP"
+            pdf = "CMS_NPS26009_pdf_NNPDF31"
+            good = parameter("good", r=[1.1, 1.25, 1.4])
+            payload = {"POIs": [{"name": "r", "fit": [.4, 1.25, 2.]}],
+                       "params": [good, parameter(qcd, [.1, .1, .1], [1.25]*3)]}
+            internal = out / "impacts.json"
+            internal.write_text(json.dumps(payload))
+            initial = out / f"higgsCombine_initialFit_{args.impact_fit_name}.MultiDimFit.mH70.root"
+            initial.touch()
+            commands = []
+            def fake_run(command, cwd, **kwargs):
+                commands.append(command)
+                if "--doFits" in command:
+                    selected = command[command.index("--named")+1].split(",")
+                    self.assertEqual(set(selected), {pdf, qcd})
+                    for n in selected:
+                        (cwd / f"higgsCombine_paramFit_{args.impact_fit_name}_{n}.MultiDimFit.mH70.root").touch()
+                elif "-o" in command:
+                    repaired = [parameter(pdf, r=[1.2, 1.25, 1.3]),
+                                parameter(qcd, [.1, .1, 3.], [1.25, 1.25, 1.1])]
+                    (cwd / "retry_internal.json").write_text(json.dumps({"params": repaired}))
+                return 0
+            bounds = {pdf: (-7., 7.), qcd: (0., 20.), "good": (-7., 7.)}
+            with patch.object(w, "impact_workspace_parameters", return_value=bounds), \
+                    patch.object(w, "run_command", side_effect=fake_run), \
+                    patch.object(w, "read_boundary_impact_result", return_value=(1.3, .02)):
+                result = w.repair_impact_payload(args, out / "card", "Run2Run3", "70", 70.,
+                                               out, out / "workspace", internal, payload, 0., 100.)
+            fits = [c for c in commands if "--doFits" in c or "--fixedPointPOIs" in c]
+            self.assertEqual(len(fits), 2)
+            for c in fits:
+                self.assertEqual(c[c.index("--expectSignal")+1], "1.25")
+                self.assertEqual(c[c.index("--setParameters")+1], "r=1.25")
+            params = {p["name"]: p for p in result["params"]}
+            self.assertEqual(params["good"], good)
+            self.assertEqual(params[qcd]["fit"], [0., .1, 3.])
+            self.assertEqual(params[qcd]["r"][0], 1.3)
+            self.assertEqual(w.impact_interval_issues(result, bounds), ([], {}))
+            report = json.loads((out / "impact_repair_M70/validation.json").read_text())
+            self.assertEqual(report["expected_signal"], 1.25)
+            self.assertEqual(report["boundary"], [qcd])
+
+
+class ReviewSBRepairTests(unittest.TestCase):
+    def make_inputs(self, root):
+        args = review.build_parser().parse_args(["20", "--task", "sb-impacts",
+            "--repair-sb-impacts", "--output-base", str(root)])
+        output = review.outdir(args)
+        output.mkdir(parents=True)
+        card = root / "card.txt"
+        card.write_text("# alpha_internal_unit = 0.001\n")
+        workspace = review.workspace_path(args)
+        workspace.write_bytes(b"workspace")
+        initial = output / "higgsCombine_initialFit_.ReviewSBImpacts_Run2Run3_M20.MultiDimFit.mH20.root"
+        initial.write_bytes(b"initial fit")
+        os.utime(workspace, (1., 1.))
+        os.utime(initial, (2., 2.))
+        metadata = {"mass": 20., "target": "Run2Run3", "injected_r": 15.5625}
+        (output / "sb_impacts_metadata_M20.json").write_text(json.dumps(metadata))
+        (root / "run_manifest.json").write_text(json.dumps({"cards": {"20": {
+            "sha256": hashlib.sha256(card.read_bytes()).hexdigest()}}}))
+        return args, card, workspace
+
+    def test_repair_uses_original_injection_and_rejects_changed_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args, card, workspace = self.make_inputs(Path(tmp))
+            self.assertEqual(review.sb_repair_inputs(args, card), (workspace, 15.5625))
+            args.inject_r = 1.
+            with self.assertRaisesRegex(RuntimeError, "original.*injection"):
+                review.sb_repair_inputs(args, card)
+            args.inject_r = None
+            card.write_text("changed card")
+            with self.assertRaisesRegex(RuntimeError, "card differs"):
+                review.sb_repair_inputs(args, card)
+
+    def test_repair_rejects_workspace_newer_than_initial_fit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args, card, workspace = self.make_inputs(Path(tmp))
+            os.utime(workspace, (3., 3.))
+            with self.assertRaisesRegex(RuntimeError, "newer than"):
+                review.sb_repair_inputs(args, card)
+
+    def test_review_repair_does_not_rebuild_workspace_or_initial_fit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args, card, workspace = self.make_inputs(Path(tmp))
+            with patch.object(review, "require_command", return_value="combineTool.py"), \
+                    patch.object(review, "ensure_workspace") as build, \
+                    patch.object(review, "produce_sb_scans") as scans, \
+                    patch.object(review, "repair_sb_payload") as repair, \
+                    patch.object(review.shutil, "which", return_value=None):
+                review.task_sb_impacts(args, card)
+            build.assert_not_called()
+            scans.assert_not_called()
+            self.assertEqual(repair.call_args.args[-1], 15.5625)
+
+    def test_failed_fresh_repair_preserves_metadata_and_skips_plot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args, card, workspace = self.make_inputs(Path(tmp))
+            args.repair_sb_impacts = False
+            with patch.object(review, "require_command", return_value="combineTool.py"), \
+                    patch.object(review, "ensure_workspace", return_value=workspace), \
+                    patch.object(review, "impact_injection", return_value=(15.5625, .0155625)), \
+                    patch.object(review, "produce_sb_scans"), \
+                    patch.object(review, "repair_sb_payload", side_effect=RuntimeError("Incomplete impacts")), \
+                    patch.object(review.shutil, "which") as plot:
+                with self.assertRaisesRegex(RuntimeError, "Incomplete"):
+                    review.task_sb_impacts(args, card)
+            plot.assert_not_called()
+            data = json.loads((review.outdir(args)/"sb_impacts_metadata_M20.json").read_text())
+            self.assertEqual(data["injected_r"], 15.5625)
+            self.assertEqual(data["rmax"], 100.)
+            self.assertIn("workspace_sha256", data)
+
+    def test_sb_repair_rejects_background_only_initial_poi(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args, card, workspace = self.make_inputs(Path(tmp))
+            path = review.outdir(args) / "impacts.json"
+            path.write_text(json.dumps({"POIs": [{"name": "r", "fit": [-1., 0., 1.]}]}))
+            with self.assertRaisesRegex(RuntimeError, "initial POI"):
+                review.repair_sb_payload(args, card, workspace, path, 15.5625)
 
 
 if __name__ == "__main__":
