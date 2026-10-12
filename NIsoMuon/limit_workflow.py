@@ -3372,6 +3372,138 @@ def expanded_impact_rmin(current: float, safe_boundary: float) -> float:
     return max(safe_boundary, candidate)
 
 
+def impact_poi_interval_issues(payload, rmin, rmax, require_lower_crossing=False):
+    """A finite three-entry singles result can still stop at the scan cap."""
+    fit = impact_fit_triplet(payload)
+    if fit is None or not all(math.isfinite(x) for x in fit):
+        return ["missing or non-finite POI interval"]
+    low, centre, high = fit
+    if not low <= centre < high:
+        return ["unordered or collapsed POI interval"]
+    issues = []
+    lower_tol = max(1e-7, 1e-4 * max(1.0, abs(rmin)))
+    upper_tol = max(1e-7, 1e-4 * max(1.0, abs(rmax)))
+    if require_lower_crossing and low <= rmin + lower_tol:
+        issues.append("POI lower endpoint reaches rMin")
+    if high >= rmax - upper_tol:
+        issues.append("POI upper endpoint reaches rMax")
+    return issues
+
+
+def read_impact_initial_poi(path):
+    """Read the singles ordering used by Combine tool_base.utils."""
+    ROOT = RootReader().ROOT
+    source = ROOT.TFile.Open(str(path), "READ")
+    if not source or source.IsZombie():
+        raise WorkflowError(f"Missing impact initial-fit ROOT file: {path}")
+    try:
+        tree = source.Get("limit")
+        if not tree or tree.GetEntries() != 3:
+            raise WorkflowError(f"Initial POI singles fit needs three entries: {path}")
+        values = []
+        for index in range(3):
+            tree.GetEntry(index)
+            values.append(float(tree.r))
+        return [values[1], values[0], values[2]]
+    finally:
+        source.Close()
+
+
+def repair_impact_initial_poi(args, card, target, label, mass, outdir,
+                              workspace, internal_json, payload, rmin, rmax):
+    """Repair only the initial POI interval; retain good nuisance scans."""
+    require_lower = bool(getattr(args, "allow_negative_r", False))
+    # Older cached JSONs may come from an automatically expanded lower range.
+    # Fresh runs already check that range in run_impacts; do not reinterpret a
+    # valid cached lower crossing using the user's original requested rMin.
+    issues = impact_poi_interval_issues(payload, rmin, rmax)
+    original_fit = impact_fit_triplet(payload)
+    report = dict(passed=not issues, repaired=False, units="internal_r",
+                  fit=list(original_fit) if original_fit else None,
+                  rmin=rmin, rmax=rmax)
+    if not issues:
+        return report
+    if (original_fit is None or not all(math.isfinite(x) for x in original_fit)
+            or not original_fit[0] <= original_fit[1] < original_fit[2]):
+        raise WorkflowError("Missing or invalid initial POI fit; rebuild the impacts")
+    print(f"[IMPACT POI REPAIR] {target} M{label}: {', '.join(issues)}; "
+          "rerun initial POI fit only", flush=True)
+    directory = outdir / f"impact_poi_repair_M{label}"
+    directory.mkdir(parents=True, exist_ok=True)
+    name = getattr(args, "impact_fit_name", f".Impacts_{tag_for(args, target)}_M{label}")
+    mass_arg = format_mass_for_combine(mass)
+    filename = f"higgsCombine_initialFit_{name}.MultiDimFit.mH{mass_arg}.root"
+    injection = float(getattr(args, "impact_expect_signal", 0.0))
+    if not math.isfinite(injection):
+        raise WorkflowError("Non-finite impact Asimov signal injection")
+    upper_ranges = [rmax]
+    if original_fit is not None:
+        low, centre, _high = original_fit
+        left_error = centre - low
+        # A second attempt may use a smaller, well-resolved profile range.
+        # It is accepted only if the new crossing is inside that range.
+        if left_error > 0 and math.isfinite(left_error):
+            proposed = max(centre + 5.0 * left_error, centre + 1.0)
+            if rmin < proposed < rmax - 1e-7:
+                upper_ranges.append(proposed)
+    failures = []
+    for attempt, upper in enumerate(upper_ranges, 1):
+        work = directory / f"attempt{attempt}"
+        work.mkdir(parents=True, exist_ok=True)
+        candidate = work / filename
+        if candidate.exists():
+            candidate.unlink()
+        command = ["combineTool.py", "-M", "Impacts", "-d", str(workspace),
+                   "-m", mass_arg, "-n", name, "--doInitialFit", "--robustFit", "1",
+                   "--cminDefaultMinimizerStrategy", "2",
+                   "--cminDefaultMinimizerTolerance", "1e-4",
+                   "--setRobustFitStrategy", "2", "--setRobustFitTolerance", "1e-4",
+                   "--setCrossingTolerance", "1e-8", "--stepSize", "0.02",
+                   "--cminFallbackAlgo", "Minuit2,Migrad,1:1e-4",
+                   *explicit_range_args(rmin, upper, card)]
+        if args.mode == "blind":
+            command.extend(["-t", "-1", "--expectSignal", f"{injection:.12g}",
+                            "--setParameters", f"r={injection:.12g}"])
+        log = work / "initial_fit.log"
+        if run_command(command, work, allow_failure=True, stdout_path=log) != 0:
+            failures.append(f"attempt {attempt}: command failed")
+            continue
+        try:
+            fit = read_impact_initial_poi(candidate)
+        except WorkflowError as exc:
+            failures.append(str(exc))
+            continue
+        trial = {"POIs": [{"name": "r", "fit": fit}]}
+        invalid = impact_poi_interval_issues(trial, rmin, upper, require_lower)
+        if invalid:
+            failures.append(f"attempt {attempt}: {', '.join(invalid)}")
+            continue
+        if original_fit is not None:
+            centre_tolerance = max(1e-7, 1e-3 * max(fit[1] - fit[0], fit[2] - fit[1]))
+            if abs(fit[1] - original_fit[1]) > centre_tolerance:
+                raise WorkflowError(
+                    "Repaired initial POI centre shifted materially; rebuild nuisance "
+                    f"fits instead of reusing them. See {log}")
+        original_root = outdir / filename
+        if original_root.exists() and not (directory / "original_initial.root").exists():
+            shutil.copy2(original_root, directory / "original_initial.root")
+        shutil.copy2(candidate, original_root)
+        backup = internal_json.with_suffix(".before_poi_repair.json")
+        if internal_json.exists() and not backup.exists():
+            shutil.copy2(internal_json, backup)
+        poi = next(p for p in payload["POIs"] if p.get("name") == "r")
+        poi["fit"] = fit
+        report.update(passed=True, repaired=True, previous_fit=list(original_fit),
+                      fit=fit, rmax=upper, strategy=2, log=str(log))
+        payload["initial_poi_validation"] = report
+        (directory / "validation.json").write_text(json.dumps(report, indent=2) + "\n")
+        print(f"[IMPACT POI CHECK] {target} M{label}: fit={fit}, "
+              f"r=[{rmin:g},{upper:g}] passed; nuisance scans retained", flush=True)
+        return report
+    raise WorkflowError(f"Impact initial POI interval remains unbracketed for {target} "
+                        f"M{label}: {'; '.join(failures)}. See {directory}")
+
+
 def output_dir(args: argparse.Namespace, target: str) -> Path:
     return (Path(args.output_base) / args.parameter / args.mode / target).resolve()
 
@@ -3846,11 +3978,9 @@ def read_boundary_impact_result(path, nuisance, bound, rmin, rmax):
 def repair_impact_payload(args, card, target, label, mass, outdir,
                           workspace, internal_json, payload, rmin, rmax):
     """Reuse good scans; retry failed scans and profile truncated QCD endpoints."""
-    poi = next((p for p in payload.get("POIs", []) if p.get("name") == "r"), None)
-    fit = poi.get("fit", []) if poi else []
-    if (len(fit) != 3 or not all(math.isfinite(x) for x in fit)
-            or not fit[0] <= fit[1] <= fit[2] or fit[0] == fit[2]):
-        raise WorkflowError("Missing or invalid initial POI fit in impact JSON")
+    poi_report = repair_impact_initial_poi(
+        args, card, target, label, mass, outdir, workspace, internal_json,
+        payload, rmin, rmax)
     bounds = impact_workspace_parameters(workspace)
     missing, bad = impact_interval_issues(payload, bounds)
     params = {p["name"]: p for p in payload["params"]}
@@ -4007,8 +4137,11 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
     unresolved, invalid = impact_interval_issues(payload, bounds)
     if unresolved or invalid:
         raise WorkflowError(f"Incomplete impacts: missing={unresolved}, intervals={invalid}")
+    recorded_boundary = sorted(p["name"] for p in params.values()
+                               if p.get("boundary_endpoints"))
     report = {"target": target, "mass": mass, "expected": len(bounds),
-              "present": len(params), "retried": retry, "boundary": sorted(boundary),
+              "present": len(params), "retried": retry, "boundary": recorded_boundary,
+              "boundary_profiled": sorted(boundary), "initial_poi": poi_report,
               "expected_signal": expected_signal, "fit_name": name,
               "passed": True}
     (repair_dir / "validation.json").write_text(json.dumps(report, indent=2) + "\n")
