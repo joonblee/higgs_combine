@@ -29,7 +29,7 @@ for pid in "${pids[@]}"; do
   wait "$pid" || failed=1
 done
 
-rg '\[IMPACT POI CHECK\]|\[IMPACT CHECK\]|\[ERROR\]' \
+grep -H -E '\[IMPACT POI CHECK\]|\[IMPACT CHECK\]|\[ERROR\]' \
   poi_repair_Run2_M40.log poi_repair_Run3_M50.log poi_repair_Run2Run3_M50.log || true
 if [ "$failed" -ne 0 ]; then
   echo '[ERROR] A POI repair failed; inspect the three logs above.'
