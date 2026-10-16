@@ -1,0 +1,1919 @@
+[REVIEW CONFIG]
+{
+  "alpha_internal_unit": 2.0002557396511213e-07,
+  "card": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-12_Run2Run3.txt",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_16_0_0",
+  "existing_expected_median_alpha95": 6.725859924576896e-06,
+  "existing_expected_median_r95": 33.625,
+  "mass": 12.0,
+  "scram_arch": "el9_amd64_gcc13",
+  "target": "Run2Run3",
+  "tasks": [
+    "sb-impacts"
+  ]
+}
+
+========================================================================================
+[TASK] sb-impacts | target=Run2Run3 | M=12
+========================================================================================
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12 && text2workspace.py /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-12_Run2Run3.txt -m 12 -o workspace_Run2Run3_M12.root)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12 && combineTool.py -M Impacts -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root -m 12 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --setParameters r=1 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -n .ReviewSBImpacts_Run2Run3_M12 --doInitialFit)
+Have POIs: ['r']
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+[ERROR] Closed range without finding crossing! 
+
+ --- MultiDimFit ---
+best fit parameter values and profile-likelihood uncertainties: 
+ Warning - No valid low-error found, will report difference to minimum of range for : r
+   r :    +1.000   -1.000/+17.255 (68%)
+>> combine -M MultiDimFit -n _initialFit_.ReviewSBImpacts_Run2Run3_M12 --algo singles --redefineSignalPOIs r --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12 && combineTool.py -M Impacts -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root -m 12 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --setParameters r=1 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -n .ReviewSBImpacts_Run2Run3_M12 --doFits --parallel 40)
+Have POIs: ['r']
+Have parameters: 142
+Setting parameter r to 1
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Random number generator seed is 123456
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Method used is MultiDimFit
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                   :   Best-fit               r            
+  CMS_NPS26009_MCstat_other_BJetOS_2016preVFP :   +0.000  -0.973/+0.974  +1.448/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+  Parameter                                 :   Best-fit               r            
+  CMS_NPS26009_MCstat_singleTop_BJetOS_2017 :   +0.000  -0.994/+0.994  +0.013/-0.012
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_MCstat_ttbar_BJetOS_2023 :   +0.000  -0.994/+0.994  +0.033/-0.031
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                :   Best-fit               r            
+  CMS_NPS26009_LightJetStat_DY_BJetOS_2023 :   +0.000  -0.994/+0.994  +0.043/-0.040
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                                :   Best-fit               r            
+  CMS_NPS26009_LightJetStat_DY_BJetOS_2018 :   -0.000  -0.992/+0.992  +0.621/-0.609
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+  Parameter                                  :   Best-fit               r            
+  CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE :   +0.000  -0.992/+0.992  +0.244/-0.237
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_MCstat_signal_BJetOS_2022 :   +0.000  -0.994/+0.994  +0.000/-0.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                :   Best-fit               r            
+  CMS_NPS26009_LightJetStat_DY_BJetOS_2017 :   +0.000  -0.993/+0.994  +0.026/-0.018
+  Parameter                                 :   Best-fit               r            
+  CMS_NPS26009_MCstat_other_BJetOS_2023BPix :   +0.000  -0.994/+0.994  +0.011/-0.011
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                      :   Best-fit               r            
+  CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP :   +0.000  -0.983/+0.984[WARNING] Minimization finished with status 1 (covariance matrix forced positive definite), this could indicate a problem with the minimum!
+  +1.047/-0.976
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_MCstat_other_BJetOS_2023 :   +0.000  -0.994/+0.994  +0.004/-0.004
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                 :   Best-fit               r            
+  CMS_NPS26009_MCstat_singleTop_BJetOS_2023 :   +0.000  -0.994/+0.994  +0.010/-0.010
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                  :   Best-fit               r            
+  CMS_NPS26009_MCstat_signal_BJetOS_2023BPix :   +0.000  -0.994/+0.994  +0.000/-0.000
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_MCstat_ttbar_BJetOS_2018 :   +0.000  -0.994/+0.994  +0.217/-0.217
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+  Parameter                                    :   Best-fit               r            
+  CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix :   +0.000  -0.993/+0.993  +0.160/-0.152
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_MCstat_ttbar_BJetOS_2022 :   +0.000  -0.993/+0.993  +0.083/-0.086
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_MCstat_signal_BJetOS_2023 :   +0.000  -0.994/+0.994  +0.000/-0.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_MCstat_other_BJetOS_2017 :   +0.000  -0.978/+0.982  +0.155/-0.029
+  Parameter                                :   Best-fit               r            
+  CMS_NPS26009_MCstat_signal_BJetOS_2022EE :   +0.000  -0.994/+0.994  +0.000/-0.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                    :   Best-fit               r            
+  CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP :   +0.000  -0.994/+0.994  +0.000/-0.000
+
+ --- MultiDimFit ---
+Parameter impacts: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                                 :   Best-fit               r            
+  CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP :   +0.105  -0.011/+0.011  +3.475/-1.000
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_MCstat_ttbar_BJetOS_2017 :   +0.000  -0.994/+0.994  +0.009/-0.024
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_MCstat_signal_BJetOS_2017 :   +0.000  -0.994/+0.994  +0.000/-0.000
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                            :   Best-fit               r            
+  CMS_NPS26009_QCD_MCTransferStat_Run2 :   +0.000  -0.967/+0.919  +6.463/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                    :   Best-fit               r            
+  CMS_NPS26009_MCstat_other_BJetOS_2016postVFP :   +0.000  -0.994/+0.994  +0.048/-0.048
+
+ --- MultiDimFit ---
+Parameter impacts: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_NFStat_DY_BJetOS_2023BPix :   +0.065  -0.011/+0.011  +0.930/-0.756
+  Parameter                                   :   Best-fit               r            
+  CMS_NPS26009_bckgNorm_QCD_BJetOS_2016preVFP :   +0.000  -0.939/+0.931  +2.523/-1.000
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+  Parameter                                     :   Best-fit               r            
+  CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix :   +0.000  -0.994/+0.994  +0.050/-0.050
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                            :   Best-fit               r            
+  CMS_NPS26009_NFStat_DY_BJetOS_2022EE :   +0.074  -0.008/+0.008  +1.204/-1.000
+  Parameter                                   :   Best-fit               r            
+  CMS_NPS26009_MCstat_ttbar_BJetOS_2016preVFP :   +0.000  -0.994/+0.994  +0.250/-0.243
+
+ --- MultiDimFit ---
+Parameter impacts: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                          :   Best-fit               r            
+  CMS_NPS26009_NFStat_DY_BJetOS_2017 :   +0.105  -0.010/+0.010  +0.616/+0.127
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Doing initial fit: 
+  Parameter                                       :   Best-fit               r            
+  CMS_NPS26009_MCstat_singleTop_BJetOS_2016preVFP :   +0.000  -0.994/+0.994  +0.083/-0.082
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                :   Best-fit               r            
+  CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP :   +0.140  -0.015/+0.015  +4.441/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                            :   Best-fit               r            
+  CMS_NPS26009_NFModel_DY_BJetOS_13TeV :   +0.000  -0.672/+0.690  +7.847/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+  Parameter                            :   Best-fit               r            
+  CMS_NPS26009_QCD_MCTransferStat_Run3 :   +0.000  -0.932/+0.933  +2.622/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_MCstat_other_BJetOS_2018 :   +0.000  -0.994/+0.994  +0.052/-0.052
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                          :   Best-fit               r            
+  CMS_NPS26009_NFStat_DY_BJetOS_2023 :   +0.074  -0.010/+0.010  +0.359/-0.368
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                               :   Best-fit               r            
+  CMS_NPS26009_bckgNorm_QCD_BJetOS_2022EE :   +0.000  -0.990/+0.990  +0.331/-0.322
+  Parameter                                 :   Best-fit               r            
+  CMS_NPS26009_MCstat_ttbar_BJetOS_2023BPix :   +0.000  -0.993/+0.993  +0.137/-0.133
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV :   +0.000  -0.836/+0.830  +4.289/-1.000
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                 :   Best-fit               r            
+  CMS_NPS26009_MCstat_singleTop_BJetOS_2022 :   +0.000  -0.994/+0.994  +0.042/-0.042
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                        :   Best-fit               r            
+  CMS_NPS26009_MCstat_singleTop_BJetOS_2016postVFP :   +0.000  -0.994/+0.994  +0.077/-0.076
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                               :   Best-fit               r            
+  CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE :   +0.000  -0.993/+0.994  +0.152/-0.148
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+  Parameter                               :   Best-fit               r            
+  CMS_NPS26009_MCstat_other_BJetOS_2022EE :   +0.000  -0.987/+0.988  +0.422/-0.424
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+  Parameter                                 :   Best-fit               r            
+  CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix :   +0.000  -0.869/+0.867  +1.624/-1.000
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                    :   Best-fit               r            
+  CMS_NPS26009_MCstat_ttbar_BJetOS_2016postVFP :   +0.000  -0.994/+0.994  +0.230/-0.226
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                :   Best-fit               r            
+  CMS_NPS26009_LightJetStat_DY_BJetOS_2022 :   +0.000  -0.993/+0.993  +0.105/-0.103
+  Parameter                           :   Best-fit               r            
+  CMS_NPS26009_QCDscale_fac_singleTop :   +0.000  -0.994/+0.994  +0.087/-0.025
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_MCstat_other_BJetOS_2022 :   +0.000  -0.994/+0.994  +0.016/-0.016
+  Parameter                                     :   Best-fit               r            
+  CMS_NPS26009_MCstat_signal_BJetOS_2016postVFP :   +0.000  -0.994/+0.994  +0.000/-0.000
+
+ --- MultiDimFit ---
+Parameter impacts: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                                            :   Best-fit               r            
+  CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13p6TeV :   +0.000  -0.992/+0.992  +0.433/-0.441
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+  Parameter                                     :   Best-fit               r            
+  CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP : +208.881  -17.872/+17.862  +1.605/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_MCstat_signal_BJetOS_2018 :   +0.000  -0.994/+0.994  +0.001/-0.001
+  Parameter                                       :   Best-fit               r            
+  CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP :   +0.000  -0.989/+0.990  +0.562/-0.540
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_bckgNorm_QCD_BJetOS_2017 :   +0.000  -0.965/+0.963  +0.271/+0.018
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                          :   Best-fit               r            
+  CMS_NPS26009_NFStat_DY_BJetOS_2018 :   +0.122  -0.010/+0.009  +5.554/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_bckgShape_QCD_BJetOS_2023 : +247.784  -16.705/+16.724  +0.275/-0.269
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                :   Best-fit               r            
+  CMS_NPS26009_stat_QCD_BJetOS_2016postVFP :   +0.000  -29.440/+29.185  +3.344/-1.000
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_bckgShape_QCD_BJetOS_2017 : +450.486  -22.710/+22.719  +0.075/-0.025
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_stat_QCD_BJetOS_2023BPix :   +0.000  -19.214/+19.733  +1.790/-1.000
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                             :   Best-fit               r            
+  CMS_NPS26009_btag_fixedWP_incl_light_correlated_13TeV :   +0.000  -0.994/+0.994  +0.186/-0.192
+
+ --- MultiDimFit ---
+Parameter impacts: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                                          :   Best-fit               r            
+  CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13TeV :   +0.000  -0.994/+0.994  +0.672/-0.666
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                          :   Best-fit               r            
+  CMS_NPS26009_NFStat_DY_BJetOS_2022 :   +0.070  -0.012/+0.012  +0.546/-0.587
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                               :   Best-fit               r            
+  CMS_NPS26009_stat_QCD_BJetOS_2016preVFP :   +0.000  -30.835/+31.038  +3.048/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+  Parameter                                   :   Best-fit               r            
+  CMS_NPS26009_MCstat_singleTop_BJetOS_2022EE :   +0.000  -0.994/+0.994  +0.046/-0.046
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                         :   Best-fit               r            
+  CMS_NPS26009_stat_QCD_BJetOS_2022 :   +0.000  -18.465/+19.461  +1.522/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_bckgNorm_QCD_BJetOS_2018 :   -0.000  -0.956/+0.949  +2.583/-1.000
+  Parameter                       :   Best-fit               r            
+  CMS_NPS26009_eff_m_trigger_2023 :   +0.000  -0.994/+0.994  +0.002/-0.002
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                         :   Best-fit               r            
+  CMS_NPS26009_stat_QCD_BJetOS_2017 :   +0.000  -59.449/+59.942  +0.319/-0.022
+
+ --- MultiDimFit ---
+Parameter impacts: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                                    :   Best-fit               r            
+  CMS_NPS26009_bckgNorm_QCD_BJetOS_2016postVFP :   +0.000  -0.994/+0.994  +0.007/-0.007
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                           :   Best-fit               r            
+  CMS_NPS26009_stat_QCD_BJetOS_2022EE :   +0.000  -32.765/+32.773  +1.653/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_btag_fixedWP_bc_uncorrelated_2022 :   +0.000  -0.994/+0.994  +0.058/-0.068
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_btag_fixedWP_bc_uncorrelated_2023 :   +0.000  -0.994/+0.994  +0.037/-0.038
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_bckgShape_QCD_BJetOS_2018 : +708.599  -26.169/+26.170  +1.144/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_bckgNorm_QCD_BJetOS_2023 :   +0.000  -0.586/+0.589  +2.728/-1.000
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+  Parameter                             :   Best-fit               r            
+  CMS_btag_fixedWP_bc_uncorrelated_2017 :   +0.000  -0.994/+0.994  +0.015/-0.015
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                         :   Best-fit               r            
+  CMS_NPS26009_stat_QCD_BJetOS_2023 :   +0.000  -35.395/+35.951  +0.674/-0.624
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+  Parameter                         :   Best-fit               r            
+  CMS_NPS26009_topmass_ttbar_BJetOS :   -0.000  -0.993/+0.990  +2.365/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                :   Best-fit               r            
+  CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE : +217.572  -34.295/+34.298  +1.779/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                    :   Best-fit               r            
+  CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP : +191.680  -11.377/+11.381  +0.918/-0.875
+  Parameter                                  :   Best-fit               r            
+  CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix : +108.309  -6.191/+6.193  +0.387/-0.377
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                 :   Best-fit               r            
+  CMS_NPS26009_MCstat_singleTop_BJetOS_2018 :   +0.000  -0.994/+0.994  +0.084/-0.084
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                       :   Best-fit               r            
+  CMS_NPS26009_eff_m_trigger_2017 :   +0.000  -0.994/+0.994  +0.006/-0.006
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_bckgNorm_QCD_BJetOS_2022 :   +0.000  -0.887/+0.895  +1.021/-0.736
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                       :   Best-fit               r            
+  CMS_btag_fixedWP_light_uncorrelated_2016postVFP :   +0.000  -0.994/+0.994  +0.039/-0.039
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_bckgShape_QCD_BJetOS_2022 :  +76.383  -7.693/+7.699  +0.364/-0.378
+  Parameter                  :   Best-fit               r            
+  CMS_NPS26009_eff_m_id_Run2 :   -0.000  -0.994/+0.994  +0.083/-0.083
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                           :   Best-fit               r            
+  CMS_NPS26009_eff_m_trigger_2023BPix :   +0.000  -0.994/+0.994  +0.011/-0.011
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                         :   Best-fit               r            
+  CMS_NPS26009_stat_QCD_BJetOS_2018 :   +0.000  -78.620/+77.610  +4.214/-1.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+  Parameter                           :   Best-fit               r            
+  CMS_NPS26009_QCDscale_ren_singleTop :   -0.000  -0.994/+0.994  -0.262/+0.306
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                       :   Best-fit               r            
+  CMS_NPS26009_eff_m_trigger_2022 :   +0.000  -0.994/+0.994  +0.011/-0.011
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                               :   Best-fit               r            
+  CMS_NPS26009_btag_fixedWP_incl_light_correlated_13p6TeV :   +0.000  -0.994/+0.994  +0.121/-0.122
+
+ --- MultiDimFit ---
+Parameter impacts: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+  Parameter                                :   Best-fit               r            
+  CMS_btag_fixedWP_light_uncorrelated_2017 :   +0.000  -0.994/+0.994  +0.008/-0.025
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_NPS26009_eff_m_trigger_2016preVFP :   +0.000  -0.994/+0.994  +0.042/-0.042
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                :   Best-fit               r            
+  CMS_NPS26009_pdf_NNPDF31 :   -0.000  -0.994/+0.994[WARNING] Minimization finished with status 1 (covariance matrix forced positive definite), this could indicate a problem with the minimum!
+  +0.983/-0.980
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                :   Best-fit               r            
+  CMS_btag_fixedWP_light_uncorrelated_2018 :   +0.000  -0.994/+0.994  +0.042/-0.041
+  Parameter      :   Best-fit               r            
+  CMS_res_j_2022 :   +0.000  -0.994/+0.994  -0.009/+0.000
+  Parameter                                :   Best-fit               r            
+  CMS_btag_fixedWP_light_uncorrelated_2023 :   +0.000  -0.994/+0.994  +0.002/-0.002
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter      :   Best-fit               r            
+  CMS_res_j_2017 :   +0.000  -0.994/+0.994  -0.006/-0.000
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter      :   Best-fit               r            
+  CMS_res_j_2018 :   -0.000  -0.994/+0.994  +0.001/-0.000
+  Parameter      :   Best-fit               r            
+  CMS_res_j_2023 :   +0.000  -0.994/+0.994  -0.000/+0.002
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+
+ --- MultiDimFit ---
+Parameter impacts: 
+Doing initial fit: 
+  Parameter                       :   Best-fit               r            
+  CMS_NPS26009_eff_m_trigger_2018 :   +0.000  -0.994/+0.994  +0.037/-0.037
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                  :   Best-fit               r            
+  CMS_NPS26009_eff_m_id_Run3 :   +0.000  -0.994/+0.994  +0.038/-0.038
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter :   Best-fit               r            
+  lumi_1    :   +0.000  -0.993/+0.993  +0.269/-0.285
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter          :   Best-fit               r            
+  QCDscale_fac_ttbar :   +0.000  -0.990/+0.993  -1.000/+1.479
+  Parameter        :   Best-fit               r            
+  CMS_pileup_13TeV :   +0.000  -0.994/+0.994  -0.076/+0.201
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter             :   Best-fit               r            
+  lumi_13TeV_15161718_l :   +0.000  -0.994/+0.994  +0.399/-0.399
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter            :   Best-fit               r            
+  CMS_res_j_2016preVFP :   +0.000  -0.994/+0.994  +0.000/-0.000
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                    :   Best-fit               r            
+  CMS_btag_fixedWP_bc_uncorrelated_2016postVFP :   +0.000  -0.994/+0.994  +0.175/-0.179
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter             :   Best-fit               r            
+  CMS_res_j_2016postVFP :   +0.000  -0.994/+0.994  +0.000/+0.019
+  Parameter                                 :   Best-fit               r            
+  CMS_btag_fixedWP_bc_uncorrelated_2023BPix :   +0.000  -0.993/+0.993  +0.106/-0.117
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter        :   Best-fit               r            
+  CMS_scale_j_2023 :   +0.000  -0.994/+0.994  +0.016/-0.015
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter             :   Best-fit               r            
+  CMS_l1_prefiring_2017 :   +0.000  -0.994/+0.994  -0.023/+0.026
+  Parameter                              :   Best-fit               r            
+  CMS_NPS26009_eff_m_trigger_2016postVFP :   +0.000  -0.994/+0.994  +0.027/-0.027
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter        :   Best-fit               r            
+  CMS_scale_j_2017 :   +0.000  -0.994/+0.994  +0.017/-0.021
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                   :   Best-fit               r            
+  CMS_btag_fixedWP_bc_uncorrelated_2016preVFP :   +0.000  -0.994/+0.994  +0.217/-0.215
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                             :   Best-fit               r            
+  CMS_btag_fixedWP_bc_uncorrelated_2018 :   +0.000  -0.994/+0.994  +0.251/-0.252
+  Parameter                               :   Best-fit               r            
+  CMS_btag_fixedWP_bc_uncorrelated_2022EE :   +0.000  -0.993/+0.993  +0.172/-0.176
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter         :   Best-fit               r            
+  lumi_13TeV_1516_l :   +0.000  -0.994/+0.994  +0.424/-0.432
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter          :   Best-fit               r            
+  QCDscale_ren_ttbar :   +0.000  -0.855/+0.990  -1.000/+8.158
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter        :   Best-fit               r            
+  CMS_res_j_2022EE :   +0.000  -0.994/+0.994  -0.011/+0.010
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter  :   Best-fit               r            
+  pdf_alphas :   +0.000  -0.993/+0.990  +1.993/-1.000
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter           :   Best-fit               r            
+  lumi_13TeV_151617_l :   +0.000  -0.994/+0.994  +0.032/-0.030
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                :   Best-fit               r            
+  CMS_btag_fixedWP_light_uncorrelated_2022 :   +0.000  -0.994/+0.994  +0.001/-0.001
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter          :   Best-fit               r            
+  CMS_pileup_13p6TeV :   +0.000  -0.994/+0.994  -0.047/+0.155
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter        :   Best-fit               r            
+  CMS_scale_j_2018 :   +0.000  -0.994/+0.994  +0.192/-0.199
+  Parameter :   Best-fit               r            
+  lumi_2    :   +0.000  -0.994/+0.994  +0.092/-0.097
+
+ --- MultiDimFit ---
+Parameter impacts: 
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter           :   Best-fit               r            
+  CMS_scale_m_13p6TeV :   +0.000  -0.994/+0.994  +0.004/-0.007
+  Parameter                                    :   Best-fit               r            
+  CMS_btag_fixedWP_light_uncorrelated_2023BPix :   +0.000  -0.994/+0.994  +0.006/-0.006
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                      :   Best-fit               r            
+  CMS_btag_fixedWP_light_uncorrelated_2016preVFP :   +0.000  -0.994/+0.994  +0.021/-0.021
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                         :   Best-fit               r            
+  CMS_NPS26009_eff_m_trigger_2022EE :   +0.000  -0.994/+0.994  +0.018/-0.017
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                                  :   Best-fit               r            
+  CMS_btag_fixedWP_light_uncorrelated_2022EE :   +0.000  -0.994/+0.994  +0.047/-0.046
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter         :   Best-fit               r            
+  CMS_scale_m_13TeV :   +0.000  -0.978/+0.994  +0.126/-0.070
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter          :   Best-fit               r            
+  CMS_res_j_2023BPix :   +0.000  -0.994/+0.994  -0.006/+0.006
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                    :   Best-fit               r            
+  CMS_l1_prefiring_2016postVFP :   +0.000  -0.994/+0.994  -0.156/+0.157
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter             :   Best-fit               r            
+  CMS_l1_prefiring_2018 :   +0.000  -0.994/+0.994  -0.043/+0.045
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter          :   Best-fit               r            
+  CMS_scale_j_2022EE :   +0.000  -0.993/+0.994  +0.156/-0.133
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter        :   Best-fit               r            
+  CMS_scale_j_2022 :   +0.000  -0.994/+0.994  +0.045/-0.036
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter                   :   Best-fit               r            
+  CMS_l1_prefiring_2016preVFP :   +0.000  -0.994/+0.994  -0.152/+0.158
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter            :   Best-fit               r            
+  CMS_scale_j_2023BPix :   +0.000  -0.994/+0.994  +0.041/-0.048
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter              :   Best-fit               r            
+  CMS_scale_j_2016preVFP :   +0.000  -0.994/+0.994  +0.078/-0.072
+
+ --- MultiDimFit ---
+Parameter impacts: 
+  Parameter               :   Best-fit               r            
+  CMS_scale_j_2016postVFP :   +0.000  -0.994/+0.994  +0.067/-0.071
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_ttbar_BJetOS_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_ttbar_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_pdf_NNPDF31 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_pdf_NNPDF31 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_QCDscale_fac_ttbar --algo impact --redefineSignalPOIs r -P QCDscale_fac_ttbar --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_ttbar_BJetOS_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_ttbar_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgNorm_QCD_BJetOS_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgNorm_QCD_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_pileup_13TeV --algo impact --redefineSignalPOIs r -P CMS_pileup_13TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_other_BJetOS_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_other_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_id_Run3 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_id_Run3 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_signal_BJetOS_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_signal_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_QCDscale_fac_singleTop --algo impact --redefineSignalPOIs r -P CMS_NPS26009_QCDscale_fac_singleTop --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_stat_QCD_BJetOS_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_stat_QCD_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_light_uncorrelated_2023 --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_light_uncorrelated_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_lumi_13TeV_15161718_l --algo impact --redefineSignalPOIs r -P lumi_13TeV_15161718_l --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_ttbar_BJetOS_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_ttbar_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_res_j_2022 --algo impact --redefineSignalPOIs r -P CMS_res_j_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_lumi_1 --algo impact --redefineSignalPOIs r -P lumi_1 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_topmass_ttbar_BJetOS --algo impact --redefineSignalPOIs r -P CMS_NPS26009_topmass_ttbar_BJetOS --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_res_j_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_res_j_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_signal_BJetOS_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_signal_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgNorm_QCD_BJetOS_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgNorm_QCD_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_bc_uncorrelated_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_bc_uncorrelated_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_LightJetStat_DY_BJetOS_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_LightJetStat_DY_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFStat_DY_BJetOS_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFStat_DY_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13TeV --algo impact --redefineSignalPOIs r -P CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_bc_uncorrelated_2023BPix --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_bc_uncorrelated_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_singleTop_BJetOS_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_singleTop_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_trigger_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_trigger_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_j_2023 --algo impact --redefineSignalPOIs r -P CMS_scale_j_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_signal_BJetOS_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_signal_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_stat_QCD_BJetOS_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_stat_QCD_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_res_j_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_res_j_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_singleTop_BJetOS_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_singleTop_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_QCD_MCTransferStat_Run3 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_QCD_MCTransferStat_Run3 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_id_Run2 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_id_Run2 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_j_2017 --algo impact --redefineSignalPOIs r -P CMS_scale_j_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_LightJetStat_DY_BJetOS_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_LightJetStat_DY_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_btag_fixedWP_incl_light_correlated_13TeV --algo impact --redefineSignalPOIs r -P CMS_NPS26009_btag_fixedWP_incl_light_correlated_13TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_bc_uncorrelated_2023 --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_bc_uncorrelated_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_l1_prefiring_2017 --algo impact --redefineSignalPOIs r -P CMS_l1_prefiring_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_other_BJetOS_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_other_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFStat_DY_BJetOS_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFStat_DY_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_trigger_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_trigger_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFStat_DY_BJetOS_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFStat_DY_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_bc_uncorrelated_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_bc_uncorrelated_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_signal_BJetOS_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_signal_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_stat_QCD_BJetOS_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_stat_QCD_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_bc_uncorrelated_2022EE --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_bc_uncorrelated_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_other_BJetOS_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_other_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_QCD_MCTransferStat_Run2 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_QCD_MCTransferStat_Run2 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_res_j_2018 --algo impact --redefineSignalPOIs r -P CMS_res_j_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_lumi_13TeV_1516_l --algo impact --redefineSignalPOIs r -P lumi_13TeV_1516_l --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_ttbar_BJetOS_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_ttbar_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_stat_QCD_BJetOS_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_stat_QCD_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_bc_uncorrelated_2018 --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_bc_uncorrelated_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_signal_BJetOS_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_signal_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_stat_QCD_BJetOS_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_stat_QCD_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_light_uncorrelated_2018 --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_light_uncorrelated_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_QCDscale_ren_ttbar --algo impact --redefineSignalPOIs r -P QCDscale_ren_ttbar --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_singleTop_BJetOS_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_singleTop_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_trigger_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_trigger_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_pdf_alphas --algo impact --redefineSignalPOIs r -P pdf_alphas --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_res_j_2017 --algo impact --redefineSignalPOIs r -P CMS_res_j_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_lumi_13TeV_151617_l --algo impact --redefineSignalPOIs r -P lumi_13TeV_151617_l --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_singleTop_BJetOS_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_singleTop_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_res_j_2022EE --algo impact --redefineSignalPOIs r -P CMS_res_j_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_other_BJetOS_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_other_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgNorm_QCD_BJetOS_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgNorm_QCD_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_light_uncorrelated_2022 --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_light_uncorrelated_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_LightJetStat_DY_BJetOS_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_LightJetStat_DY_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFStat_DY_BJetOS_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFStat_DY_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgShape_QCD_BJetOS_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgShape_QCD_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_bc_uncorrelated_2017 --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_bc_uncorrelated_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_pileup_13p6TeV --algo impact --redefineSignalPOIs r -P CMS_pileup_13p6TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_other_BJetOS_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_other_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_trigger_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_trigger_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_j_2018 --algo impact --redefineSignalPOIs r -P CMS_scale_j_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_ttbar_BJetOS_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_ttbar_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_trigger_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_trigger_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_res_j_2023 --algo impact --redefineSignalPOIs r -P CMS_res_j_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_lumi_2 --algo impact --redefineSignalPOIs r -P lumi_2 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgNorm_QCD_BJetOS_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgNorm_QCD_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_trigger_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_trigger_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_m_13p6TeV --algo impact --redefineSignalPOIs r -P CMS_scale_m_13p6TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgNorm_QCD_BJetOS_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgNorm_QCD_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_light_uncorrelated_2023BPix --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_light_uncorrelated_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_LightJetStat_DY_BJetOS_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_LightJetStat_DY_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_stat_QCD_BJetOS_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_stat_QCD_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_light_uncorrelated_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_light_uncorrelated_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_singleTop_BJetOS_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_singleTop_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_trigger_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_trigger_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_eff_m_trigger_2023 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_eff_m_trigger_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_light_uncorrelated_2022EE --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_light_uncorrelated_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_singleTop_BJetOS_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_singleTop_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_light_uncorrelated_2017 --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_light_uncorrelated_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_m_13TeV --algo impact --redefineSignalPOIs r -P CMS_scale_m_13TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_singleTop_BJetOS_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_singleTop_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13p6TeV --algo impact --redefineSignalPOIs r -P CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13p6TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_stat_QCD_BJetOS_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_stat_QCD_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_l1_prefiring_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_l1_prefiring_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_signal_BJetOS_2022EE --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_signal_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgNorm_QCD_BJetOS_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgNorm_QCD_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_res_j_2023BPix --algo impact --redefineSignalPOIs r -P CMS_res_j_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFStat_DY_BJetOS_2023BPix --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFStat_DY_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgShape_QCD_BJetOS_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgShape_QCD_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_l1_prefiring_2018 --algo impact --redefineSignalPOIs r -P CMS_l1_prefiring_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_other_BJetOS_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_other_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_stat_QCD_BJetOS_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_stat_QCD_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_j_2022 --algo impact --redefineSignalPOIs r -P CMS_scale_j_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_ttbar_BJetOS_2018 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_ttbar_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_QCDscale_ren_singleTop --algo impact --redefineSignalPOIs r -P CMS_NPS26009_QCDscale_ren_singleTop --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_j_2022EE --algo impact --redefineSignalPOIs r -P CMS_scale_j_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_other_BJetOS_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_other_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgShape_QCD_BJetOS_2017 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgShape_QCD_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_bc_uncorrelated_2022 --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_bc_uncorrelated_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_l1_prefiring_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_l1_prefiring_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_other_BJetOS_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_other_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFModel_DY_BJetOS_13TeV --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFModel_DY_BJetOS_13TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_btag_fixedWP_incl_light_correlated_13p6TeV --algo impact --redefineSignalPOIs r -P CMS_NPS26009_btag_fixedWP_incl_light_correlated_13p6TeV --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_j_2023BPix --algo impact --redefineSignalPOIs r -P CMS_scale_j_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_signal_BJetOS_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_signal_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_NFStat_DY_BJetOS_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_NFStat_DY_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_btag_fixedWP_light_uncorrelated_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_btag_fixedWP_light_uncorrelated_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_j_2016postVFP --algo impact --redefineSignalPOIs r -P CMS_scale_j_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_MCstat_ttbar_BJetOS_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_MCstat_ttbar_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgNorm_QCD_BJetOS_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgNorm_QCD_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_NPS26009_bckgShape_QCD_BJetOS_2022 --algo impact --redefineSignalPOIs r -P CMS_NPS26009_bckgShape_QCD_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+>> combine -M MultiDimFit -n _paramFit_.ReviewSBImpacts_Run2Run3_M12_CMS_scale_j_2016preVFP --algo impact --redefineSignalPOIs r -P CMS_scale_j_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 12 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root --setParameters r=1
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12 && combineTool.py -M Impacts -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12/workspace_Run2Run3_M12.root -m 12 -n .ReviewSBImpacts_Run2Run3_M12 -o impacts_Run2Run3_M12_SB.json)
+Have POIs: ['r']
+Have parameters: 142
+[IMPACT REPAIR] Run2Run3 M12: missing=0, retry=0, boundary=0
+[IMPACT CHECK] Run2Run3 M12: 142/142 passed
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12 && /data6/Users/joonblee/higgs_combine/CMSSW_16_0_0/bin/el9_amd64_gcc13/plotImpacts.py -i impacts_Run2Run3_M12_SB.json -o impacts_Run2Run3_M12_SB)
+Info in <TCanvas::Print>: pdf file impacts_Run2Run3_M12_SB.pdf has been created using the current canvas
+Info in <TCanvas::Print>: Current canvas added to pdf file impacts_Run2Run3_M12_SB.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file impacts_Run2Run3_M12_SB.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file impacts_Run2Run3_M12_SB.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file impacts_Run2Run3_M12_SB.pdf and file closed
+>> Doing page 0, have 30 parameters
+>> Doing page 1, have 30 parameters
+>> Doing page 2, have 30 parameters
+>> Doing page 3, have 30 parameters
+>> Doing page 4, have 22 parameters
+
+[S+B IMPACT INJECTION]
+{
+  "alpha_internal_unit": 2.0002557396511213e-07,
+  "card_sha256": "d64143810063e00d6d4e1cbf50cfdce7617e9f6c5229ba8cc9dfe92528578dce",
+  "injected_alpha": 2.0002557396511213e-07,
+  "injected_r": 1.0,
+  "mass": 12.0,
+  "rmax": 100.0,
+  "rmin": 0.0,
+  "source_for_default_injection": "--inject-r",
+  "target": "Run2Run3",
+  "workspace_sha256": "1112cfe5c70de727f8e7d74553530dd5d0755cb3a05e96efcceb2393cb60f7c2"
+}
+
+[DONE] review outputs: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M12

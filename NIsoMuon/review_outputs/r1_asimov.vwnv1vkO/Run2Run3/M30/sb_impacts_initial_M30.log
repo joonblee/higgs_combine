@@ -1,0 +1,15 @@
+Have POIs: ['r']
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 1
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+[ERROR] Closed range without finding crossing! 
+
+ --- MultiDimFit ---
+best fit parameter values and profile-likelihood uncertainties: 
+ Warning - No valid low-error found, will report difference to minimum of range for : r
+   r :    +1.000   -1.000/+3.120 (68%)
+>> combine -M MultiDimFit -n _initialFit_.ReviewSBImpacts_Run2Run3_M30 --algo singles --redefineSignalPOIs r --robustFit 1 --setCrossingTolerance 1e-12 --cminDefaultMinimizerStrategy 1 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 1 --setRobustFitTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 1 -m 30 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs/r1_asimov.vwnv1vkO/Run2Run3/M30/workspace_Run2Run3_M30.root --setParameters r=1
