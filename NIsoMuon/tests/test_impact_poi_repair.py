@@ -33,6 +33,30 @@ class InitialPOIRepairTests(unittest.TestCase):
                        Path('out'),Path('workspace'),Path('input.json'),p,-5.,100.)
         run.assert_not_called();self.assertTrue(report['passed']);self.assertFalse(report['repaired'])
 
+    def test_cached_physical_bonly_result_cannot_pass_negative_r_request(self):
+        args=w.build_parser().parse_args(['--allow-negative-r','--r-min','-50'])
+        for fit in ([0.,.002656,17.25235], [0.,0.,1.], [.01,.02,1.]):
+            with self.subTest(fit=fit),patch.object(w,'run_command') as run:
+                with self.assertRaisesRegex(w.WorkflowError,'nuisance scans cannot be reused'):
+                    w.repair_impact_initial_poi(args,Path('card'),'Run2Run3','12',12.,
+                        Path('out'),Path('workspace'),Path('input.json'),payload(fit),-50.,100.)
+                run.assert_not_called()
+
+    def test_explicit_physical_bonly_diagnostic_remains_supported(self):
+        args=w.build_parser().parse_args([])
+        with patch.object(w,'run_command') as run:
+            report=w.repair_impact_initial_poi(args,Path('card'),'Run2Run3','12',12.,
+                Path('out'),Path('workspace'),Path('input.json'),payload([0.,0.,1.]),0.,100.)
+        run.assert_not_called();self.assertTrue(report['passed'])
+
+    def test_valid_sb_interval_is_not_required_to_cross_zero(self):
+        args=w.build_parser().parse_args(['--allow-negative-r'])
+        args.impact_expect_signal=15.5625
+        with patch.object(w,'run_command') as run:
+            report=w.repair_impact_initial_poi(args,Path('card'),'Run2Run3','20',20.,
+                Path('out'),Path('workspace'),Path('input.json'),payload([6.47,15.5625,23.79]),-50.,100.)
+        run.assert_not_called();self.assertTrue(report['passed'])
+
     def setup_case(self,directory,mode='blind',injection=0.):
         out=Path(directory);card=out/'card.txt';card.write_text('# alpha_internal_unit = 0.0003\n')
         workspace=out/'workspace.root';workspace.touch()
