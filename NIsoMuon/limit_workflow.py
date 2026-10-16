@@ -3,7 +3,7 @@
 """
 Standalone NIsoMuon Run-2/Run-3 counting-limit workflow, background-interface revision 20260907.
 
-This ONE file performs all stages:
+This driver orchestrates all stages (external inputs and plotting dependencies below):
   1. read ROOT histograms and audit all required inputs;
   2. build per-era, Run-2, Run-3, and combined Run-2+Run-3 datacards;
   3. apply a numerically stable internal parameterisation for alpha_qZ';
@@ -61,34 +61,97 @@ Uncertainty policy in this revision
   L1PreFiringWeight Up/Down branches for 2016preVFP, 2016postVFP, and 2017.
   The corresponding nuisance parameters are decorrelated between data-taking eras.
 
-Planned Run-level command (sigFit files stored in ./sigfit_inputs):
+Reproduce the organised blind production (2026-10-16)
+----------------------------------------------------
+Run these commands from NIsoMuon. This file is the calculation driver, not a
+replacement for the following inputs/dependencies:
+  * CMSSW_16_0_0 / Combine v11.0.0 / ROOT 6.36.07 used for the reviewed results;
+  * python/plotLimits.py AND python/plotting.py for the analysis limit style;
+  * the environment's text2workspace.py, combineTool.py and plotImpacts.py;
+  * existing datacards_NIsoMuon/alpha/blind/ for --stage run;
+  * sigfit_inputs/ AND the matching external SKOutput ROOT inputs for --stage cards.
+The workflow writes counting cards directly; template/ is not consumed.
+systematics_NPS26009.yml is a separate review/name-check dictionary, not a
+numerical input to this driver. Review/bias checks use combine_review.py and
+the retained audit_bias_intervals.py, repair_bias_intervals.py and
+validate_bias_repair.py helpers; this driver does not replace those checks.
+
+0. Initialise the production environment; the setup lives in the parent src.
+
+production_dir=$PWD
+cd ..
+source ./setup_validation_v16.sh
+cd "$production_dir"
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+
+1. Recompute all 39 blind limits from the preserved cards (no SKOutput access).
+   AsymptoticLimits uses --run blind, strategy 1 and physical rMin=0. Its initial
+   rMax=10 expands by factors of 2 if needed, up to the requested cap 100.
+
+python3 -u limit_workflow.py \
+  --stage run --task limits --target runs --parameter alpha --mode blind \
+  --masses 12,15,20,25,30,35,40,45,50,55,60,65,70 \
+  --jobs 40 --r-max 100 --plot-limits-py "$PWD/python/plotLimits.py" --strict
+
+2. Recompute all 39 B-only diagnostic impacts from the same cards. Negative
+   INTERNAL r is explicit, including M12 in every target; --impact-parallel 40
+   runs at most 40 nuisance fits for the current mass/target, not 40 targets.
+   The driver uses -t -1 --expectSignal 0, robustFit 1, strategy 1, tolerance
+   1e-4 and crossing tolerance 1e-8, then validates/repairs nuisance intervals
+   and the POI interval. Nominal yield safety can clip the requested lower
+   bound, and lower-bound checks can trigger an automatic full-range retry.
+
+python3 -u limit_workflow.py \
+  --stage run --task impacts --target runs --parameter alpha --mode blind \
+  --masses 12,15,20,25,30,35,40,45,50,55,60,65,70 \
+  --allow-negative-r --r-min -50 --r-max 100 --impact-parallel 40 --strict
+
+Both commands use the canonical limit_outputs/alpha/blind/<target>/ directory
+and replace the matching task's results. For an independent comparison, add
+--output-base /absolute/path/to/a/new/output/directory. Combine produces ROOT
+fits; the driver writes internal/physical alpha JSONs, PDFs and impact repair
+validation. Other tasks' outputs are retained. Fresh fits reproduce the model
+and procedure; byte-identical optimiser results are not guaranteed.
+
+3. Optional: regenerate the cards FIRST, only when the original histogram
+   inputs are available. This is unnecessary for rerunning the saved cards.
+   It replaces the selected cards, so use a separate --card-base to compare.
 
 python3 limit_workflow.py \
-  --stage cards \
-  --target runs \
-  --parameter alpha \
-  --mode blind \
+  --stage cards --target runs --parameter alpha --mode blind \
+  --masses 12,15,20,25,30,35,40,45,50,55,60,65,70 \
+  --base-dir /data6/Users/joonblee/SKOutput/Run2UL_v3_Run3_v13/NIsoMuon \
   --sigfit-dir ./sigfit_inputs \
-  --strict
+  --qcd-method data-driven --dy-method data-driven --strict
 
-python3 limit_workflow.py \
-  --stage run \
-  --target runs \
-  --parameter alpha \
-  --mode blind \
-  --task all \
-  --impact-parallel 45 \
-  --r-max 100 \
-  --strict \
-  --allow-negative-r \
-  --r-min -2 \
-  &> limit_blind_runs.log &
+4. Redraw the EXACT saved physical-alpha results, without refitting. This uses
+   the repaired JSONs already in limit_outputs; do not recollect from the
+   original Combine ROOT scans because that discards patched repair endpoints.
+   Execute this Python block after step 0 (steps 1--3 are not needed):
 
-  python3 limit_workflow.py \
-    --stage all --target runs --parameter alpha --mode blind --task all \
-    --sigfit-dir ./sigfit_inputs \
-    --impact-parallel 12 --r-max 100 --strict --allow-negative-r --r-min -2 \
-    &> limit_blind_runs.log &
+python3 - <<'PY'
+import shutil, sys
+from pathlib import Path
+import limit_workflow as w
+base = Path.cwd()
+plot_limits = base / 'python/plotLimits.py'
+plot_impacts = shutil.which('plotImpacts.py')
+if not plot_impacts:
+    raise SystemExit('Initialise the Combine environment first')
+for target in ('Run2', 'Run3', 'Run2Run3'):
+    out = base / 'limit_outputs/alpha/blind' / target
+    w.run_command([sys.executable, str(plot_limits),
+        f'limits_{target}_alpha.json', '--logy', '--show', 'exp',
+        '--x-title', "m_{Z'} (GeV)", '--y-title', w.y_axis_title('alpha'),
+        '--title-right', w.lumi_label(target), '--output', f'limits_{target}_alpha'], out)
+    plotter = w.nps_endpoint_safe_plot_impacts_script(Path(plot_impacts), out)
+    for mass in (12,15,20,25,30,35,40,45,50,55,60,65,70):
+        stem = f'impacts_{target}_alpha_M{mass}'
+        w.run_command([sys.executable, str(plotter), '-i', stem+'.json', '-o', stem,
+            '--sort', 'impact', '--per-page', '30', '--max-pages', '1',
+            '--translate', 'impact_translation_alpha.json'], out)
+PY
+
 
 The current production provides generator PDF/scale/alpha_s variations for tt and
 single-top backgrounds. Signal theory variations are not requested by default; signal
@@ -4969,4 +5032,5 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
