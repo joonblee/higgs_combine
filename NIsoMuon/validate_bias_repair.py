@@ -151,7 +151,7 @@ def run(command, directory, history):
     history.append({"directory": str(directory), "command": command, "exit_code": p.returncode})
     if p.returncode:
         raise RuntimeError(f"Command exit {p.returncode}: {directory}")
-    return read_rows(one(directory, "higgsCombine*.MultiDimFit.mH20*.root"))
+    return read_rows(one(directory, "higgsCombine*.MultiDimFit.mH*.root"))
 
 
 def seed_command(command, info):
