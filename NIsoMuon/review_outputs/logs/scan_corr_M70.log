@@ -1,0 +1,519 @@
+[REVIEW CONFIG]
+{
+  "alpha_internal_unit": 0.0004119195853095905,
+  "card": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-70_Run2Run3.txt",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_16_0_0",
+  "existing_expected_median_alpha95": 0.0003910017938680879,
+  "existing_expected_median_r95": 0.94921875,
+  "mass": 70.0,
+  "scram_arch": "el9_amd64_gcc13",
+  "target": "Run2Run3",
+  "tasks": [
+    "scan",
+    "correlation"
+  ]
+}
+
+========================================================================================
+[TASK] scan | target=Run2Run3 | M=70
+========================================================================================
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70 && text2workspace.py /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-70_Run2Run3.txt -m 70 -o workspace_Run2Run3_M70.root)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70 && /cvmfs/cms.cern.ch/el9_amd64_gcc13/cms/cmssw/CMSSW_16_0_0/external/el9_amd64_gcc13/bin/python3 /data6/Users/joonblee/higgs_combine/CMSSW_16_0_0/src/HiggsAnalysis/CombinedLimit/test/parallelScan.py combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70 -j 20 --hadd)
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Method used is MultiDimFit
+>>> Random number generator seed is 123456
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Random number generator seed is 123456
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Method used is MultiDimFit
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+Doing initial fit: 
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 132/240 r = 1.86458
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 133/240 r = 1.89375
+Point 72/240 r = 0.114583
+Point 134/240 r = 1.92292
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 120/240 r = 1.51458
+Point 135/240 r = 1.95208
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 136/240 r = 1.98125
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 192/240 r = 3.61458
+Point 48/240 r = -0.264583
+ POI: r= -8.19657e-17 -> [-2,5]
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 121/240 r = 1.54375
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 84/240 r = 0.464583
+Point 60/240 r = -0.235417
+Point 144/240 r = 2.21458
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 180/240 r = 3.26458
+Point 137/240 r = 2.01042
+Point 193/240 r = 3.64375
+Point 122/240 r = 1.57292
+Point 138/240 r = 2.03958
+Point 194/240 r = 3.67292
+Point 145/240 r = 2.24375
+Point 181/240 r = 3.29375
+Point 123/240 r = 1.60208
+Point 195/240 r = 3.70208
+Point 139/240 r = 2.06875
+Point 196/240 r = 3.73125
+Point 146/240 r = 2.27292
+Point 124/240 r = 1.63125
+Point 182/240 r = 3.32292
+ POI: r= -8.19657e-17 -> [-2,5]
+ POI: r= -8.19657e-17 -> [-2,5]
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 108/240 r = 1.16458
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 24/240 r = -0.964583
+Point 156/240 r = 2.56458
+Point 204/240 r = 3.96458
+Point 197/240 r = 3.76042
+Point 140/240 r = 2.09792
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 216/240 r = 4.31458
+ POI: r= -8.19657e-17 -> [-2,5]
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 96/240 r = 0.814583
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 12/240 r = -1.31458
+ POI: r= -8.19657e-17 -> [-2,5]
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 0/240 r = -1.66458
+ POI: r= -8.19657e-17 -> [-2,5]
+Point 168/240 r = 2.91458
+Point 36/240 r = -0.614583
+Point 228/240 r = 4.66458
+Point 125/240 r = 1.66042
+Point 147/240 r = 2.30208
+Point 198/240 r = 3.78958
+Point 183/240 r = 3.35208
+Point 141/240 r = 2.12708
+Point 148/240 r = 2.33125
+Point 126/240 r = 1.68958
+Point 169/240 r = 2.94375
+Point 157/240 r = 2.59375
+Point 205/240 r = 3.99375
+Point 73/240 r = 0.14375
+Point 184/240 r = 3.38125
+Point 142/240 r = 2.15625
+Point 217/240 r = 4.34375
+Point 199/240 r = 3.81875
+Point 229/240 r = 4.69375
+Point 85/240 r = 0.49375
+Point 149/240 r = 2.36042
+Point 170/240 r = 2.97292
+Point 61/240 r = -0.20625
+Point 127/240 r = 1.71875
+Point 143/240 r = 2.18542
+Point 185/240 r = 3.41042
+Point 13/240 r = -1.34375
+Point 158/240 r = 2.62292
+Point 150/240 r = 2.38958
+Point 206/240 r = 4.02292
+Point 218/240 r = 4.37292
+Point 200/240 r = 3.84792
+Point 171/240 r = 3.00208
+Point 128/240 r = 1.74792
+Point 230/240 r = 4.72292
+Point 25/240 r = -0.99375
+Point 186/240 r = 3.43958
+Point 159/240 r = 2.65208
+Point 151/240 r = 2.41875
+Point 49/240 r = -0.29375
+Point 207/240 r = 4.05208
+Point 172/240 r = 3.03125
+Point 129/240 r = 1.77708
+Point 201/240 r = 3.87708
+Point 219/240 r = 4.40208
+Point 231/240 r = 4.75208
+Point 160/240 r = 2.68125
+Point 187/240 r = 3.46875
+Point 152/240 r = 2.44792
+Point 130/240 r = 1.80625
+Point 173/240 r = 3.06042
+Point 208/240 r = 4.08125
+Point 202/240 r = 3.90625
+Point 220/240 r = 4.43125
+Point 232/240 r = 4.78125
+Point 109/240 r = 1.19375
+Point 161/240 r = 2.71042
+Point 131/240 r = 1.83542
+Point 153/240 r = 2.47708
+Point 188/240 r = 3.49792
+Point 97/240 r = 0.84375
+Point 174/240 r = 3.08958
+Point 74/240 r = 0.172917
+Point 209/240 r = 4.11042
+Point 203/240 r = 3.93542
+Point 14/240 r = -1.37292
+Point 37/240 r = -0.64375
+Point 221/240 r = 4.46042
+Point 233/240 r = 4.81042
+Point 162/240 r = 2.73958
+Point 86/240 r = 0.522917
+Point 154/240 r = 2.50625
+Point 175/240 r = 3.11875
+Point 189/240 r = 3.52708
+Point 62/240 r = -0.177083
+Point 210/240 r = 4.13958
+Point 1/240 r = -1.69375
+Point 222/240 r = 4.48958
+Point 163/240 r = 2.76875
+Point 234/240 r = 4.83958
+Point 155/240 r = 2.53542
+Point 176/240 r = 3.14792
+Point 190/240 r = 3.55625
+Point 211/240 r = 4.16875
+Point 223/240 r = 4.51875
+Point 75/240 r = 0.202083
+Point 164/240 r = 2.79792
+Point 235/240 r = 4.86875
+Point 177/240 r = 3.17708
+Point 191/240 r = 3.58542
+Point 2/240 r = -1.72292
+Point 15/240 r = -1.40208
+Point 26/240 r = -1.02292
+Point 224/240 r = 4.54792
+Point 212/240 r = 4.19792
+Point 165/240 r = 2.82708
+Point 50/240 r = -0.322917
+Point 178/240 r = 3.20625
+Point 236/240 r = 4.89792
+Point 63/240 r = -0.147917
+Point 110/240 r = 1.22292
+Point 179/240 r = 3.23542
+Point 225/240 r = 4.57708
+Point 166/240 r = 2.85625
+Point 213/240 r = 4.22708
+Point 3/240 r = -1.75208
+Point 27/240 r = -1.05208
+Point 237/240 r = 4.92708
+Point 98/240 r = 0.872917
+Point 76/240 r = 0.23125
+Point 87/240 r = 0.552083
+Point 226/240 r = 4.60625
+Point 167/240 r = 2.88542
+Point 214/240 r = 4.25625
+Point 4/240 r = -1.78125
+Point 238/240 r = 4.95625
+Point 38/240 r = -0.672917
+Point 16/240 r = -1.43125
+Point 64/240 r = -0.11875
+Point 5/240 r = -1.81042
+Point 215/240 r = 4.28542
+Point 227/240 r = 4.63542
+Point 239/240 r = 4.98542
+Point 77/240 r = 0.260417
+Point 6/240 r = -1.83958
+Point 88/240 r = 0.58125
+Point 111/240 r = 1.25208
+Point 17/240 r = -1.46042
+Point 65/240 r = -0.0895833
+Point 51/240 r = -0.352083
+Point 78/240 r = 0.289583
+Point 99/240 r = 0.902083
+Point 7/240 r = -1.86875
+Point 39/240 r = -0.702083
+Point 28/240 r = -1.08125
+Point 89/240 r = 0.610417
+RooAbsMinimizerFcn: Minimized function has error status.
+Returning maximum FCN so far (218.925) to force MIGRAD to back out of this region. Error log follows.
+Parameter values: 	CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP=0.170163	CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP=0.237513	CMS_NPS26009_LightJetStat_DY_BJetOS_2017=0.308545	CMS_NPS26009_LightJetStat_DY_BJetOS_2018=0.442508	CMS_NPS26009_LightJetStat_DY_BJetOS_2022=0.078807	CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE=0.0774994	CMS_NPS26009_LightJetStat_DY_BJetOS_2023=1.7698e-09	CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix=3.68953e-05	CMS_NPS26009_MCstat_other_BJetOS_2016postVFP=0.0875161	CMS_NPS26009_MCstat_other_BJetOS_2016preVFP=0.0993187	CMS_NPS26009_MCstat_other_BJetOS_2017=0.106166	CMS_NPS26009_MCstat_other_BJetOS_2018=0.111975	CMS_NPS26009_MCstat_other_BJetOS_2022=0.0226506	CMS_NPS26009_MCstat_other_BJetOS_2022EE=0.0258039	CMS_NPS26009_MCstat_other_BJetOS_2023=0.0140027	CMS_NPS26009_MCstat_other_BJetOS_2023BPix=0.0772385	CMS_NPS26009_MCstat_signal_BJetOS_2016postVFP=-0.0190997	CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP=-0.0233512	CMS_NPS26009_MCstat_signal_BJetOS_2017=-0.0506524	CMS_NPS26009_MCstat_signal_BJetOS_2018=-0.0747595	CMS_NPS26009_MCstat_signal_BJetOS_2022=-0.00356481	CMS_NPS26009_MCstat_signal_BJetOS_2022EE=-0.00934146	CMS_NPS26009_MCstat_signal_BJetOS_2023=-0.0118888	CMS_NPS26009_MCstat_signal_BJetOS_2023BPix=-0.00721326	CMS_NPS26009_MCstat_singleTop_BJetOS_2016postVFP=0.0312286	CMS_NPS26009_MCstat_singleTop_BJetOS_2016preVFP=0.0800673	CMS_NPS26009_MCstat_singleTop_BJetOS_2017=0.0963329	CMS_NPS26009_MCstat_singleTop_BJetOS_2018=0.111406	CMS_NPS26009_MCstat_singleTop_BJetOS_2022=0.0682652	CMS_NPS26009_MCstat_singleTop_BJetOS_2022EE=0.107066	CMS_NPS26009_MCstat_singleTop_BJetOS_2023=0.0197373	CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix=0.0187075	CMS_NPS26009_MCstat_ttbar_BJetOS_2016postVFP=0.190471	CMS_NPS26009_MCstat_ttbar_BJetOS_2016preVFP=0.221544	CMS_NPS26009_MCstat_ttbar_BJetOS_2017=0.304262	CMS_NPS26009_MCstat_ttbar_BJetOS_2018=0.355306	CMS_NPS26009_MCstat_ttbar_BJetOS_2022=0.0771445	CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE=0.131203	CMS_NPS26009_MCstat_ttbar_BJetOS_2023=0.143877	CMS_NPS26009_MCstat_ttbar_BJetOS_2023BPix=0.11265	CMS_NPS26009_NFModel_DY_BJetOS_13TeV=0.61114	CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV=0.00266847	CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP=0.106375	CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP=0.143499	CMS_NPS26009_NFStat_DY_BJetOS_2017=0.108095	CMS_NPS26009_NFStat_DY_BJetOS_2018=0.127301	CMS_NPS26009_NFStat_DY_BJetOS_2022=0.0696756	CMS_NPS26009_NFStat_DY_BJetOS_2022EE=0.0738129	CMS_NPS26009_QCD_MCTransferStat_Run2=5.92019e-06	CMS_NPS26009_QCD_MCTransferStat_Run3=1.4493e-08	CMS_NPS26009_QCDscale_fac_singleTop=-0.0707619	CMS_NPS26009_QCDscale_ren_singleTop=-0.135723	CMS_NPS26009_bckgNorm_QCD_BJetOS_2016postVFP=2.32806e-06	CMS_NPS26009_bckgNorm_QCD_BJetOS_2016preVFP=0.000103199	CMS_NPS26009_bckgNorm_QCD_BJetOS_2017=0.00577696	CMS_NPS26009_bckgNorm_QCD_BJetOS_2018=0.00174948	CMS_NPS26009_bckgNorm_QCD_BJetOS_2022=6.86758e-08	CMS_NPS26009_bckgNorm_QCD_BJetOS_2022EE=3.71642e-07	CMS_NPS26009_bckgNorm_QCD_BJetOS_2023=0.000200324	CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix=1.47657e-06	CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP=0.0140298	CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP=0.00129703	CMS_NPS26009_bckgShape_QCD_BJetOS_2017=0.0942654	CMS_NPS26009_bckgShape_QCD_BJetOS_2018=0.0771698	CMS_NPS26009_bckgShape_QCD_BJetOS_2022=8.95606e-07	CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE=5.27573e-05	CMS_NPS26009_bckgShape_QCD_BJetOS_2023=0.00180932	CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix=2.00985e-05	CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13TeV=0.234136	CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13p6TeV=0.180118	CMS_NPS26009_btag_fixedWP_incl_light_correlated_13TeV=0.168937	CMS_NPS26009_btag_fixedWP_incl_light_correlated_13p6TeV=0.0352281	CMS_NPS26009_eff_m_id_Run2=0.00803997	CMS_NPS26009_eff_m_id_Run3=0.0157116	CMS_NPS26009_eff_m_trigger_2016postVFP=0.00756613	CMS_NPS26009_eff_m_trigger_2016preVFP=0.00665105	CMS_NPS26009_eff_m_trigger_2017=0.0102333	CMS_NPS26009_eff_m_trigger_2018=0.0118872	CMS_NPS26009_eff_m_trigger_2022=0.0066718	CMS_NPS26009_eff_m_trigger_2022EE=0.00987705	CMS_NPS26009_eff_m_trigger_2023=0.0110469	CMS_NPS26009_eff_m_trigger_2023BPix=0.00589344	CMS_NPS26009_pdf_NNPDF31=0.525002	CMS_NPS26009_stat_QCD_BJetOS_2016postVFP=7.36065e-12	CMS_NPS26009_stat_QCD_BJetOS_2016preVFP=1.85042e-16	CMS_NPS26009_stat_QCD_BJetOS_2017=6.92555e-12	CMS_NPS26009_stat_QCD_BJetOS_2018=4.44211e-08	CMS_NPS26009_stat_QCD_BJetOS_2022=1.17476e-14	CMS_NPS26009_stat_QCD_BJetOS_2022EE=0	CMS_NPS26009_stat_QCD_BJetOS_2023=2.57404e-22	CMS_NPS26009_stat_QCD_BJetOS_2023BPix=4.81393e-13	CMS_NPS26009_topmass_ttbar_BJetOS=0.594864	CMS_btag_fixedWP_bc_uncorrelated_2016postVFP=0.0422534	CMS_btag_fixedWP_bc_uncorrelated_2016preVFP=0.0484288	CMS_btag_fixedWP_bc_uncorrelated_2017=0.0947375	CMS_btag_fixedWP_bc_uncorrelated_2018=0.113146	CMS_btag_fixedWP_bc_uncorrelated_2022=0.0160357	CMS_btag_fixedWP_bc_uncorrelated_2022EE=0.0272732	CMS_btag_fixedWP_bc_uncorrelated_2023=0.0368867	CMS_btag_fixedWP_bc_uncorrelated_2023BPix=0.0248978	CMS_btag_fixedWP_light_uncorrelated_2016postVFP=0.0368068	CMS_btag_fixedWP_light_uncorrelated_2016preVFP=0.0127952	CMS_btag_fixedWP_light_uncorrelated_2017=0.0309009	CMS_btag_fixedWP_light_uncorrelated_2018=0.0457165	CMS_btag_fixedWP_light_uncorrelated_2022=0.00398601	CMS_btag_fixedWP_light_uncorrelated_2022EE=0.00634748	CMS_btag_fixedWP_light_uncorrelated_2023=0.00175898	CMS_btag_fixedWP_light_uncorrelated_2023BPix=0.00352634	CMS_l1_prefiring_2016postVFP=-0.010741	CMS_l1_prefiring_2016preVFP=-0.00884035	CMS_l1_prefiring_2017=-0.0169925	CMS_l1_prefiring_2018=-0.00759716	CMS_pileup_13TeV=0.124209	CMS_pileup_13p6TeV=0.0178767	CMS_res_j_2016postVFP=0.00601464	CMS_res_j_2016preVFP=-0.000182711	CMS_res_j_2017=0.00730645	CMS_res_j_2018=0.020916	CMS_res_j_2022=-5.37148e-06	CMS_res_j_2022EE=8.00621e-05	CMS_res_j_2023=-1.7929e-06	CMS_res_j_2023BPix=-0.000208912	CMS_scale_j_2016postVFP=0.00620228	CMS_scale_j_2016preVFP=-0.000632536	CMS_scale_j_2017=0.0291065	CMS_scale_j_2018=0.0162305	CMS_scale_j_2022=0.00180958	CMS_scale_j_2022EE=0.00227765	CMS_scale_j_2023=0.0100278	CMS_scale_j_2023BPix=0.0236606	CMS_scale_m_13TeV=0.0107684	CMS_scale_m_13p6TeV=0.0538725	QCDscale_fac_ttbar=-1.17177	QCDscale_ren_ttbar=-27.4791	lumi_1=0.0286796	lumi_13TeV_15161718_l=0.0645713	lumi_13TeV_151617_l=0.0188774	lumi_13TeV_1516_l=0.0335752	lumi_2=0.0217359	pdf_alphas=0.845448
+RooFit::Detail::RooFixedProdPdf::model_s[ ]
+     getLogVal() top-level p.d.f not greater than zero @ !servers=(modelObs_s = 0)
+
+Point 79/240 r = 0.31875
+Point 18/240 r = -1.48958
+Point 66/240 r = -0.0604167
+Point 29/240 r = -1.11042
+RooAbsMinimizerFcn: Minimized function has error status.
+Returning maximum FCN so far (218.925) to force MIGRAD to back out of this region. Error log follows.
+Parameter values: 	CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP=0.177094	CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP=0.246942	CMS_NPS26009_LightJetStat_DY_BJetOS_2017=0.322013	CMS_NPS26009_LightJetStat_DY_BJetOS_2018=0.456782	CMS_NPS26009_LightJetStat_DY_BJetOS_2022=0.0815801	CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE=0.0821649	CMS_NPS26009_LightJetStat_DY_BJetOS_2023=1.86073e-09	CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix=3.87714e-05	CMS_NPS26009_MCstat_other_BJetOS_2016postVFP=0.0911681	CMS_NPS26009_MCstat_other_BJetOS_2016preVFP=0.103352	CMS_NPS26009_MCstat_other_BJetOS_2017=0.110729	CMS_NPS26009_MCstat_other_BJetOS_2018=0.116062	CMS_NPS26009_MCstat_other_BJetOS_2022=0.02345	CMS_NPS26009_MCstat_other_BJetOS_2022EE=0.0272526	CMS_NPS26009_MCstat_other_BJetOS_2023=0.0147136	CMS_NPS26009_MCstat_other_BJetOS_2023BPix=0.0806066	CMS_NPS26009_MCstat_signal_BJetOS_2016postVFP=-0.0205448	CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP=-0.0251723	CMS_NPS26009_MCstat_signal_BJetOS_2017=-0.0547077	CMS_NPS26009_MCstat_signal_BJetOS_2018=-0.0797949	CMS_NPS26009_MCstat_signal_BJetOS_2022=-0.00378466	CMS_NPS26009_MCstat_signal_BJetOS_2022EE=-0.0101467	CMS_NPS26009_MCstat_signal_BJetOS_2023=-0.0128373	CMS_NPS26009_MCstat_signal_BJetOS_2023BPix=-0.00778472	CMS_NPS26009_MCstat_singleTop_BJetOS_2016postVFP=0.0326342	CMS_NPS26009_MCstat_singleTop_BJetOS_2016preVFP=0.0835223	CMS_NPS26009_MCstat_singleTop_BJetOS_2017=0.100867	CMS_NPS26009_MCstat_singleTop_BJetOS_2018=0.11536	CMS_NPS26009_MCstat_singleTop_BJetOS_2022=0.0706043	CMS_NPS26009_MCstat_singleTop_BJetOS_2022EE=0.111485	CMS_NPS26009_MCstat_singleTop_BJetOS_2023=0.0207143	CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix=0.019617	CMS_NPS26009_MCstat_ttbar_BJetOS_2016postVFP=0.19844	CMS_NPS26009_MCstat_ttbar_BJetOS_2016preVFP=0.230975	CMS_NPS26009_MCstat_ttbar_BJetOS_2017=0.318055	CMS_NPS26009_MCstat_ttbar_BJetOS_2018=0.367809	CMS_NPS26009_MCstat_ttbar_BJetOS_2022=0.0796006	CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE=0.138001	CMS_NPS26009_MCstat_ttbar_BJetOS_2023=0.150351	CMS_NPS26009_MCstat_ttbar_BJetOS_2023BPix=0.117561	CMS_NPS26009_NFModel_DY_BJetOS_13TeV=0.627667	CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV=0.00280185	CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP=0.106438	CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP=0.143647	CMS_NPS26009_NFStat_DY_BJetOS_2017=0.108241	CMS_NPS26009_NFStat_DY_BJetOS_2018=0.1275	CMS_NPS26009_NFStat_DY_BJetOS_2022=0.0696764	CMS_NPS26009_NFStat_DY_BJetOS_2022EE=0.0738134	CMS_NPS26009_QCD_MCTransferStat_Run2=6.15356e-06	CMS_NPS26009_QCD_MCTransferStat_Run3=1.52108e-08	CMS_NPS26009_QCDscale_fac_singleTop=-0.0738528	CMS_NPS26009_QCDscale_ren_singleTop=-0.142034	CMS_NPS26009_bckgNorm_QCD_BJetOS_2016postVFP=2.53183e-06	CMS_NPS26009_bckgNorm_QCD_BJetOS_2016preVFP=0.000110324	CMS_NPS26009_bckgNorm_QCD_BJetOS_2017=0.00589271	CMS_NPS26009_bckgNorm_QCD_BJetOS_2018=0.00302984	CMS_NPS26009_bckgNorm_QCD_BJetOS_2022=8.54395e-08	CMS_NPS26009_bckgNorm_QCD_BJetOS_2022EE=7.35328e-07	CMS_NPS26009_bckgNorm_QCD_BJetOS_2023=0.00023866	CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix=1.7401e-06	CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP=0.0146972	CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP=0.00135457	CMS_NPS26009_bckgShape_QCD_BJetOS_2017=0.0975417	CMS_NPS26009_bckgShape_QCD_BJetOS_2018=0.0719743	CMS_NPS26009_bckgShape_QCD_BJetOS_2022=1.12209e-06	CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE=7.0912e-05	CMS_NPS26009_bckgShape_QCD_BJetOS_2023=0.0019263	CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix=2.15617e-05	CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13TeV=0.234249	CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13p6TeV=0.186715	CMS_NPS26009_btag_fixedWP_incl_light_correlated_13TeV=0.175936	CMS_NPS26009_btag_fixedWP_incl_light_correlated_13p6TeV=0.0368648	CMS_NPS26009_eff_m_id_Run2=0.00803734	CMS_NPS26009_eff_m_id_Run3=0.016247	CMS_NPS26009_eff_m_trigger_2016postVFP=0.0077215	CMS_NPS26009_eff_m_trigger_2016preVFP=0.00666814	CMS_NPS26009_eff_m_trigger_2017=0.0103179	CMS_NPS26009_eff_m_trigger_2018=0.011814	CMS_NPS26009_eff_m_trigger_2022=0.00686263	CMS_NPS26009_eff_m_trigger_2022EE=0.0103711	CMS_NPS26009_eff_m_trigger_2023=0.0115092	CMS_NPS26009_eff_m_trigger_2023BPix=0.00611542	CMS_NPS26009_pdf_NNPDF31=0.546561	CMS_NPS26009_stat_QCD_BJetOS_2016postVFP=7.70942e-12	CMS_NPS26009_stat_QCD_BJetOS_2016preVFP=1.94127e-16	CMS_NPS26009_stat_QCD_BJetOS_2017=7.28313e-12	CMS_NPS26009_stat_QCD_BJetOS_2018=4.61644e-08	CMS_NPS26009_stat_QCD_BJetOS_2022=1.2145e-14	CMS_NPS26009_stat_QCD_BJetOS_2022EE=0	CMS_NPS26009_stat_QCD_BJetOS_2023=2.55011e-22	CMS_NPS26009_stat_QCD_BJetOS_2023BPix=5.05881e-13	CMS_NPS26009_topmass_ttbar_BJetOS=0.621459	CMS_btag_fixedWP_bc_uncorrelated_2016postVFP=0.0431252	CMS_btag_fixedWP_bc_uncorrelated_2016preVFP=0.0494586	CMS_btag_fixedWP_bc_uncorrelated_2017=0.095785	CMS_btag_fixedWP_bc_uncorrelated_2018=0.114088	CMS_btag_fixedWP_bc_uncorrelated_2022=0.0164133	CMS_btag_fixedWP_bc_uncorrelated_2022EE=0.0285283	CMS_btag_fixedWP_bc_uncorrelated_2023=0.0383348	CMS_btag_fixedWP_bc_uncorrelated_2023BPix=0.0258455	CMS_btag_fixedWP_light_uncorrelated_2016postVFP=0.038461	CMS_btag_fixedWP_light_uncorrelated_2016preVFP=0.0133847	CMS_btag_fixedWP_light_uncorrelated_2017=0.0324067	CMS_btag_fixedWP_light_uncorrelated_2018=0.0473929	CMS_btag_fixedWP_light_uncorrelated_2022=0.00411947	CMS_btag_fixedWP_light_uncorrelated_2022EE=0.00669572	CMS_btag_fixedWP_light_uncorrelated_2023=0.00183954	CMS_btag_fixedWP_light_uncorrelated_2023BPix=0.003695	CMS_l1_prefiring_2016postVFP=-0.010774	CMS_l1_prefiring_2016preVFP=-0.00876869	CMS_l1_prefiring_2017=-0.016727	CMS_l1_prefiring_2018=-0.00766585	CMS_pileup_13TeV=0.129641	CMS_pileup_13p6TeV=0.0196997	CMS_res_j_2016postVFP=0.00626898	CMS_res_j_2016preVFP=-0.00019724	CMS_res_j_2017=0.00771383	CMS_res_j_2018=0.0217948	CMS_res_j_2022=-5.55263e-06	CMS_res_j_2022EE=8.74413e-05	CMS_res_j_2023=-1.84802e-06	CMS_res_j_2023BPix=-0.000225518	CMS_scale_j_2016postVFP=0.00646419	CMS_scale_j_2016preVFP=-0.000670229	CMS_scale_j_2017=0.0302953	CMS_scale_j_2018=0.01664	CMS_scale_j_2022=0.00186708	CMS_scale_j_2022EE=0.00241211	CMS_scale_j_2023=0.0105627	CMS_scale_j_2023BPix=0.0245847	CMS_scale_m_13TeV=0.0108981	CMS_scale_m_13p6TeV=0.0566171	QCDscale_fac_ttbar=-1.21477	QCDscale_ren_ttbar=-129.986	lumi_1=0.0298939	lumi_13TeV_15161718_l=0.0654072	lumi_13TeV_151617_l=0.0192645	lumi_13TeV_1516_l=0.0342717	lumi_2=0.0225811	pdf_alphas=0.907928
+RooFit::Detail::RooFixedProdPdf::model_s[ ]
+     getLogVal() top-level p.d.f not greater than zero @ !servers=(modelObs_s = 0)
+
+RooAbsMinimizerFcn: Minimized function has error status.
+Returning maximum FCN so far (218.925) to force MIGRAD to back out of this region. Error log follows.
+Parameter values: 	CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP=0.0515388	CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP=0.0718663	CMS_NPS26009_LightJetStat_DY_BJetOS_2017=0.0937136	CMS_NPS26009_LightJetStat_DY_BJetOS_2018=0.132935	CMS_NPS26009_LightJetStat_DY_BJetOS_2022=0.0237418	CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE=0.023912	CMS_NPS26009_LightJetStat_DY_BJetOS_2023=5.41517e-10	CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix=1.12834e-05	CMS_NPS26009_MCstat_other_BJetOS_2016postVFP=0.0265322	CMS_NPS26009_MCstat_other_BJetOS_2016preVFP=0.0300778	CMS_NPS26009_MCstat_other_BJetOS_2017=0.0322248	CMS_NPS26009_MCstat_other_BJetOS_2018=0.0337768	CMS_NPS26009_MCstat_other_BJetOS_2022=0.00682453	CMS_NPS26009_MCstat_other_BJetOS_2022EE=0.00793116	CMS_NPS26009_MCstat_other_BJetOS_2023=0.00428203	CMS_NPS26009_MCstat_other_BJetOS_2023BPix=0.0234585	CMS_NPS26009_MCstat_signal_BJetOS_2016postVFP=-0.00597905	CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP=-0.00732575	CMS_NPS26009_MCstat_signal_BJetOS_2017=-0.0159213	CMS_NPS26009_MCstat_signal_BJetOS_2018=-0.0232223	CMS_NPS26009_MCstat_signal_BJetOS_2022=-0.00110143	CMS_NPS26009_MCstat_signal_BJetOS_2022EE=-0.00295294	CMS_NPS26009_MCstat_signal_BJetOS_2023=-0.00373596	CMS_NPS26009_MCstat_signal_BJetOS_2023BPix=-0.00226554	CMS_NPS26009_MCstat_singleTop_BJetOS_2016postVFP=0.00949735	CMS_NPS26009_MCstat_singleTop_BJetOS_2016preVFP=0.024307	CMS_NPS26009_MCstat_singleTop_BJetOS_2017=0.0293547	CMS_NPS26009_MCstat_singleTop_BJetOS_2018=0.0335725	CMS_NPS26009_MCstat_singleTop_BJetOS_2022=0.0205476	CMS_NPS26009_MCstat_singleTop_BJetOS_2022EE=0.032445	CMS_NPS26009_MCstat_singleTop_BJetOS_2023=0.00602836	CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix=0.00570902	CMS_NPS26009_MCstat_ttbar_BJetOS_2016postVFP=0.0577509	CMS_NPS26009_MCstat_ttbar_BJetOS_2016preVFP=0.0672193	CMS_NPS26009_MCstat_ttbar_BJetOS_2017=0.0925619	CMS_NPS26009_MCstat_ttbar_BJetOS_2018=0.107041	CMS_NPS26009_MCstat_ttbar_BJetOS_2022=0.0231657	CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE=0.0401617	CMS_NPS26009_MCstat_ttbar_BJetOS_2023=0.0437559	CMS_NPS26009_MCstat_ttbar_BJetOS_2023BPix=0.0342133	CMS_NPS26009_NFModel_DY_BJetOS_13TeV=0.182667	CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV=0.000815406	CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP=0.105433	CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP=0.141384	CMS_NPS26009_NFStat_DY_BJetOS_2017=0.106077	CMS_NPS26009_NFStat_DY_BJetOS_2018=0.123546	CMS_NPS26009_NFStat_DY_BJetOS_2022=0.0696585	CMS_NPS26009_NFStat_DY_BJetOS_2022EE=0.0738065	CMS_NPS26009_QCD_MCTransferStat_Run2=1.79084e-06	CMS_NPS26009_QCD_MCTransferStat_Run3=4.42672e-09	CMS_NPS26009_QCDscale_fac_singleTop=-0.021493	CMS_NPS26009_QCDscale_ren_singleTop=-0.0413353	CMS_NPS26009_bckgNorm_QCD_BJetOS_2016postVFP=7.36824e-07	CMS_NPS26009_bckgNorm_QCD_BJetOS_2016preVFP=3.2107e-05	CMS_NPS26009_bckgNorm_QCD_BJetOS_2017=0.00171492	CMS_NPS26009_bckgNorm_QCD_BJetOS_2018=0.000881757	CMS_NPS26009_bckgNorm_QCD_BJetOS_2022=2.4865e-08	CMS_NPS26009_bckgNorm_QCD_BJetOS_2022EE=2.13999e-07	CMS_NPS26009_bckgNorm_QCD_BJetOS_2023=6.94559e-05	CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix=5.06411e-07	CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP=0.0144481	CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP=0.00145712	CMS_NPS26009_bckgShape_QCD_BJetOS_2017=0.104347	CMS_NPS26009_bckgShape_QCD_BJetOS_2018=0.0775809	CMS_NPS26009_bckgShape_QCD_BJetOS_2022=1.46557e-06	CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE=9.797e-05	CMS_NPS26009_bckgShape_QCD_BJetOS_2023=0.00213571	CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix=2.54283e-05	CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13TeV=0.0681721	CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13p6TeV=0.0543385	CMS_NPS26009_btag_fixedWP_incl_light_correlated_13TeV=0.0512017	CMS_NPS26009_btag_fixedWP_incl_light_correlated_13p6TeV=0.0107286	CMS_NPS26009_eff_m_id_Run2=0.00233906	CMS_NPS26009_eff_m_id_Run3=0.00472828	CMS_NPS26009_eff_m_trigger_2016postVFP=0.00224715	CMS_NPS26009_eff_m_trigger_2016preVFP=0.00194059	CMS_NPS26009_eff_m_trigger_2017=0.00300277	CMS_NPS26009_eff_m_trigger_2018=0.00343815	CMS_NPS26009_eff_m_trigger_2022=0.00199719	CMS_NPS26009_eff_m_trigger_2022EE=0.00301825	CMS_NPS26009_eff_m_trigger_2023=0.00334945	CMS_NPS26009_eff_m_trigger_2023BPix=0.00177974	CMS_NPS26009_pdf_NNPDF31=0.159063	CMS_NPS26009_stat_QCD_BJetOS_2016postVFP=2.24363e-12	CMS_NPS26009_stat_QCD_BJetOS_2016preVFP=5.64956e-17	CMS_NPS26009_stat_QCD_BJetOS_2017=2.11957e-12	CMS_NPS26009_stat_QCD_BJetOS_2018=1.3435e-08	CMS_NPS26009_stat_QCD_BJetOS_2022=3.53451e-15	CMS_NPS26009_stat_QCD_BJetOS_2022EE=0	CMS_NPS26009_stat_QCD_BJetOS_2023=7.42143e-23	CMS_NPS26009_stat_QCD_BJetOS_2023BPix=1.47224e-13	CMS_NPS26009_topmass_ttbar_BJetOS=0.18086	CMS_btag_fixedWP_bc_uncorrelated_2016postVFP=0.0125505	CMS_btag_fixedWP_bc_uncorrelated_2016preVFP=0.0143937	CMS_btag_fixedWP_bc_uncorrelated_2017=0.0278758	CMS_btag_fixedWP_bc_uncorrelated_2018=0.0332025	CMS_btag_fixedWP_bc_uncorrelated_2022=0.00477668	CMS_btag_fixedWP_bc_uncorrelated_2022EE=0.00830243	CMS_btag_fixedWP_bc_uncorrelated_2023=0.0111564	CMS_btag_fixedWP_bc_uncorrelated_2023BPix=0.00752166	CMS_btag_fixedWP_light_uncorrelated_2016postVFP=0.0111931	CMS_btag_fixedWP_light_uncorrelated_2016preVFP=0.00389528	CMS_btag_fixedWP_light_uncorrelated_2017=0.00943115	CMS_btag_fixedWP_light_uncorrelated_2018=0.0137925	CMS_btag_fixedWP_light_uncorrelated_2022=0.00119887	CMS_btag_fixedWP_light_uncorrelated_2022EE=0.00194862	CMS_btag_fixedWP_light_uncorrelated_2023=0.000535353	CMS_btag_fixedWP_light_uncorrelated_2023BPix=0.00107534	CMS_l1_prefiring_2016postVFP=-0.00313549	CMS_l1_prefiring_2016preVFP=-0.0025519	CMS_l1_prefiring_2017=-0.00486795	CMS_l1_prefiring_2018=-0.00223095	CMS_pileup_13TeV=0.0377287	CMS_pileup_13p6TeV=0.00573309	CMS_res_j_2016postVFP=0.00182443	CMS_res_j_2016preVFP=-5.74015e-05	CMS_res_j_2017=0.00224491	CMS_res_j_2018=0.00634281	CMS_res_j_2022=-1.61595e-06	CMS_res_j_2022EE=2.54476e-05	CMS_res_j_2023=-5.37819e-07	CMS_res_j_2023BPix=-6.56313e-05	CMS_scale_j_2016postVFP=0.00188124	CMS_scale_j_2016preVFP=-0.000195053	CMS_scale_j_2017=0.00881668	CMS_scale_j_2018=0.00484266	CMS_scale_j_2022=0.000543367	CMS_scale_j_2022EE=0.000701984	CMS_scale_j_2023=0.003074	CMS_scale_j_2023BPix=0.00715475	CMS_scale_m_13TeV=0.00317162	CMS_scale_m_13p6TeV=0.016477	QCDscale_fac_ttbar=-0.800214	QCDscale_ren_ttbar=-37.8291	lumi_1=0.00869987	lumi_13TeV_15161718_l=0.0190351	lumi_13TeV_151617_l=0.00560643	lumi_13TeV_1516_l=0.00997391	lumi_2=0.00657164	pdf_alphas=0.264229
+RooFit::Detail::RooFixedProdPdf::model_s[ ]
+     getLogVal() top-level p.d.f not greater than zero @ !servers=(modelObs_s = 0)
+
+Point 112/240 r = 1.28125
+Point 90/240 r = 0.639583
+Point 8/240 r = -1.89792
+Point 80/240 r = 0.347917
+Point 40/240 r = -0.73125
+Point 100/240 r = 0.93125
+Point 67/240 r = -0.03125
+Point 19/240 r = -1.51875
+Point 52/240 r = -0.38125
+Point 30/240 r = -1.13958
+Point 91/240 r = 0.66875
+Point 81/240 r = 0.377083
+Point 9/240 r = -1.92708
+Point 20/240 r = -1.54792
+Point 68/240 r = -0.00208333
+Point 113/240 r = 1.31042
+Point 92/240 r = 0.697917
+Point 41/240 r = -0.760417
+Point 82/240 r = 0.40625
+RooAbsMinimizerFcn: Minimized function has error status.
+Returning maximum FCN so far (120.716) to force MIGRAD to back out of this region. Error log follows.
+Parameter values: 	CMS_NPS26009_LightJetStat_DY_BJetOS_2016postVFP=0.123298	CMS_NPS26009_LightJetStat_DY_BJetOS_2016preVFP=0.175417	CMS_NPS26009_LightJetStat_DY_BJetOS_2017=0.227049	CMS_NPS26009_LightJetStat_DY_BJetOS_2018=0.305253	CMS_NPS26009_LightJetStat_DY_BJetOS_2022=0.0515814	CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE=0.0700317	CMS_NPS26009_LightJetStat_DY_BJetOS_2023=1.39864e-09	CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix=2.84672e-05	CMS_NPS26009_MCstat_other_BJetOS_2016postVFP=0.0630305	CMS_NPS26009_MCstat_other_BJetOS_2016preVFP=0.0729915	CMS_NPS26009_MCstat_other_BJetOS_2017=0.0784707	CMS_NPS26009_MCstat_other_BJetOS_2018=0.0744095	CMS_NPS26009_MCstat_other_BJetOS_2022=0.0148144	CMS_NPS26009_MCstat_other_BJetOS_2022EE=0.0234619	CMS_NPS26009_MCstat_other_BJetOS_2023=0.0110922	CMS_NPS26009_MCstat_other_BJetOS_2023BPix=0.0615021	CMS_NPS26009_MCstat_signal_BJetOS_2016postVFP=-0.0093361	CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP=-0.0114268	CMS_NPS26009_MCstat_signal_BJetOS_2017=-0.025072	CMS_NPS26009_MCstat_signal_BJetOS_2018=-0.0340883	CMS_NPS26009_MCstat_signal_BJetOS_2022=-0.00166353	CMS_NPS26009_MCstat_signal_BJetOS_2022EE=-0.00595944	CMS_NPS26009_MCstat_signal_BJetOS_2023=-0.00660669	CMS_NPS26009_MCstat_signal_BJetOS_2023BPix=-0.00391371	CMS_NPS26009_MCstat_singleTop_BJetOS_2016postVFP=0.0220304	CMS_NPS26009_MCstat_singleTop_BJetOS_2016preVFP=0.0579239	CMS_NPS26009_MCstat_singleTop_BJetOS_2017=0.0695581	CMS_NPS26009_MCstat_singleTop_BJetOS_2018=0.074701	CMS_NPS26009_MCstat_singleTop_BJetOS_2022=0.0450797	CMS_NPS26009_MCstat_singleTop_BJetOS_2022EE=0.0996454	CMS_NPS26009_MCstat_singleTop_BJetOS_2023=0.015713	CMS_NPS26009_MCstat_singleTop_BJetOS_2023BPix=0.0145737	CMS_NPS26009_MCstat_ttbar_BJetOS_2016postVFP=0.131411	CMS_NPS26009_MCstat_ttbar_BJetOS_2016preVFP=0.152404	CMS_NPS26009_MCstat_ttbar_BJetOS_2017=0.21028	CMS_NPS26009_MCstat_ttbar_BJetOS_2018=0.231906	CMS_NPS26009_MCstat_ttbar_BJetOS_2022=0.0520826	CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE=0.114878	CMS_NPS26009_MCstat_ttbar_BJetOS_2023=0.112174	CMS_NPS26009_MCstat_ttbar_BJetOS_2023BPix=0.0858145	CMS_NPS26009_NFModel_DY_BJetOS_13TeV=0.476391	CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV=0.00221419	CMS_NPS26009_NFStat_DY_BJetOS_2016postVFP=0.105965	CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP=0.142587	CMS_NPS26009_NFStat_DY_BJetOS_2017=0.107251	CMS_NPS26009_NFStat_DY_BJetOS_2018=0.125474	CMS_NPS26009_NFStat_DY_BJetOS_2022=0.0696674	CMS_NPS26009_NFStat_DY_BJetOS_2022EE=0.073812	CMS_NPS26009_QCD_MCTransferStat_Run2=3.8462e-06	CMS_NPS26009_QCD_MCTransferStat_Run3=1.10584e-08	CMS_NPS26009_QCDscale_fac_singleTop=-0.0517401	CMS_NPS26009_QCDscale_ren_singleTop=-0.0990589	CMS_NPS26009_bckgNorm_QCD_BJetOS_2016postVFP=8.89004e-07	CMS_NPS26009_bckgNorm_QCD_BJetOS_2016preVFP=3.7385e-05	CMS_NPS26009_bckgNorm_QCD_BJetOS_2017=0.00222819	CMS_NPS26009_bckgNorm_QCD_BJetOS_2018=0.00173751	CMS_NPS26009_bckgNorm_QCD_BJetOS_2022=1.67954e-09	CMS_NPS26009_bckgNorm_QCD_BJetOS_2022EE=2.74087e-07	CMS_NPS26009_bckgNorm_QCD_BJetOS_2023=9.18243e-05	CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix=7.14304e-07	CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP=0.0102948	CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP=0.000906976	CMS_NPS26009_bckgShape_QCD_BJetOS_2017=0.0648233	CMS_NPS26009_bckgShape_QCD_BJetOS_2018=0.051313	CMS_NPS26009_bckgShape_QCD_BJetOS_2022=1.66274e-07	CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE=4.77735e-05	CMS_NPS26009_bckgShape_QCD_BJetOS_2023=0.0014842	CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix=1.51895e-05	CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13TeV=0.215789	CMS_NPS26009_btag_fixedWP_comb_bc_correlated_13p6TeV=0.154784	CMS_NPS26009_btag_fixedWP_incl_light_correlated_13TeV=0.112474	CMS_NPS26009_btag_fixedWP_incl_light_correlated_13p6TeV=0.0273435	CMS_NPS26009_eff_m_id_Run2=0.00747012	CMS_NPS26009_eff_m_id_Run3=0.0130716	CMS_NPS26009_eff_m_trigger_2016postVFP=0.00627043	CMS_NPS26009_eff_m_trigger_2016preVFP=0.00618831	CMS_NPS26009_eff_m_trigger_2017=0.00937865	CMS_NPS26009_eff_m_trigger_2018=0.0108256	CMS_NPS26009_eff_m_trigger_2022=0.00466296	CMS_NPS26009_eff_m_trigger_2022EE=0.00894934	CMS_NPS26009_eff_m_trigger_2023=0.00896487	CMS_NPS26009_eff_m_trigger_2023BPix=0.00481559	CMS_NPS26009_pdf_NNPDF31=0.372435	CMS_NPS26009_stat_QCD_BJetOS_2016postVFP=5.11675e-12	CMS_NPS26009_stat_QCD_BJetOS_2016preVFP=1.28575e-16	CMS_NPS26009_stat_QCD_BJetOS_2017=4.87608e-12	CMS_NPS26009_stat_QCD_BJetOS_2018=2.88199e-08	CMS_NPS26009_stat_QCD_BJetOS_2022=7.79545e-15	CMS_NPS26009_stat_QCD_BJetOS_2022EE=0	CMS_NPS26009_stat_QCD_BJetOS_2023=1.98154e-22	CMS_NPS26009_stat_QCD_BJetOS_2023BPix=3.71429e-13	CMS_NPS26009_topmass_ttbar_BJetOS=0.403763	CMS_btag_fixedWP_bc_uncorrelated_2016postVFP=0.0349374	CMS_btag_fixedWP_bc_uncorrelated_2016preVFP=0.039959	CMS_btag_fixedWP_bc_uncorrelated_2017=0.0853023	CMS_btag_fixedWP_bc_uncorrelated_2018=0.0931583	CMS_btag_fixedWP_bc_uncorrelated_2022=0.0117773	CMS_btag_fixedWP_bc_uncorrelated_2022EE=0.025608	CMS_btag_fixedWP_bc_uncorrelated_2023=0.0306327	CMS_btag_fixedWP_bc_uncorrelated_2023BPix=0.0202507	CMS_btag_fixedWP_light_uncorrelated_2016postVFP=0.0249206	CMS_btag_fixedWP_light_uncorrelated_2016preVFP=0.00861384	CMS_btag_fixedWP_light_uncorrelated_2017=0.0210171	CMS_btag_fixedWP_light_uncorrelated_2018=0.0294489	CMS_btag_fixedWP_light_uncorrelated_2022=0.00264902	CMS_btag_fixedWP_light_uncorrelated_2022EE=0.00548463	CMS_btag_fixedWP_light_uncorrelated_2023=0.00137995	CMS_btag_fixedWP_light_uncorrelated_2023BPix=0.00261724	CMS_l1_prefiring_2016postVFP=-0.0100143	CMS_l1_prefiring_2016preVFP=-0.00879964	CMS_l1_prefiring_2017=-0.0178751	CMS_l1_prefiring_2018=-0.00620453	CMS_pileup_13TeV=0.0760191	CMS_pileup_13p6TeV=0.0241117	CMS_res_j_2016postVFP=0.00413379	CMS_res_j_2016preVFP=-8.7458e-05	CMS_res_j_2017=0.00468261	CMS_res_j_2018=0.0127575	CMS_res_j_2022=-3.56038e-06	CMS_res_j_2022EE=4.70198e-05	CMS_res_j_2023=-1.59048e-06	CMS_res_j_2023BPix=-0.000114095	CMS_scale_j_2016postVFP=0.00427459	CMS_scale_j_2016preVFP=-0.000377237	CMS_scale_j_2017=0.0207553	CMS_scale_j_2018=0.0116365	CMS_scale_j_2022=0.00122389	CMS_scale_j_2022EE=0.00190046	CMS_scale_j_2023=0.00747717	CMS_scale_j_2023BPix=0.0183895	CMS_scale_m_13TeV=0.00815301	CMS_scale_m_13p6TeV=0.0414056	QCDscale_fac_ttbar=-78.0926	QCDscale_ren_ttbar=-4.67206	lumi_1=0.0246229	lumi_13TeV_15161718_l=0.0539129	lumi_13TeV_151617_l=0.0159259	lumi_13TeV_1516_l=0.0276903	lumi_2=0.0179252	pdf_alphas=0.483206
+RooFit::Detail::RooFixedProdPdf::model_s[ ]
+     getLogVal() top-level p.d.f not greater than zero @ !servers=(modelObs_s = 0)
+
+Point 31/240 r = -1.16875
+Point 42/240 r = -0.789583
+Point 101/240 r = 0.960417
+Point 10/240 r = -1.95625
+Point 53/240 r = -0.410417
+Point 21/240 r = -1.57708
+Point 93/240 r = 0.727083
+Point 83/240 r = 0.435417
+Point 43/240 r = -0.81875
+Point 32/240 r = -1.19792
+Point 69/240 r = 0.0270833
+Point 11/240 r = -1.98542
+Point 114/240 r = 1.33958
+Point 22/240 r = -1.60625
+Point 94/240 r = 0.75625
+Point 102/240 r = 0.989583
+Point 44/240 r = -0.847917
+Point 33/240 r = -1.22708
+Point 54/240 r = -0.439583
+Point 95/240 r = 0.785417
+Point 23/240 r = -1.63542
+Point 70/240 r = 0.05625
+Point 115/240 r = 1.36875
+Point 45/240 r = -0.877083
+Point 34/240 r = -1.25625
+Point 103/240 r = 1.01875
+Point 55/240 r = -0.46875
+Point 71/240 r = 0.0854167
+Point 46/240 r = -0.90625
+Point 116/240 r = 1.39792
+Point 56/240 r = -0.497917
+Point 35/240 r = -1.28542
+Point 104/240 r = 1.04792
+Point 117/240 r = 1.42708
+Point 47/240 r = -0.935417
+Point 105/240 r = 1.07708
+Point 57/240 r = -0.527083
+Point 106/240 r = 1.10625
+Point 58/240 r = -0.55625
+Point 118/240 r = 1.45625
+Point 107/240 r = 1.13542
+Point 59/240 r = -0.585417
+Point 119/240 r = 1.48542
+Info in <hadd>: target file: higgsCombine.ReviewScan_Run2Run3_M70.MultiDimFit.mH70.root
+Info in <hadd>: compression setting for all output: 101
+hadd Source file 1: higgsCombine.ReviewScan_Run2Run3_M70.0.MultiDimFit.mH70.root
+hadd Source file 2: higgsCombine.ReviewScan_Run2Run3_M70.1.MultiDimFit.mH70.root
+hadd Source file 3: higgsCombine.ReviewScan_Run2Run3_M70.2.MultiDimFit.mH70.root
+hadd Source file 4: higgsCombine.ReviewScan_Run2Run3_M70.3.MultiDimFit.mH70.root
+hadd Source file 5: higgsCombine.ReviewScan_Run2Run3_M70.4.MultiDimFit.mH70.root
+hadd Source file 6: higgsCombine.ReviewScan_Run2Run3_M70.5.MultiDimFit.mH70.root
+hadd Source file 7: higgsCombine.ReviewScan_Run2Run3_M70.6.MultiDimFit.mH70.root
+hadd Source file 8: higgsCombine.ReviewScan_Run2Run3_M70.7.MultiDimFit.mH70.root
+hadd Source file 9: higgsCombine.ReviewScan_Run2Run3_M70.8.MultiDimFit.mH70.root
+hadd Source file 10: higgsCombine.ReviewScan_Run2Run3_M70.9.MultiDimFit.mH70.root
+hadd Source file 11: higgsCombine.ReviewScan_Run2Run3_M70.10.MultiDimFit.mH70.root
+hadd Source file 12: higgsCombine.ReviewScan_Run2Run3_M70.11.MultiDimFit.mH70.root
+hadd Source file 13: higgsCombine.ReviewScan_Run2Run3_M70.12.MultiDimFit.mH70.root
+hadd Source file 14: higgsCombine.ReviewScan_Run2Run3_M70.13.MultiDimFit.mH70.root
+hadd Source file 15: higgsCombine.ReviewScan_Run2Run3_M70.14.MultiDimFit.mH70.root
+hadd Source file 16: higgsCombine.ReviewScan_Run2Run3_M70.15.MultiDimFit.mH70.root
+hadd Source file 17: higgsCombine.ReviewScan_Run2Run3_M70.16.MultiDimFit.mH70.root
+hadd Source file 18: higgsCombine.ReviewScan_Run2Run3_M70.17.MultiDimFit.mH70.root
+hadd Source file 19: higgsCombine.ReviewScan_Run2Run3_M70.18.MultiDimFit.mH70.root
+hadd Source file 20: higgsCombine.ReviewScan_Run2Run3_M70.19.MultiDimFit.mH70.root
+hadd Target path: higgsCombine.ReviewScan_Run2Run3_M70.MultiDimFit.mH70.root:/
+hadd Target path: higgsCombine.ReviewScan_Run2Run3_M70.MultiDimFit.mH70.root:/toys
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.0 --firstPoint 0 --lastPoint 11
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.1 --firstPoint 12 --lastPoint 23
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.2 --firstPoint 24 --lastPoint 35
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.3 --firstPoint 36 --lastPoint 47
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.4 --firstPoint 48 --lastPoint 59
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.5 --firstPoint 60 --lastPoint 71
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.6 --firstPoint 72 --lastPoint 83
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.7 --firstPoint 84 --lastPoint 95
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.8 --firstPoint 96 --lastPoint 107
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.9 --firstPoint 108 --lastPoint 119
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.10 --firstPoint 120 --lastPoint 131
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.11 --firstPoint 132 --lastPoint 143
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.12 --firstPoint 144 --lastPoint 155
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.13 --firstPoint 156 --lastPoint 167
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.14 --firstPoint 168 --lastPoint 179
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.15 --firstPoint 180 --lastPoint 191
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.16 --firstPoint 192 --lastPoint 203
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.17 --firstPoint 204 --lastPoint 215
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.18 --firstPoint 216 --lastPoint 227
+spawning combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --algo grid --points 240 --rMin -2 --rMax 5 --saveNLL -n .ReviewScan_Run2Run3_M70.19 --firstPoint 228 --lastPoint 239
+All workers done, doing the hadd to make higgsCombine.ReviewScan_Run2Run3_M70.MultiDimFit.mH70.root out of higgsCombine.ReviewScan_Run2Run3_M70.{0..19}.MultiDimFit.mH70.root
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70 && /data6/Users/joonblee/higgs_combine/CMSSW_16_0_0/bin/el9_amd64_gcc13/plot1DScan.py /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/higgsCombine.ReviewScan_Run2Run3_M70.MultiDimFit.mH70.root --POI r -o scan_Run2Run3_M70_Bonly)
+Info in <TCanvas::Print>: pdf file ./scan_Run2Run3_M70_Bonly.pdf has been created
+Info in <TCanvas::Print>: png file ./scan_Run2Run3_M70_Bonly.png has been created
+--------------------------------------
+scan_Run2Run3_M70_Bonly
+--------------------------------------
+[{'lo': -0.4857905800316909, 'hi': 0.4774133722384396, 'valid_lo': True, 'valid_hi': True}]
+[{'lo': -0.9707749842782409, 'hi': 0.9713882753938045, 'valid_lo': True, 'valid_hi': True}]
+[SAVED] /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/scan_Run2Run3_M70_Bonly.pdf
+
+========================================================================================
+[TASK] correlation | target=Run2Run3 | M=70
+========================================================================================
+[WORKSPACE] reuse /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70 && combine -M FitDiagnostics /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -t -1 --expectSignal 0 --setParameters r=0 --rMin -2 --rMax 5 --saveWithUncertainties --saveNormalizations -n .ReviewCorrelation_Run2Run3_M70)
+ <<< Combine >>> 
+ <<< v11.0.0 >>>
+>>> Random number generator seed is 123456
+>>> Method used is FitDiagnostics
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+
+ --- FitDiagnostics ---
+Best fit r: 6.65655e-05  -0.482409/+0.474673  (68% CL)
+Info in <TCanvas::Print>: pdf file /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/correlation_Run2Run3_M70.pdf has been created
+[SAVED] /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/correlation_Run2Run3_M70.pdf
+[SAVED] /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/correlation_Run2Run3_M70.root
+
+[DONE] review outputs: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70

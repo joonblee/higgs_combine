@@ -1,0 +1,73 @@
+[REVIEW CONFIG]
+{
+  "alpha_internal_unit": 0.0004119195853095905,
+  "card": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/datacards_NIsoMuon/alpha/blind/combined/Run2Run3/datacard_M-70_Run2Run3.txt",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_16_0_0",
+  "existing_expected_median_alpha95": 0.0003910017938680879,
+  "existing_expected_median_r95": 0.94921875,
+  "mass": 70.0,
+  "scram_arch": "el9_amd64_gcc13",
+  "target": "Run2Run3",
+  "tasks": [
+    "sb-impacts"
+  ]
+}
+
+========================================================================================
+[TASK] sb-impacts | target=Run2Run3 | M=70
+========================================================================================
+[IMPACT REPAIR] Run2Run3 M70: missing=2, retry=10, boundary=7
+[IMPACT RESUME] Run2Run3 M70: reuse=0, remaining=10
+[IMPACT RETRY] Run2Run3 M70: strategy=2, nuisances=CMS_NPS26009_MCstat_other_BJetOS_2022EE,CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP,CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE,CMS_NPS26009_NFStat_DY_BJetOS_2018,CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP,CMS_NPS26009_eff_m_trigger_2016preVFP,CMS_NPS26009_pdf_NNPDF31,CMS_NPS26009_stat_QCD_BJetOS_2016preVFP,CMS_NPS26009_topmass_ttbar_BJetOS,CMS_btag_fixedWP_bc_uncorrelated_2023BPix; log=/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70/retry_pass1_strategy2.log
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70 && combineTool.py -M Impacts -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -n .ReviewSBImpacts_Run2Run3_M70 --robustFit 1 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 2 --setRobustFitTolerance 1e-4 --setCrossingTolerance 1e-12 --stepSize 0.02 --rMin 0 --rMax 100 -t -1 --expectSignal 0.94921875 --setParameters r=0.94921875 --cminFallbackAlgo Minuit2,Migrad,1:1e-4 --cminFallbackAlgo Minuit2,Migrad,0:1e-4 -v 2 --doFits --named CMS_NPS26009_MCstat_other_BJetOS_2022EE,CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP,CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE,CMS_NPS26009_NFStat_DY_BJetOS_2018,CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP,CMS_NPS26009_eff_m_trigger_2016preVFP,CMS_NPS26009_pdf_NNPDF31,CMS_NPS26009_stat_QCD_BJetOS_2016preVFP,CMS_NPS26009_topmass_ttbar_BJetOS,CMS_btag_fixedWP_bc_uncorrelated_2023BPix --parallel 20)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70 && combineTool.py -M Impacts -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 -n .ReviewSBImpacts_Run2Run3_M70 --named CMS_NPS26009_MCstat_other_BJetOS_2022EE,CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP,CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE,CMS_NPS26009_NFStat_DY_BJetOS_2018,CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP,CMS_NPS26009_eff_m_trigger_2016preVFP,CMS_NPS26009_pdf_NNPDF31,CMS_NPS26009_stat_QCD_BJetOS_2016preVFP,CMS_NPS26009_topmass_ttbar_BJetOS,CMS_btag_fixedWP_bc_uncorrelated_2023BPix -o retry_internal.json)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70/CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP && combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --algo fixed -P CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP --floatOtherPOIs 1 --saveInactivePOI 1 --fixedPointPOIs CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP=0 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 0.94921875 --setParameters r=0.94921875 -n .Boundary -v 1)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70/CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP && combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --algo fixed -P CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP --floatOtherPOIs 1 --saveInactivePOI 1 --fixedPointPOIs CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP=0 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 0.94921875 --setParameters r=0.94921875 -n .Boundary -v 1)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70/CMS_NPS26009_bckgShape_QCD_BJetOS_2017 && combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --algo fixed -P CMS_NPS26009_bckgShape_QCD_BJetOS_2017 --floatOtherPOIs 1 --saveInactivePOI 1 --fixedPointPOIs CMS_NPS26009_bckgShape_QCD_BJetOS_2017=0 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 0.94921875 --setParameters r=0.94921875 -n .Boundary -v 1)[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70/CMS_NPS26009_bckgShape_QCD_BJetOS_2018 && combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --algo fixed -P CMS_NPS26009_bckgShape_QCD_BJetOS_2018 --floatOtherPOIs 1 --saveInactivePOI 1 --fixedPointPOIs CMS_NPS26009_bckgShape_QCD_BJetOS_2018=0 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 0.94921875 --setParameters r=0.94921875 -n .Boundary -v 1)
+
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70/CMS_NPS26009_bckgShape_QCD_BJetOS_2022 && combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --algo fixed -P CMS_NPS26009_bckgShape_QCD_BJetOS_2022 --floatOtherPOIs 1 --saveInactivePOI 1 --fixedPointPOIs CMS_NPS26009_bckgShape_QCD_BJetOS_2022=0 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 0.94921875 --setParameters r=0.94921875 -n .Boundary -v 1)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70/CMS_NPS26009_bckgShape_QCD_BJetOS_2023 && combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --algo fixed -P CMS_NPS26009_bckgShape_QCD_BJetOS_2023 --floatOtherPOIs 1 --saveInactivePOI 1 --fixedPointPOIs CMS_NPS26009_bckgShape_QCD_BJetOS_2023=0 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 0.94921875 --setParameters r=0.94921875 -n .Boundary -v 1)
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70/CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE && combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --algo fixed -P CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE --floatOtherPOIs 1 --saveInactivePOI 1 --fixedPointPOIs CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE=0 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 0.94921875 --setParameters r=0.94921875 -n .Boundary -v 1)[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/impact_repair_M70/CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix && combine -M MultiDimFit /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70/workspace_Run2Run3_M70.root -m 70 --algo fixed -P CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix --floatOtherPOIs 1 --saveInactivePOI 1 --fixedPointPOIs CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix=0 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --rMin 0 --rMax 100 -t -1 --expectSignal 0.94921875 --setParameters r=0.94921875 -n .Boundary -v 1)
+
+[IMPACT BOUNDARY] Run2Run3 M70 CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP: endpoint=0 r=0.94921947 deltaNLL=-6.7537087e-12
+[IMPACT BOUNDARY] Run2Run3 M70 CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP: endpoint=0 r=0.94921857 deltaNLL=-4.1577408e-11
+[IMPACT BOUNDARY] Run2Run3 M70 CMS_NPS26009_bckgShape_QCD_BJetOS_2017: endpoint=0 r=0.94921911 deltaNLL=-3.8468784e-11
+[IMPACT BOUNDARY] Run2Run3 M70 CMS_NPS26009_bckgShape_QCD_BJetOS_2018: endpoint=0 r=0.94922447 deltaNLL=5.5544618e-08
+[IMPACT BOUNDARY] Run2Run3 M70 CMS_NPS26009_bckgShape_QCD_BJetOS_2022: endpoint=0 r=0.94921851 deltaNLL=1.3933743e-10
+[IMPACT BOUNDARY] Run2Run3 M70 CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE: endpoint=0 r=0.94921863 deltaNLL=-4.7016613e-11
+[IMPACT BOUNDARY] Run2Run3 M70 CMS_NPS26009_bckgShape_QCD_BJetOS_2023: endpoint=0 r=0.94921881 deltaNLL=-4.663292e-11
+[IMPACT BOUNDARY] Run2Run3 M70 CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix: endpoint=0 r=0.94921875 deltaNLL=1.3303705e-09
+[IMPACT CHECK] Run2Run3 M70: 140/140 passed
+[RUN] (cd /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70 && /data6/Users/joonblee/higgs_combine/CMSSW_16_0_0/bin/el9_amd64_gcc13/plotImpacts.py -i impacts_Run2Run3_M70_SB.json -o impacts_Run2Run3_M70_SB)
+Info in <TCanvas::Print>: pdf file impacts_Run2Run3_M70_SB.pdf has been created using the current canvas
+Info in <TCanvas::Print>: Current canvas added to pdf file impacts_Run2Run3_M70_SB.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file impacts_Run2Run3_M70_SB.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file impacts_Run2Run3_M70_SB.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file impacts_Run2Run3_M70_SB.pdf and file closed
+>> Warning, the pull for CMS_NPS26009_bckgShape_QCD_BJetOS_2017 could not be computed
+>> Warning, the pull for CMS_NPS26009_bckgShape_QCD_BJetOS_2018 could not be computed
+>> Warning, the pull for CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE could not be computed
+>> Warning, the pull for CMS_NPS26009_bckgShape_QCD_BJetOS_2023 could not be computed
+>> Warning, the pull for CMS_NPS26009_stat_QCD_BJetOS_2022EE could not be computed
+>> Warning, the pull for CMS_NPS26009_stat_QCD_BJetOS_2023 could not be computed
+>> Doing page 0, have 30 parameters
+>> Doing page 1, have 30 parameters
+>> Doing page 2, have 30 parameters
+>> Doing page 3, have 30 parameters
+>> Doing page 4, have 20 parameters
+
+[S+B IMPACT INJECTION]
+{
+  "alpha_internal_unit": 0.0004119195853095905,
+  "card_sha256": "ff0d660f05128b9661400240cda28830ecdb9f8df26060cc2ff798bbd05761aa",
+  "injected_alpha": 0.0003910017938680879,
+  "injected_r": 0.94921875,
+  "mass": 70.0,
+  "rmax": 100.0,
+  "rmin": 0.0,
+  "source_for_default_injection": "original S+B metadata",
+  "target": "Run2Run3",
+  "workspace_sha256": "48749ef7f414954ad8c6e955decc1024bcee5da8df1b2b63c2b8cc9b3ac20276"
+}
+
+[DONE] review outputs: /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/review_outputs_updated.P2ejoE9l/Run2Run3/M70

@@ -1,0 +1,13 @@
+Error in <TFile::TFile>: file /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/limit_outputs_impacts_retry/alpha/blind/Run3/impact_repair_M70/higgsCombine_paramFit_.Impacts_Run3_alpha_M70_CMS_NPS26009_pdf_NNPDF31.MultiDimFit.mH70.root does not exist
+Have POIs: ['r']
+Have parameters: 1
+Traceback (most recent call last):
+  File "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/bin/el9_amd64_gcc12/combineTool.py", line 77, in <module>
+    method.run_method()
+  File "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/HiggsAnalysis/CombinedLimit/python/tool_base/Impacts.py", line 247, in run_method
+    paramScanRes = utils.get_singles_results(
+  File "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/HiggsAnalysis/CombinedLimit/python/tool_base/utils.py", line 109, in get_singles_results
+    f = ROOT.TFile(file)
+  File "/cvmfs/cms.cern.ch/el9_amd64_gcc12/lcg/root/6.30.07-8b1a11e1ef0e074fdfd44e162b27e71c/lib/ROOT/_pythonization/_tfile.py", line 90, in _TFileConstructor
+    raise OSError('Failed to open file {}'.format(args[0]))
+OSError: Failed to open file higgsCombine_paramFit_.Impacts_Run3_alpha_M70_CMS_NPS26009_pdf_NNPDF31.MultiDimFit.mH70.root

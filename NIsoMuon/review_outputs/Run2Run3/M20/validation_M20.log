@@ -10,14 +10,32 @@
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2022EE
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2023
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_NFStat_DY_BJetOS_2023BPix
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_QCD_MCTransferStat_Run2
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_QCD_MCTransferStat_Run3
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_stat_QCD_BJetOS_2016preVFP
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooFormulaVar::CMS_NPS26009_yield_QCD_BJetOS_2016preVFP
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_stat_QCD_BJetOS_2016postVFP
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooFormulaVar::CMS_NPS26009_yield_QCD_BJetOS_2016postVFP
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2017
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_stat_QCD_BJetOS_2017
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooFormulaVar::CMS_NPS26009_yield_QCD_BJetOS_2017
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2018
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_stat_QCD_BJetOS_2018
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooFormulaVar::CMS_NPS26009_yield_QCD_BJetOS_2018
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2022
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_stat_QCD_BJetOS_2022
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooFormulaVar::CMS_NPS26009_yield_QCD_BJetOS_2022
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_stat_QCD_BJetOS_2022EE
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooFormulaVar::CMS_NPS26009_yield_QCD_BJetOS_2022EE
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2023
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_stat_QCD_BJetOS_2023
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooFormulaVar::CMS_NPS26009_yield_QCD_BJetOS_2023
 [#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooRealVar::CMS_NPS26009_stat_QCD_BJetOS_2023BPix
+[#1] INFO:ObjectHandling -- RooWorkspace::import(_rateParams) importing RooFormulaVar::CMS_NPS26009_yield_QCD_BJetOS_2023BPix
 Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping checks on systematic shapes.
 ================================
 =======Validation results=======
@@ -25,7 +43,7 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
 >>>There were no warnings of type  'up/down templates vary the yield in the same direction'
 >>>There were no warnings of type  'up/down templates are identical'
 >>>There were no warnings of type  'At least one of the up/down systematic uncertainty templates is empty'
->>>There were  29 warnings of type  'Uncertainty has normalisation effect of more than 10.0%'
+>>>There were  27 warnings of type  'Uncertainty has normalisation effect of more than 10.0%'
     For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2016postVFP there were  1  such warnings
         In bin  bin_2016postVFP the affected processes are:  ["Others"]
     For uncertainty CMS_NPS26009_MCstat_other_BJetOS_2016preVFP there were  1  such warnings
@@ -68,12 +86,8 @@ Not a shape-based datacard / shape-based datacard using RooDataHist. Skipping ch
         In bin  bin_2023 the affected processes are:  ["QCD"]
     For uncertainty CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix there were  1  such warnings
         In bin  bin_2023BPix the affected processes are:  ["QCD"]
-    For uncertainty CMS_pileup_13TeV there were  1  such warnings
-        In bin  bin_2017 the affected processes are:  ["Others"]
     For uncertainty CMS_pileup_13p6TeV there were  2  such warnings
         In bin  bin_2022EE the affected processes are:  ["Others", "ST"]
-    For uncertainty CMS_scale_m_13TeV there were  1  such warnings
-        In bin  bin_2016preVFP the affected processes are:  ["Others"]
     For uncertainty QCDscale_ren_ttbar there were  3  such warnings
         In bin  bin_2016preVFP the affected processes are:  ["tt"]
         In bin  bin_2017 the affected processes are:  ["tt"]

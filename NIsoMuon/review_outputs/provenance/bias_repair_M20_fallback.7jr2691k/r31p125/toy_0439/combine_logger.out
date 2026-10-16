@@ -1,0 +1,17 @@
+CascadeMinimizer.cc[835] : (in function: applyOptions) - Configured fallback algorithm, type Minuit2, algo Migrad, strategy 2, tolerance 0.1
+FitterAlgoBase.cc[122] : (in function: applyOptionsBase) - Setting robust fit options to Tolerance=0.01 / Strategy=1 / Type,Algo=Minuit2,Migrad (note that defaults of CascadeMinimizer if these options were not specified)
+FitterAlgoBase.cc[250] : (in function: doFit) - do first minimization
+CascadeMinimizer.cc[197] : (in function: improveOnce) - Minimization configured with Type=Minuit2, Algo=Migrad, strategy=1, tolerance=0.01
+CascadeMinimizer.cc[242] : (in function: improveOnce) - Minimization finished with status=-1
+CascadeMinimizer.cc[247] : (in function: improveOnce) - Minimization ended with latest status != 0 or 1
+CascadeMinimizer.cc[144] : (in function: improve) - Failed minimization with Minuit2, Migrad and tolerance 0.01
+CascadeMinimizer.cc[155] : (in function: improve) - Will fall back to minimization using Migrad, strategy 2 and tolerance 0.1
+CascadeMinimizer.cc[197] : (in function: improveOnce) - Minimization configured with Type=Minuit2, Algo=Migrad, strategy=1, tolerance=0.01
+CascadeMinimizer.cc[242] : (in function: improveOnce) - Minimization finished with status=-1
+CascadeMinimizer.cc[247] : (in function: improveOnce) - Minimization ended with latest status != 0 or 1
+utils.cc[1073] : (in function: anyParameterAtBoundaries) - [WARNING] Found parameter CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE at boundary (within ~1sigma): 3.1655+/-4.94428
+CascadeMinimizer.cc[511] : (in function: minimize) - [WARNING] After fit, some parameters are found at the boundary (within ~1sigma)
+FitterAlgoBase.cc[254] : (in function: doFit) - Minimized in 0.847909 seconds (0.830000 CPU time)
+FitterAlgoBase.cc[258] : (in function: doFit) - FINAL NLL - NLL0 VALUE = 0
+
+FitterAlgoBase.cc[269] : (in function: doFit) - Initial minimization failed. Aborting.

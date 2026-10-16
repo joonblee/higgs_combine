@@ -1,0 +1,14 @@
+Have POIs: ['r']
+ <<< Combine >>> 
+ <<< v10.6.0 >>>
+>>> Random number generator seed is 123456
+Configured fallback algorithm, type Minuit2, algo Migrad, strategy 1, tolerance 0.0001
+>>> Method used is MultiDimFit
+Set Default Value of Parameter r To : 0
+Warning: A value of r is specified in both the --setParameters and --expectSignal options. The argument of --expectSignal will take precedence
+Doing initial fit: 
+
+ --- MultiDimFit ---
+best fit parameter values and profile-likelihood uncertainties: 
+   r :    +0.000   -1.122/+0.989 (68%)
+>> combine -M MultiDimFit -n _initialFit_.Impacts_Run2Run3_alpha_M50 --algo singles --redefineSignalPOIs r --robustFit 1 --cminDefaultMinimizerStrategy 2 --cminDefaultMinimizerTolerance 1e-4 --setRobustFitStrategy 2 --setRobustFitTolerance 1e-4 --setCrossingTolerance 1e-8 --stepSize 0.02 --cminFallbackAlgo Minuit2,Migrad,1:1e-4 --rMin -5 --rMax 10 -t -1 --expectSignal 0 -m 50 -d /data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/limit_outputs_impacts_updated/alpha/blind/Run2Run3/workspace_Run2Run3_alpha_M50.root --setParameters r=0
