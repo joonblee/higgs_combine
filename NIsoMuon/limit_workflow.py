@@ -3418,6 +3418,21 @@ def repair_impact_initial_poi(args, card, target, label, mass, outdir,
     # valid cached lower crossing using the user's original requested rMin.
     issues = impact_poi_interval_issues(payload, rmin, rmax)
     original_fit = impact_fit_triplet(payload)
+    injection = float(getattr(args, "impact_expect_signal", 0.0))
+    if not math.isfinite(injection):
+        raise WorkflowError("Non-finite impact Asimov signal injection")
+    # A legacy r>=0 B-only result can have perfectly finite intervals. Repairing
+    # only its initial POI would leave the nuisance scans clipped at zero.
+    # Require a full rerun rather than silently mixing the two fit ranges.
+    if (require_lower and args.mode == "blind" and injection == 0.0
+            and original_fit is not None and math.isfinite(original_fit[0])
+            and original_fit[0] >= 0.0):
+        raise WorkflowError(
+            "B-only impacts have no negative-r lower interval although "
+            "--allow-negative-r was requested. A legacy r>=0 initial fit and "
+            "nuisance scans cannot be reused. Rerun --stage run --task impacts "
+            "without --repair-impacts, with --allow-negative-r --r-min <0, "
+            "preferably in a new --output-base.")
     report = dict(passed=not issues, repaired=False, units="internal_r",
                   fit=list(original_fit) if original_fit else None,
                   rmin=rmin, rmax=rmax)
@@ -3433,9 +3448,6 @@ def repair_impact_initial_poi(args, card, target, label, mass, outdir,
     name = getattr(args, "impact_fit_name", f".Impacts_{tag_for(args, target)}_M{label}")
     mass_arg = format_mass_for_combine(mass)
     filename = f"higgsCombine_initialFit_{name}.MultiDimFit.mH{mass_arg}.root"
-    injection = float(getattr(args, "impact_expect_signal", 0.0))
-    if not math.isfinite(injection):
-        raise WorkflowError("Non-finite impact Asimov signal injection")
     upper_ranges = [rmax]
     if original_fit is not None:
         low, centre, _high = original_fit
