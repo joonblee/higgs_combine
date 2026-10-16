@@ -58,6 +58,43 @@ def load(path):
     return json.loads(path.read_text())
 
 
+def audit_references(base, record, digest_for=None):
+    """Check live fingerprints as well as the outer file inventory.
+
+    Original JSONs are historical records; their original absolute paths and
+    hashes are intentionally retained. All live input hashes must resolve.
+    """
+    digest_for = digest_for or sha
+    prefix = record.get("copied_from", str(base)).rstrip("/") + "/"
+    for p in (base/"review_outputs").rglob("*.json"):
+        if "original_json" in p.relative_to(base).parts:
+            continue
+        value = load(p)
+        if not isinstance(value, dict) or not isinstance(value.get("input_sha256"), dict):
+            continue
+        for name, expected in value["input_sha256"].items():
+            # Only inputs within this production tree are relocated/audited here.
+            if name.startswith(prefix):
+                path = base/name[len(prefix):]
+            elif name.startswith(str(base) + "/"):
+                path = Path(name)
+            else:
+                continue
+            require(path.is_file() and digest_for(path) == expected,
+                    f"Stale/missing input fingerprint in {p}: {name}")
+    final = base/"limit_outputs/final_impacts_manifest.json"
+    if final.is_file():
+        entries = load(final)["b_only_impacts"]
+        expected_sets = {(t, m) for t in ("Run2", "Run3", "Run2Run3")
+                         for m in (12,15,20,25,30,35,40,45,50,55,60,65,70)}
+        require(len(entries) == 39 and {(e['target'], e['mass']) for e in entries} == expected_sets,
+                "Final impact manifest does not contain exactly 39 distinct sets")
+        for e in entries:
+            internal = base/f"limit_outputs/alpha/blind/{e['target']}/impacts_{e['target']}_alpha_M{e['mass']}_internal.json"
+            require(internal.is_file() and digest_for(internal) == e["internal_json_sha256"],
+                    f"Stale final-impact fingerprint: {e['target']} M{e['mass']}")
+
+
 def audit(base):
     for name in KEEP:
         require((base/name).is_file(), f"Required file is missing: {name}")
@@ -81,7 +118,8 @@ def audit(base):
         for suffix in (".pdf", ".json", "_internal.json"):
             require((folder/f"limits_{target}_alpha{suffix}").is_file(),
                     f"Missing final limit: {target} {suffix}")
-    print("[PASS] Saved scientific file hashes and 39 final impact sets are intact")
+    audit_references(base, record, lambda p: record["files_sha256"].get(str(p.relative_to(base))) or sha(p))
+    print("[PASS] Saved scientific file hashes, live dependency fingerprints and 39 final impact sets are intact")
     return record
 
 
