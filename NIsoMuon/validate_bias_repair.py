@@ -12,6 +12,7 @@ import copy
 import hashlib
 import json
 import math
+import re
 import statistics
 import subprocess
 import tempfile
@@ -175,6 +176,17 @@ def reference_consistent(shift, interval, center_delta, absolute_tol, relative_t
     return (math.isfinite(center_delta) and abs(center_delta) <= nll_tol
             and math.isfinite(shift)
             and shift <= max(absolute_tol, relative_tol * scale))
+
+
+def global_refit_change(directory):
+    path = directory / "combine_logger.out"
+    if not path.is_file():
+        return None
+    values = re.findall(r"FINAL NLL - NLL0 VALUE\s*=\s*([^\s]+)", path.read_text())
+    if len(values) != 1:
+        return None
+    value = float(values[0])
+    return value if math.isfinite(value) else None
 
 
 def fixed_command(command, info, value, label, strategy, tolerance):
@@ -397,16 +409,22 @@ def main():
                         if len(best) == 1 and len(points) == 1:
                             p = points[0]
                             shift = abs(best[0]["r"]-interval[1])
+                            refit_nll_change = global_refit_change(cached_dir)
+                            small_refit = (shift <= args.minimum_shift_tolerance or
+                                (refit_nll_change is not None and
+                                 abs(refit_nll_change) <= args.minimum_nll_tolerance))
                             if (math.isfinite(p.get("deltaNLL", float("nan")))
                                     and abs(p["deltaNLL"]-target) <= args.endpoint_nll_tolerance
                                     and abs(p["r"]-value) <= 1e-4
+                                    and small_refit
                                     and reference_consistent(shift, interval, center["deltaNLL"],
                                         args.minimum_shift_tolerance, args.minimum_relative_shift_tolerance,
                                         args.minimum_nll_tolerance)):
                                 check = {"r": value, "deltaNLL": p["deltaNLL"],
                                          "refitted_best_r": best[0]["r"], "best_r_shift": shift,
                                          "source_directory": str(cached_dir), "reused": True,
-                                         "saved_center_deltaNLL": center["deltaNLL"]}
+                                         "saved_center_deltaNLL": center["deltaNLL"],
+                                         "global_refit_deltaNLL": refit_nll_change}
                                 print(f"[REUSE ENDPOINT] {job}/{label}", flush=True)
                     if check is None:
                         check = profile_saved_reference(command, info, toy, value,
