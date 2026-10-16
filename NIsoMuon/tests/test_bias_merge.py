@@ -84,6 +84,16 @@ class BiasMergeTests(unittest.TestCase):
                 bias.profile_saved_reference(command, {"parameters": {"r": 0}},
                     8, 1, Path(directory) / "high", [], 0.01)
 
+    def test_cached_refit_must_have_one_finite_nll_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            log = directory / "combine_logger.out"
+            self.assertIsNone(bias.global_refit_change(directory))
+            log.write_text("doFit - FINAL NLL - NLL0 VALUE = -2.434261795e-05\n")
+            self.assertAlmostEqual(bias.global_refit_change(directory), -2.434261795e-05)
+            log.write_text("FINAL NLL - NLL0 VALUE = NaN\n")
+            self.assertIsNone(bias.global_refit_change(directory))
+
 
 if __name__ == "__main__":
     unittest.main()
