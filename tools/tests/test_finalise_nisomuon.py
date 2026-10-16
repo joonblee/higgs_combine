@@ -134,6 +134,32 @@ class FinaliseTests(unittest.TestCase):
         after = {str(p.relative_to(self.base)): m.sha(p) for p in self.base.rglob('*') if p.is_file()}
         self.assertEqual(before, after)
 
+    def test_inner_input_fingerprint_must_match_even_when_outer_inventory_passes(self):
+        audit_file = self.base/'review_outputs/provenance/audit.json'
+        audit_file.parent.mkdir(parents=True)
+        audit_file.write_text('{"relocated": true}\n')
+        manifest = self.base/'review_outputs/input_manifest.json'
+        manifest.write_text(json.dumps({'input_sha256': {str(audit_file): 'stale pre-relocation hash'}}))
+        for p in (audit_file, manifest):
+            self.record['files_sha256'][str(p.relative_to(self.base))] = m.sha(p)
+        (self.base/'review_outputs/organisation_manifest.json').write_text(json.dumps(self.record))
+        with self.assertRaisesRegex(RuntimeError, 'Stale/missing input fingerprint'):
+            m.audit(self.base)
+
+    def test_final_impact_manifest_must_track_relocated_json_bytes(self):
+        entries = []
+        for target in ('Run2', 'Run3', 'Run2Run3'):
+            for mass in (12,15,20,25,30,35,40,45,50,55,60,65,70):
+                p = self.base/f'limit_outputs/alpha/blind/{target}/impacts_{target}_alpha_M{mass}_internal.json'
+                entries.append({'target': target, 'mass': mass, 'internal_json_sha256': m.sha(p)})
+        entries[0]['internal_json_sha256'] = 'stale pre-relocation hash'
+        p = self.base/'limit_outputs/final_impacts_manifest.json'
+        p.write_text(json.dumps({'b_only_impacts': entries}))
+        self.record['files_sha256'][str(p.relative_to(self.base))] = m.sha(p)
+        (self.base/'review_outputs/organisation_manifest.json').write_text(json.dumps(self.record))
+        with self.assertRaisesRegex(RuntimeError, 'Stale final-impact fingerprint'):
+            m.audit(self.base)
+
 
 if __name__ == '__main__':
     unittest.main()
