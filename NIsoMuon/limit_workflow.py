@@ -189,6 +189,7 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -196,8 +197,10 @@ from collections import defaultdict
 from collections.abc import MutableMapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from uuid import uuid4
 
 
 # -------------------------------------------------------------------------------------------------
@@ -886,7 +889,20 @@ def parse_float_list(value: str) -> List[float]:
     return out
 
 
-def selected_targets(target: str) -> List[str]:
+def parse_era_list(value: str) -> List[str]:
+    eras = []
+    for token in re.split(r"[,;:\s]+", value.strip()):
+        era = canonical_target(token)
+        if era not in YEARS:
+            raise argparse.ArgumentTypeError("--eras accepts individual data-taking eras only.")
+        if era not in eras:
+            eras.append(era)
+    if not eras:
+        raise argparse.ArgumentTypeError("At least one era is required.")
+    return eras
+
+
+def selected_targets(target: str, eras: Optional[Sequence[str]] = None) -> List[str]:
     if target == "run2":
         return ["Run2"]
     if target == "run3":
@@ -896,10 +912,14 @@ def selected_targets(target: str) -> List[str]:
     if target == "runs":
         return ["Run2", "Run3", "Run2Run3"]
     if target == "eras":
-        return list(YEARS)
+        return list(eras) if eras else list(YEARS)
     if target == "all":
         return ["Run2", "Run3", "Run2Run3", *YEARS]
     return [target]
+
+
+def requested_targets(args: argparse.Namespace) -> List[str]:
+    return selected_targets(args.target, getattr(args, "eras", None))
 
 
 def target_years(target: str) -> Tuple[str, ...]:
@@ -914,7 +934,7 @@ def target_years(target: str) -> Tuple[str, ...]:
 
 def years_needed_for_request(args: argparse.Namespace) -> Tuple[str, ...]:
     needed = set()
-    for target in selected_targets(args.target):
+    for target in requested_targets(args):
         needed.update(target_years(target))
     return tuple(year for year in YEARS if year in needed)
 
@@ -1436,7 +1456,7 @@ def signal_mass_from_filename(filename: str) -> Optional[Tuple[str, float]]:
 
 def scan_signal_files(args: argparse.Namespace) -> Dict[float, Dict[str, str]]:
     found: Dict[float, Dict[str, str]] = defaultdict(dict)
-    for year in YEARS:
+    for year in years_needed_for_request(args):
         directory = root_dir(args, year)
         candidates = sorted(glob.glob(os.path.join(directory, "NIsoMuon_Zp_M-*.root")))
         candidates += sorted(glob.glob(os.path.join(directory, "NIsoMuon_SkimTree_NIsoMuon_Zp_M-*.root")))
@@ -3043,7 +3063,7 @@ def write_card_summaries(args: argparse.Namespace, cards: Sequence[CardInfo]) ->
 
 def clean_card_targets(args: argparse.Namespace) -> None:
     root = Path(args.card_base) / args.parameter / args.mode
-    for target in selected_targets(args.target):
+    for target in requested_targets(args):
         directory = (
             root / "combined" / target
             if target in COMBINED_TARGETS
@@ -3086,7 +3106,7 @@ def build_cards(args: argparse.Namespace) -> List[CardInfo]:
             )
             audit.print_and_check(mass_label(mass), args.strict)
 
-            for target in selected_targets(args.target):
+            for target in requested_targets(args):
                 years = target_years(target)
                 missing_signal_years = [year for year in years if not files_by_year.get(year)]
                 if missing_signal_years:
@@ -4591,7 +4611,7 @@ def prepare_card_run(
 def run_parallel_limits(args: argparse.Namespace) -> None:
     batches: List[Tuple[str, List[Path], Path]] = []
     # Validate every selected target before any worker removes an old output.
-    for target in selected_targets(args.target):
+    for target in requested_targets(args):
         cards = cards_for_target(args, target)
         if not cards:
             raise WorkflowError(f"No datacards found for {target}: {card_pattern(args, target)}")
@@ -4667,7 +4687,214 @@ def run_target(args: argparse.Namespace, target: str) -> None:
         )
 
 
+def condor_environment(args: argparse.Namespace) -> Tuple[Path, str]:
+    cmssw = args.condor_cmssw_base or os.environ.get("CMSSW_BASE")
+    arch = args.condor_scram_arch or os.environ.get("SCRAM_ARCH")
+    if not cmssw or not arch:
+        raise WorkflowError(
+            "Initialise the Combine CMSSW environment, or set --condor-cmssw-base "
+            "and --condor-scram-arch."
+        )
+    base = Path(cmssw).expanduser().resolve()
+    if not (base / "src").is_dir():
+        raise WorkflowError(f"Combine CMSSW src directory does not exist: {base / 'src'}")
+    return base, arch
+
+
+def write_condor_status(path: Path, payload: Mapping[str, Any]) -> None:
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    temporary.replace(path)
+
+
+def submit_condor_limits(args: argparse.Namespace) -> Path:
+    """Snapshot a batch and submit one counting-card fit per Condor process."""
+    cmssw, arch = condor_environment(args)
+    if not args.condor_dry_run:
+        require_command("condor_submit")
+    targets = requested_targets(args)
+    selected = []
+    for target in targets:
+        cards = cards_for_target(args, target)
+        if not cards:
+            raise WorkflowError(f"No datacards found for {target}: {card_pattern(args, target)}")
+        for card in cards:
+            _validate_background_card(args, card)
+            selected.append((target, card))
+
+    batch_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid4().hex[:8]
+    batch = (Path(args.condor_dir).expanduser() if args.condor_dir else
+             Path(args.output_base) / "condor" / args.parameter / args.mode / batch_id).resolve()
+    # Submit files expand dollar macros in pathname values.
+    if any(character in str(batch) for character in ('$', '\n', '\r', '"')):
+        raise WorkflowError("The Condor directory must not contain dollar signs, quotes or newlines.")
+    batch_name = args.condor_batch_name or f"NIsoMuon_{args.parameter}_{args.mode}_{batch_id}"
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", batch_name):
+        raise WorkflowError("--condor-batch-name accepts letters, digits, underscores, dots and hyphens.")
+    requirements = args.condor_requirements
+    if requirements and any(c in requirements for c in ("\n", "\r")):
+        raise WorkflowError("--condor-requirements must be one ClassAd expression.")
+    user = os.environ.get("USER", "")
+    if args.condor_nmax and not re.fullmatch(r"[A-Za-z0-9_.-]+", user):
+        raise WorkflowError("A valid USER is required for the SKFlat concurrency limit.")
+    if batch.exists():
+        raise WorkflowError(f"Condor batch directory already exists: {batch}; choose a new directory.")
+    batch.mkdir(parents=True)
+    snapshot = batch / "limit_workflow.py"
+    shutil.copy2(Path(__file__).resolve(), snapshot)
+    # Only parser options are needed by workers; card-building audit objects
+    # can contain Path instances and are intentionally not serialised.
+    config = {a.dest: getattr(args, a.dest) for a in build_parser()._actions if a.dest != "help"}
+    config.update(stage="run", backend="local", jobs=1, condor_dry_run=False,
+                  condor_worker=None, condor_index=None,
+                  output_base=str(Path(args.output_base).expanduser().resolve()))
+    plot_path = shutil.which(args.plot_limits_py) or args.plot_limits_py
+    config["plot_limits_py"] = str(Path(plot_path).expanduser().resolve())
+    jobs = []
+    for index, (target, card) in enumerate(selected):
+        saved_card = batch / "cards" / target / card.name
+        saved_card.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(card, saved_card)
+        workdir = batch / "jobs" / f"job_{index}"
+        workdir.mkdir(parents=True)
+        jobs.append({"index": index, "target": target, "card": str(saved_card),
+                     "original_card": str(card), "workdir": str(workdir),
+                     "card_sha256": hashlib.sha256(saved_card.read_bytes()).hexdigest()})
+    manifest = batch / "manifest.json"
+    manifest.write_text(json.dumps({
+        "schema": "NIsoMuon_condor_v1", "batch_id": batch_id,
+        "config": config, "jobs": jobs, "cmssw_base": str(cmssw), "scram_arch": arch,
+    }, indent=2, sort_keys=True) + "\n")
+    wrapper = batch / "run_job.sh"
+    wrapper.write_text("\n".join([
+        "#!/bin/bash", "set -eo pipefail", "export LC_ALL=C ROOT_HIST=0",
+        "export CMS_PATH=/cvmfs/cms.cern.ch", 'source "$CMS_PATH/cmsset_default.sh"',
+        f"export SCRAM_ARCH={shlex.quote(arch)}", f"cd {shlex.quote(str(cmssw / 'src'))}",
+        'eval "$(scramv1 runtime -sh)"',
+        "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1",
+        f"cd {shlex.quote(str(batch))}",
+        f"exec python3 -u {shlex.quote(str(snapshot))} --condor-worker "
+        f'{shlex.quote(str(manifest))} --condor-index "$1"', "",
+    ]))
+    wrapper.chmod(0o755)
+    # Match SKFlatAnalyzer's vanilla/$(Process)/job logs and optional n<N>.USER
+    # convention. Combine uses the user's compiled CMSSW area, so this backend
+    # explicitly requires shared storage instead of transferring hists.root.
+    # Pathname values are literal submit strings, not shell/ClassAd strings:
+    # adding quotes would make the quotes part of the executable/IWD path.
+    submit_lines = [
+        f"executable = {wrapper}", f"initialdir = {batch}",
+        f"jobbatchname = {batch_name}", "universe = vanilla", "arguments = $(Process)",
+        "log = condor.log", "getenv = True", "should_transfer_files = NO",
+        "output = job_$(Process).log", "error = job_$(Process).err",
+        "request_cpus = 1", f"request_memory = {args.condor_memory}MB",
+    ]
+    if args.condor_nmax:
+        submit_lines.append(f"concurrency_limits = n{args.condor_nmax}.{user}")
+    if requirements:
+        submit_lines.append(f"requirements = {requirements}")
+    submit_lines.extend([f"queue {len(jobs)}", ""])
+    (batch / "submit.jds").write_text("\n".join(submit_lines))
+    print(f"[CONDOR] {len(jobs)} jobs; mode={args.mode}; targets={','.join(targets)}")
+    print(f"[CONDOR] batch={batch}")
+    if args.condor_dry_run:
+        print(f"[CONDOR] prepared only; submit with: cd {shlex.quote(str(batch))} && condor_submit submit.jds")
+    else:
+        run_command(["condor_submit", "submit.jds"], batch)
+    print(f"[CONDOR] after all jobs finish: python3 {shlex.quote(str(snapshot))} "
+          f"--stage collect --condor-dir {shlex.quote(str(batch))}")
+    return batch
+
+
+def load_condor_manifest(path: Path) -> Tuple[Dict[str, Any], argparse.Namespace]:
+    payload = json.loads(path.read_text())
+    if payload.get("schema") != "NIsoMuon_condor_v1" or not payload.get("jobs"):
+        raise WorkflowError(f"Invalid Condor manifest: {path}")
+    args = argparse.Namespace(**payload["config"])
+    validate_args(args)
+    return payload, args
+
+
+def run_condor_worker(manifest: Path, index: int) -> None:
+    import fcntl
+
+    payload, args = load_condor_manifest(manifest)
+    if index < 0 or index >= len(payload["jobs"]):
+        raise WorkflowError(f"Invalid Condor process index: {index}")
+    job = payload["jobs"][index]
+    workdir = Path(job["workdir"])
+    card = Path(job["card"])
+    status_path = workdir / "status.json"
+    # A second submission of the same process must not delete an active fit.
+    with (workdir / "worker.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise WorkflowError(f"Condor job {index} is already running in {workdir}") from exc
+        status = {"batch_id": payload["batch_id"], "index": index,
+                  "target": job["target"], "mode": args.mode,
+                  "card_sha256": job["card_sha256"], "state": "running"}
+        write_condor_status(status_path, status)
+        try:
+            if hashlib.sha256(card.read_bytes()).hexdigest() != job["card_sha256"]:
+                raise WorkflowError(f"Submitted datacard changed: {card}")
+            require_command("combine")
+            require_command("combineTool.py")
+            _validate_background_card(args, card)
+            label, mass = prepare_card_run(args, card, job["target"], workdir)
+            result = run_asymptotic(args, card, job["target"], label, mass, workdir)
+            for path in (result.observed, result.expected):
+                if not path.is_file() or path.stat().st_size == 0:
+                    raise WorkflowError(f"Missing/empty limit output: {path}")
+            status.update(state="success", observed=str(result.observed), expected=str(result.expected))
+        except Exception as exc:
+            status.update(state="failed", error=str(exc))
+            write_condor_status(status_path, status)
+            raise
+        write_condor_status(status_path, status)
+        print(f"[CONDOR] completed job {index}: {job['target']} M-{label} ({args.mode})")
+
+
+def collect_condor_limits(batch: Path) -> None:
+    payload, args = load_condor_manifest(batch / "manifest.json")
+    grouped = defaultdict(list)
+    incomplete = []
+    # Check the entire batch before writing any plots. Never glob a previous
+    # production's ROOT files or use current datacards for alpha rescaling.
+    for job in payload["jobs"]:
+        status_path = Path(job["workdir"]) / "status.json"
+        status = json.loads(status_path.read_text()) if status_path.is_file() else {}
+        expected = {"batch_id": payload["batch_id"], "index": job["index"],
+                    "target": job["target"], "mode": args.mode,
+                    "card_sha256": job["card_sha256"], "state": "success"}
+        if any(status.get(key) != value for key, value in expected.items()):
+            incomplete.append(f"job {job['index']} {job['target']}: {status.get('state', 'pending')}")
+            continue
+        card = Path(job["card"])
+        if hashlib.sha256(card.read_bytes()).hexdigest() != job["card_sha256"]:
+            raise WorkflowError(f"Submitted datacard changed: {card}")
+        outputs = [Path(status[key]) for key in ("observed", "expected")]
+        if any(not p.is_file() or p.stat().st_size == 0 for p in outputs):
+            incomplete.append(f"job {job['index']} {job['target']}: missing/empty ROOT output")
+            continue
+        grouped[job["target"]].append((card, *outputs))
+    if incomplete:
+        raise WorkflowError("Condor batch is incomplete; no plots collected. Check job logs:\n  "
+                            + "\n  ".join(incomplete))
+    print(f"[CONDOR COLLECT] mode={args.mode}; targets={','.join(grouped)}; batch={batch}")
+    require_command("combineTool.py")
+    for target, rows in grouped.items():
+        outdir = output_dir(args, target)
+        outdir.mkdir(parents=True, exist_ok=True)
+        collect_and_plot_limits(args, target, [r[0] for r in rows],
+                                [r[1] for r in rows], [r[2] for r in rows], outdir)
+    print(f"[DONE] collected {len(payload['jobs'])} Condor jobs from {batch}")
+
+
 def run_combine(args: argparse.Namespace) -> None:
+    if args.backend == "condor":
+        submit_condor_limits(args)
+        return
     require_command("combine")
     require_command("combineTool.py")
     if args.task in {"impacts", "all"}:
@@ -4683,7 +4910,7 @@ def run_combine(args: argparse.Namespace) -> None:
     if getattr(args, "jobs", 1) > 1:
         run_parallel_limits(args)
     else:
-        for target in selected_targets(args.target):
+        for target in requested_targets(args):
             run_target(args, target)
 
 
@@ -4695,10 +4922,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="limit_workflow.py",
         formatter_class=argparse.RawTextHelpFormatter,
-        description="Standalone NIsoMuon Run-2/Run-3 datacard + Combine limit/impact workflow (20260826_0541). Use --target runs for Run2+Run3+full in one invocation.",
+        description="NIsoMuon datacard + Combine limit/impact workflow. Use --target runs for Run2/Run3/full, or --target eras --eras 2018,2022 for separate era results.",
     )
-    parser.add_argument("--stage", choices=("cards", "run", "all"), default="all")
-    parser.add_argument("--target", type=canonical_target, default="run2")
+    parser.add_argument("--stage", choices=("cards", "run", "all", "collect"), default="all",
+                        help="collect = collect and plot a completed Condor batch from --condor-dir.")
+    parser.add_argument("--target", type=canonical_target, default="run2",
+                        help="run2, run3, full, runs, eras, all, or one era (e.g. 2018).")
+    parser.add_argument("--eras", type=parse_era_list, default=None,
+                        help="Comma-separated subset for --target eras; each era is fitted separately.")
     parser.add_argument("--parameter", type=canonical_parameter, default="alpha")
     parser.add_argument("--mode", choices=("blind", "unblind"), default="blind")
     parser.add_argument(
@@ -4857,10 +5088,41 @@ def build_parser() -> argparse.ArgumentParser:
     combine.add_argument("--impact-parallel", type=int, default=1)
     combine.add_argument("--repair-impacts", action="store_true",
                          help="Reuse existing impact workspaces/JSON; rerun only failed scans and boundary endpoints.")
+
+    batch = parser.add_argument_group("HTCondor limits (shared filesystem, SKFlatAnalyzer style)")
+    batch.add_argument("--backend", choices=("local", "condor"), default="local")
+    batch.add_argument("--condor-dir", default=None,
+                       help="New batch directory for submission; existing batch directory for --stage collect.")
+    batch.add_argument("--condor-dry-run", "--no-exec", action="store_true",
+                       help="Write scripts/cards/manifest without calling condor_submit.")
+    batch.add_argument("--condor-memory", "--memory", type=int, default=4000,
+                       help="Memory per single-CPU limit job in MiB (default: 4000).")
+    batch.add_argument("--condor-nmax", "--nmax", type=int, default=0,
+                       help="SKFlat/TAMSA concurrency_limits = n<N>.<USER>; 0 leaves it unset.")
+    batch.add_argument("--condor-batch-name", "--batchname", default=None)
+    batch.add_argument("--condor-cmssw-base", default=None,
+                       help="Combine CMSSW area; defaults to the active CMSSW_BASE.")
+    batch.add_argument("--condor-scram-arch", default=None,
+                       help="Defaults to the active SCRAM_ARCH.")
+    batch.add_argument("--condor-requirements", default=None,
+                       help="Optional site-specific ClassAd requirements expression.")
+    parser.add_argument("--condor-worker", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--condor-index", type=int, default=None, help=argparse.SUPPRESS)
     return parser
 
 
 def validate_args(args: argparse.Namespace) -> None:
+    if args.eras is not None and args.target != "eras":
+        raise WorkflowError("--eras requires --target eras; run combinations must keep their full era set.")
+    if args.backend == "condor":
+        if args.stage not in {"run", "all"} or args.task != "limits":
+            raise WorkflowError("--backend condor requires --stage run/all --task limits.")
+        if args.jobs != 1:
+            raise WorkflowError("--jobs is local-only; use --condor-nmax for the SKFlat site concurrency limit.")
+    if args.condor_dry_run and args.backend != "condor":
+        raise WorkflowError("--condor-dry-run requires --backend condor.")
+    if args.condor_memory < 1 or args.condor_nmax < 0:
+        raise WorkflowError("--condor-memory must be positive and --condor-nmax must be non-negative.")
     if args.repair_impacts and (args.stage != "run" or args.task != "impacts"):
         raise WorkflowError("--repair-impacts requires --stage run --task impacts")
     if args.jobs < 1:
@@ -4922,7 +5184,7 @@ def validate_args(args: argparse.Namespace) -> None:
     for process in args.experimental_processes:
         if process not in PROCESSES:
             raise WorkflowError(f"Invalid experimental process: {process}")
-    if args.parameter == "xsec" and "Run2Run3" in selected_targets(args.target):
+    if args.parameter == "xsec" and "Run2Run3" in requested_targets(args):
         raise WorkflowError(
             "A single xsec POI is not defined for the combined 13 and 13.6 TeV target. "
             "Use --parameter alpha/yield, or run the xsec interpretation separately for Run2 and Run3."
@@ -4935,6 +5197,7 @@ def print_configuration(args: argparse.Namespace) -> None:
     if args.task == "limits":
         print(f"[CONFIG] limit jobs={args.jobs}")
     print(f"[CONFIG] target={args.target}, parameter={args.parameter}, mode={args.mode}")
+    print(f"[CONFIG] selected targets={','.join(requested_targets(args))}, backend={args.backend}")
     print(f"[CONFIG] base_dir={args.base_dir}")
     print(f"[CONFIG] region={args.region}")
     print(f"[CONFIG] search_mass_window=[{SEARCH_MASS_MIN:g},{SEARCH_MASS_MAX:g}] GeV")
@@ -5012,7 +5275,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.condor_worker is not None:
+            if args.condor_index is None:
+                raise WorkflowError("--condor-worker requires --condor-index.")
+            run_condor_worker(Path(args.condor_worker).resolve(), args.condor_index)
+            return 0
+        if args.stage == "collect":
+            # The saved mode/era/card selection is authoritative. Reject extra
+            # options rather than silently ignoring e.g. --mode blind here.
+            collector = argparse.ArgumentParser(description="Collect a saved Condor batch.")
+            collector.add_argument("--stage", choices=("collect",), required=True)
+            collector.add_argument("--condor-dir", required=True)
+            collect_args = collector.parse_args(argv)
+            collect_condor_limits(Path(collect_args.condor_dir).expanduser().resolve())
+            return 0
         validate_args(args)
+        if args.backend == "condor":
+            condor_environment(args)
+            if args.condor_dir and Path(args.condor_dir).expanduser().exists():
+                raise WorkflowError(f"Condor batch directory already exists: {args.condor_dir}; choose a new directory.")
+            if not args.condor_dry_run:
+                require_command("condor_submit")
         if args.stage in {"cards", "all"}:
             prepare_resolution_coefficients(args)
         print_configuration(args)
@@ -5020,8 +5303,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             build_cards(args)
         if args.stage in {"run", "all"}:
             run_combine(args)
+        state = ("PREPARED" if args.condor_dry_run else "SUBMITTED") if args.backend == "condor" else "DONE"
         print(
-            f"[DONE] workflow_tag=20260826_0541, target={args.target}, parameter={args.parameter}, "
+            f"[{state}] workflow_tag=20260826_0541, target={args.target}, parameter={args.parameter}, "
             f"mode={args.mode}, stage={args.stage}, task={args.task}"
         )
         return 0

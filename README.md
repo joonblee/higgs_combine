@@ -71,19 +71,17 @@ The mirrored review source and detailed model documentation are in
 
 
 For limits only, `--jobs` caps concurrent mass/target jobs across all selected
-targets (default: 1). In the production `NIsoMuon` directory, run blind and
-unblind sequentially with up to 40 workers:
+targets (default: 1). In the production `NIsoMuon` directory, run blind limits
+with up to 40 workers:
 
 ```bash
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
-for mode in blind unblind; do
-  python3 -u limit_workflow.py \
-    --stage all --target runs --parameter alpha \
-    --mode "$mode" --task limits --jobs 40 \
-    --sigfit-dir ./sigfit_inputs \
-    --qcd-method data-driven --dy-method data-driven \
-    --r-max 100 --strict >"limits_${mode}.log" 2>&1 || break
-done
+python3 -u limit_workflow.py \
+  --stage all --target runs --parameter alpha \
+  --mode blind --task limits --jobs 40 \
+  --sigfit-dir ./sigfit_inputs \
+  --qcd-method data-driven --dy-method data-driven \
+  --r-max 100 --strict > limits_blind.log 2>&1
 ```
 
 With all thirteen masses and `--target runs`, each mode has 39 jobs.
@@ -92,6 +90,107 @@ Combine output is saved separately to
 `limit_outputs/alpha/<mode>/<target>/combine_*_attempt*.log`;
 collection and plotting run once per target after the batch succeeds.
 `--jobs > 1` applies to `--task limits`; impacts use `--impact-parallel`.
+
+## Individual eras and partial unblinding
+
+Individual-era cards, fits and limit plots use the same statistical model as
+the run combinations. Choose the scope explicitly:
+
+| Selection | Options |
+| --- | --- |
+| One era | `--target 2018` |
+| Selected eras, fitted separately | `--target eras --eras 2018,2022` |
+| All eight individual eras | `--target eras` |
+| Run-2, Run-3 and Run-2+3 combinations | `--target runs` |
+| All run combinations and individual eras | `--target all` |
+
+The supported eras are `2016preVFP`, `2016postVFP`, `2017`, `2018`, `2022`,
+`2022EE`, `2023` and `2023BPix`. `--eras` is valid only with `--target eras`;
+it does not redefine what Run2 or Run3 means. `--masses 12,30` additionally
+selects mass hypotheses. The luminosity and energy labels follow each era.
+
+For partial unblinding, use `--mode unblind` with the chosen individual era(s).
+Only those eras' SR observations are read when building cards. For example,
+to build and run observed limits for 2018 locally:
+
+```bash
+python3 -u limit_workflow.py \
+  --stage all --task limits --target 2018 --mode unblind \
+  --parameter alpha --sigfit-dir ./sigfit_inputs --jobs 40 --r-max 100 --strict
+```
+
+For each unblind card, the observed limit comes from data and the expected
+bands from a separate `--run blind` fit. The default remains `--mode blind`.
+Cards are under `datacards_NIsoMuon/alpha/<mode>/per_year/<era>/`; plots and
+physical-limit JSON are under `limit_outputs/alpha/<mode>/<era>/`, named
+`limits_<era>_alpha.*`. Use `--stage all` to build the selected era cards first;
+`--stage run` requires existing cards for the requested mode and targets.
+
+## HTCondor limits
+
+`--backend condor` supports `--task limits` with `--stage run` or `all`.
+`all` builds cards on the submission host before submitting; `run` snapshots
+existing cards. Each Condor process runs one target/mass, including both fits
+for an unblind card. Submission returns immediately; collection is a separate
+step after all jobs finish.
+
+The `submit.jds`, `$(Process)` worker argument, `job_<N>.log/.err`,
+`condor.log`, vanilla universe and optional `n<N>.<USER>` concurrency limit
+follow `SKFlatAnalyzer/python/SKFlat.py`. Workers initialise CMS via CVMFS
+and `scramv1 runtime -sh` in the active **Combine** `CMSSW_BASE`, using the
+active `SCRAM_ARCH`. Both can be overridden with `--condor-cmssw-base` and
+`--condor-scram-arch`.
+
+This backend requires the CMSSW area and batch/output directories to be on
+storage shared with worker nodes. It uses `should_transfer_files = NO` and
+does not package a CMSSW installation. Each job requests one CPU and 4000 MiB
+by default, and sets OpenMP/BLAS thread counts to one. `--condor-memory`
+changes memory; `--condor-requirements` supplies site-specific requirements.
+
+From `NIsoMuon`, after initialising the Combine environment, the Condor
+equivalent of the 2018 partial-unblinding example is:
+
+```bash
+python3 -u limit_workflow.py \
+  --stage all --task limits --target 2018 --mode unblind \
+  --parameter alpha --sigfit-dir ./sigfit_inputs --r-max 100 --strict \
+  --backend condor --condor-nmax 40 \
+  --condor-dir condor_jobs/2018_unblind
+```
+
+`--jobs` is for local execution; do not pass `--jobs 40` to Condor.
+`--condor-nmax 40` uses the same site-configured `n40.<USER>` convention as
+SKFlatAnalyzer. Omit it on a pool without that concurrency-limit setup.
+`--condor-batch-name` sets the batch name. Aliases `--nmax`, `--memory`,
+`--batchname` and `--no-exec` match the SKFlat naming.
+
+Add `--condor-dry-run` to prepare the submission without enqueuing jobs, then
+submit manually from the generated directory with `condor_submit submit.jds`.
+It still builds cards if `--stage all` was requested. Choose a new
+`--condor-dir` for each submission; existing directories are not overwritten.
+Omitting it creates a unique directory under
+`<output-base>/condor/<parameter>/<mode>/`.
+
+After completion, collect using the printed command, or for this example:
+
+```bash
+python3 condor_jobs/2018_unblind/limit_workflow.py \
+  --stage collect --condor-dir condor_jobs/2018_unblind
+```
+
+Collection restores the saved mode, targets, masses and options from the
+manifest; no other CLI options are accepted at this stage. It runs no fits.
+Each batch retains its workflow snapshot, datacards, `manifest.json`, and
+separate `jobs/job_<N>/` fit outputs and completion status. Later edits to
+the original cards do not change a queued fit or its alpha conversion.
+Pending/failed jobs, changed card snapshots and missing outputs stop
+collection before plotting. Final plots/JSON use the usual output directory;
+ROOT fit files and batch logs remain in the batch directory. Set
+`--output-base` at submission to retain a separate production's final plots.
+
+The orchestration tests use synthetic Combine executables to exercise batch
+preparation, concurrent workers, collection, era selection, blinding and alpha
+conversion without ROOT. They do not validate a live pool or physical limits.
 
 ROOT-free statistical/card contract tests: `python3 -m unittest discover -s NIsoMuon/tests -v`.
 
