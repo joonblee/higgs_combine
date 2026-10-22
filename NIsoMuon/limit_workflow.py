@@ -11,6 +11,11 @@ This driver orchestrates all stages (external inputs and plotting dependencies b
   5. convert alpha limit/impact JSON files back to physical alpha_qZ';
   6. make the limit and impact plots.
 
+Execution defaults to Condor, with no workflow concurrency cap. Use --local
+for CPU execution (--jobs N for limits; --impact-parallel N for impacts).
+Fresh Condor impacts use a DAG: initial fit -> one job per nuisance -> final
+collection/validation/plotting. --stage collect publishes a completed batch.
+
 Uncertainty policy in this revision
 -----------------------------------
 * Data-driven QCD has QCD_norm, QCD_shape and QCD_stat.  QCD_norm remains a
@@ -91,7 +96,7 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 python3 -u limit_workflow.py \
   --stage run --task limits --target runs --parameter alpha --mode blind \
   --masses 12,15,20,25,30,35,40,45,50,55,60,65,70 \
-  --jobs 40 --r-max 100 --plot-limits-py "$PWD/python/plotLimits.py" --strict
+  --local --jobs 40 --r-max 100 --plot-limits-py "$PWD/python/plotLimits.py" --strict
 
 2. Recompute all 39 B-only diagnostic impacts from the same cards. Negative
    INTERNAL r is explicit, including M12 in every target; --impact-parallel 40
@@ -104,7 +109,7 @@ python3 -u limit_workflow.py \
 python3 -u limit_workflow.py \
   --stage run --task impacts --target runs --parameter alpha --mode blind \
   --masses 12,15,20,25,30,35,40,45,50,55,60,65,70 \
-  --allow-negative-r --r-min -50 --r-max 100 --impact-parallel 40 --strict
+  --allow-negative-r --r-min -50 --r-max 100 --local --impact-parallel 40 --strict
 
 Both commands use the canonical limit_outputs/alpha/blind/<target>/ directory
 and replace the matching task's results. For an independent comparison, add
@@ -4245,6 +4250,21 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
     return payload
 
 
+def impact_common_command(args, card, target, label, mass, workspace, rmin, rmax):
+    command = [
+        "combineTool.py", "-M", "Impacts", "-d", str(workspace),
+        "-m", format_mass_for_combine(mass),
+        "--robustFit", "1", "--setCrossingTolerance", "1e-8",
+        "--cminDefaultMinimizerStrategy", "1", "--cminDefaultMinimizerTolerance", "1e-4",
+        "--setRobustFitStrategy", "1", "--setRobustFitTolerance", "1e-4",
+        "--setParameters", "r=0", *explicit_range_args(rmin, rmax, card),
+        "-n", f".Impacts_{tag_for(args, target)}_M{label}",
+    ]
+    if args.mode == "blind":
+        command.extend(["-t", "-1", "--expectSignal", "0"])
+    return command
+
+
 def run_impacts(
     args: argparse.Namespace,
     card: Path,
@@ -4299,21 +4319,8 @@ def run_impacts(
         if internal_json.exists():
             internal_json.unlink()
 
-        common = [
-            "combineTool.py", "-M", "Impacts", "-d", str(workspace),
-            "-m", format_mass_for_combine(mass),
-            "--robustFit", "1",
-            "--setCrossingTolerance", "1e-8",
-            "--cminDefaultMinimizerStrategy", "1",
-            "--cminDefaultMinimizerTolerance", "1e-4",
-            "--setRobustFitStrategy", "1",
-            "--setRobustFitTolerance", "1e-4",
-            "--setParameters", "r=0",
-            *explicit_range_args(impact_rmin, impact_rmax, card),
-            "-n", f".{name}",
-        ]
-        if args.mode == "blind":
-            common.extend(["-t", "-1", "--expectSignal", "0"])
+        common = impact_common_command(args, card, target, label, mass, workspace,
+                                       impact_rmin, impact_rmax)
 
         if run_command([*common, "--doInitialFit"], outdir, allow_failure=True) != 0:
             nonfatal_or_raise(args, f"Impact initial fit failed for {target} M-{label}.")
@@ -4373,6 +4380,13 @@ def run_impacts(
         nonfatal_or_raise(args, f"Impact range retries were exhausted for {target} M-{label}.")
         return
 
+    finish_impacts(args, card, target, label, mass, outdir, workspace, internal_json,
+                   payload_internal, impact_rmin, impact_rmax)
+
+
+def finish_impacts(args, card, target, label, mass, outdir, workspace, internal_json,
+                   payload_internal, impact_rmin, impact_rmax):
+    tag = tag_for(args, target)
     payload_internal = repair_impact_payload(
         args, card, target, label, mass, outdir, workspace, internal_json,
         payload_internal, impact_rmin, impact_rmax,
@@ -4707,11 +4721,13 @@ def write_condor_status(path: Path, payload: Mapping[str, Any]) -> None:
     temporary.replace(path)
 
 
-def submit_condor_limits(args: argparse.Namespace) -> Path:
-    """Snapshot a batch and submit one counting-card fit per Condor process."""
+def submit_condor_workflow(args: argparse.Namespace) -> Path:
+    """Snapshot fits; use a DAG to distribute each impact nuisance separately."""
     cmssw, arch = condor_environment(args)
+    use_dag = args.task in {"impacts", "all"}
+    submission = ["condor_submit_dag", "workflow.dag"] if use_dag else ["condor_submit", "submit.jds"]
     if not args.condor_dry_run:
-        require_command("condor_submit")
+        require_command(submission[0])
     targets = requested_targets(args)
     selected = []
     for target in targets:
@@ -4745,24 +4761,72 @@ def submit_condor_limits(args: argparse.Namespace) -> Path:
     # Only parser options are needed by workers; card-building audit objects
     # can contain Path instances and are intentionally not serialised.
     config = {a.dest: getattr(args, a.dest) for a in build_parser()._actions if a.dest != "help"}
-    config.update(stage="run", backend="local", jobs=1, condor_dry_run=False,
+    config.update(stage="run", backend="local", jobs=1, impact_parallel=1, strict=True, condor_dry_run=False,
                   condor_worker=None, condor_index=None,
                   output_base=str(Path(args.output_base).expanduser().resolve()))
     plot_path = shutil.which(args.plot_limits_py) or args.plot_limits_py
     config["plot_limits_py"] = str(Path(plot_path).expanduser().resolve())
     jobs = []
-    for index, (target, card) in enumerate(selected):
+    for target, card in selected:
         saved_card = batch / "cards" / target / card.name
         saved_card.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(card, saved_card)
-        workdir = batch / "jobs" / f"job_{index}"
-        workdir.mkdir(parents=True)
-        jobs.append({"index": index, "target": target, "card": str(saved_card),
-                     "original_card": str(card), "workdir": str(workdir),
-                     "card_sha256": hashlib.sha256(saved_card.read_bytes()).hexdigest()})
+        def add_job(kind, dependencies=(), **options):
+            index = len(jobs)
+            workdir = batch / "jobs" / f"job_{index}"
+            workdir.mkdir(parents=True)
+            job = {"index": index, "kind": kind, "target": target, "card": str(saved_card),
+                   "original_card": str(card), "workdir": str(workdir),
+                   "dependencies": list(dependencies),
+                   "card_sha256": hashlib.sha256(saved_card.read_bytes()).hexdigest(), **options}
+            jobs.append(job)
+            return job
+
+        if args.task in {"limits", "all"}:
+            add_job("limits")
+        if args.task in {"fitdiag", "checks", "all"}:
+            add_job("fitdiag")
+        label, mass = extract_mass_from_card(saved_card, target)
+        if args.task not in {"impacts", "all"} or not should_run_impacts(args, mass):
+            continue
+        tag = tag_for(args, target)
+        if args.repair_impacts:
+            job = add_job("impact_repair")
+            old = output_dir(args, target)
+            work = Path(job["workdir"])
+            workspace = old / f"workspace_{tag}_M{label}.root"
+            suffix = "_internal" if args.parameter == "alpha" else ""
+            internal = old / f"impacts_{tag}_M{label}{suffix}.json"
+            if not workspace.is_file() or not internal.is_file():
+                raise WorkflowError(f"--repair-impacts requires existing workspace and JSON in {old}")
+            patterns = [workspace.name, f"impacts_{tag}_M{label}*.json",
+                        f"higgsCombine_*_.Impacts_{tag}_M{label}*.MultiDimFit.mH*.root",
+                        f"impact_repair_M{label}", f"impact_poi_repair_M{label}"]
+            for pattern in patterns:
+                for source in old.glob(pattern):
+                    if source.is_dir():
+                        shutil.copytree(source, work / source.name, dirs_exist_ok=True)
+                    else:
+                        shutil.copy2(source, work / source.name)
+            continue
+        require_command("text2workspace.py")
+        directory = batch / "workspaces" / target / f"M{label}"
+        directory.mkdir(parents=True)
+        workspace = directory / f"workspace_{tag}_M{label}.root"
+        run_command(["text2workspace.py", str(saved_card), "-m", format_mass_for_combine(mass),
+                     "-o", str(workspace)], directory)
+        parameters = sorted(impact_workspace_parameters(workspace))
+        initial = add_job("impact_initial", workspace=str(workspace),
+                          workspace_sha256=hashlib.sha256(workspace.read_bytes()).hexdigest())
+        nuisance_jobs = [add_job("impact_nuisance", [initial["index"]], initial=initial["index"],
+                                 nuisance=nuisance) for nuisance in parameters]
+        add_job("impact_final", [initial["index"], *[j["index"] for j in nuisance_jobs]],
+                initial=initial["index"], nuisance_jobs=[j["index"] for j in nuisance_jobs])
+    if not jobs:
+        raise WorkflowError("No jobs selected; check --masses and --impact-masses.")
     manifest = batch / "manifest.json"
     manifest.write_text(json.dumps({
-        "schema": "NIsoMuon_condor_v1", "batch_id": batch_id,
+        "schema": "NIsoMuon_condor_v2", "batch_id": batch_id,
         "config": config, "jobs": jobs, "cmssw_base": str(cmssw), "scram_arch": arch,
     }, indent=2, sort_keys=True) + "\n")
     wrapper = batch / "run_job.sh"
@@ -4782,25 +4846,36 @@ def submit_condor_limits(args: argparse.Namespace) -> Path:
     # explicitly requires shared storage instead of transferring hists.root.
     # Pathname values are literal submit strings, not shell/ClassAd strings:
     # adding quotes would make the quotes part of the executable/IWD path.
+    job_macro = "$(jobindex)" if use_dag else "$(Process)"
     submit_lines = [
         f"executable = {wrapper}", f"initialdir = {batch}",
-        f"jobbatchname = {batch_name}", "universe = vanilla", "arguments = $(Process)",
+        f"jobbatchname = {batch_name}", "universe = vanilla", f"arguments = {job_macro}",
         "log = condor.log", "getenv = True", "should_transfer_files = NO",
-        "output = job_$(Process).log", "error = job_$(Process).err",
+        f"output = job_{job_macro}.log", f"error = job_{job_macro}.err",
         "request_cpus = 1", f"request_memory = {args.condor_memory}MB",
     ]
     if args.condor_nmax:
         submit_lines.append(f"concurrency_limits = n{args.condor_nmax}.{user}")
     if requirements:
         submit_lines.append(f"requirements = {requirements}")
-    submit_lines.extend([f"queue {len(jobs)}", ""])
+    submit_lines.extend([f"queue {1 if use_dag else len(jobs)}", ""])
     (batch / "submit.jds").write_text("\n".join(submit_lines))
-    print(f"[CONDOR] {len(jobs)} jobs; mode={args.mode}; targets={','.join(targets)}")
+    if use_dag:
+        lines = []
+        for job in jobs:
+            node = f"J{job['index']}"
+            lines.extend([f"JOB {node} submit.jds", f'VARS {node} jobindex="{job["index"]}"'])
+            if job["dependencies"]:
+                parents = " ".join(f"J{index}" for index in job["dependencies"])
+                lines.append(f"PARENT {parents} CHILD {node}")
+        (batch / "workflow.dag").write_text("\n".join(lines) + "\n")
+    cap = str(args.condor_nmax) if args.condor_nmax else "unset (pool scheduling only)"
+    print(f"[CONDOR] {len(jobs)} jobs; task={args.task}; mode={args.mode}; targets={','.join(targets)}; cap={cap}")
     print(f"[CONDOR] batch={batch}")
     if args.condor_dry_run:
-        print(f"[CONDOR] prepared only; submit with: cd {shlex.quote(str(batch))} && condor_submit submit.jds")
+        print(f"[CONDOR] prepared only; submit with: cd {shlex.quote(str(batch))} && {' '.join(submission)}")
     else:
-        run_command(["condor_submit", "submit.jds"], batch)
+        run_command(submission, batch)
     print(f"[CONDOR] after all jobs finish: python3 {shlex.quote(str(snapshot))} "
           f"--stage collect --condor-dir {shlex.quote(str(batch))}")
     return batch
@@ -4808,11 +4883,136 @@ def submit_condor_limits(args: argparse.Namespace) -> Path:
 
 def load_condor_manifest(path: Path) -> Tuple[Dict[str, Any], argparse.Namespace]:
     payload = json.loads(path.read_text())
-    if payload.get("schema") != "NIsoMuon_condor_v1" or not payload.get("jobs"):
+    if payload.get("schema") not in {"NIsoMuon_condor_v1", "NIsoMuon_condor_v2"} or not payload.get("jobs"):
         raise WorkflowError(f"Invalid Condor manifest: {path}")
-    args = argparse.Namespace(**payload["config"])
+    config = vars(build_parser().parse_args([]))
+    config.update(payload["config"])
+    args = argparse.Namespace(**config)
     validate_args(args)
     return payload, args
+
+
+def completed_condor_job(payload, args, job):
+    path = Path(job["workdir"]) / "status.json"
+    status = json.loads(path.read_text()) if path.is_file() else {}
+    expected = {"batch_id": payload["batch_id"], "index": job["index"],
+                "target": job["target"], "mode": args.mode,
+                "card_sha256": job["card_sha256"], "state": "success"}
+    if "kind" in job:
+        expected["kind"] = job["kind"]
+    if any(status.get(key) != value for key, value in expected.items()):
+        raise WorkflowError(f"job {job['index']} {job['target']}: {status.get('state', 'pending')}")
+    card = Path(job["card"])
+    if hashlib.sha256(card.read_bytes()).hexdigest() != job["card_sha256"]:
+        raise WorkflowError(f"Submitted datacard changed: {card}")
+    files = status.get("files", [status.get("observed"), status.get("expected")])
+    if not files or any(not p or not Path(p).is_file() or Path(p).stat().st_size == 0 for p in files):
+        raise WorkflowError(f"job {job['index']} {job['target']}: missing/empty output")
+    if "initial" in job:
+        initial = payload["jobs"][job["initial"]]
+        initial_status = completed_condor_job(payload, args, initial)
+        if status.get("impact_run_id") != initial_status.get("impact_run_id"):
+            raise WorkflowError(f"job {job['index']}: stale impact result from a different initial fit")
+    for index in job.get("dependencies", []):
+        parent = completed_condor_job(payload, args, payload["jobs"][index])
+        if status.get("dependency_completions", {}).get(str(index)) != parent.get("completion_id"):
+            raise WorkflowError(f"job {job['index']}: stale result after dependency {index} was rerun")
+    return status
+
+
+def condor_impact_context(payload, args, initial_index):
+    initial = payload["jobs"][initial_index]
+    status = completed_condor_job(payload, args, initial)
+    context = json.loads((Path(initial["workdir"]) / "impact_context.json").read_text())
+    if context["impact_run_id"] != status["impact_run_id"]:
+        raise WorkflowError("Impact context belongs to a different initial fit")
+    for key in ("workspace", "initial_file"):
+        if hashlib.sha256(Path(context[key]).read_bytes()).hexdigest() != context[key + "_sha256"]:
+            raise WorkflowError(f"Impact {key} changed after the initial fit")
+    return context
+
+
+def run_condor_impact_initial(args, job, card, label, mass, workdir):
+    workspace = Path(job["workspace"])
+    if hashlib.sha256(workspace.read_bytes()).hexdigest() != job["workspace_sha256"]:
+        raise WorkflowError("Submitted impact workspace changed")
+    target = job["target"]
+    name = f".Impacts_{tag_for(args, target)}_M{label}"
+    filename = f"higgsCombine_initialFit_{name}.MultiDimFit.mH{format_mass_for_combine(mass)}.root"
+    initial_file = workdir / filename
+    context_file = workdir / "impact_context.json"
+    if context_file.exists():
+        context_file.unlink()
+    rmin, rmax, safe = initial_impact_range(args, card)
+    for attempt in range(args.impact_range_retries + 1):
+        if initial_file.exists():
+            initial_file.unlink()
+        command = impact_common_command(args, card, target, label, mass, workspace, rmin, rmax)
+        run_command([*command, "--doInitialFit"], workdir)
+        poi = {"POIs": [{"name": "r", "fit": read_impact_initial_poi(initial_file)}]}
+        at_boundary, _ = impact_fit_reaches_lower_boundary(poi, rmin)
+        if at_boundary and args.allow_negative_r:
+            next_rmin = expanded_impact_rmin(rmin, safe)
+            if (args.auto_expand_impact_r_range and attempt < args.impact_range_retries
+                    and next_rmin < rmin - 1e-9):
+                print(f"[IMPACT-RANGE] {target} M{label}: expand rMin {rmin:g} -> {next_rmin:g}")
+                rmin = next_rmin
+                continue
+            raise WorkflowError(f"Impact initial POI remains at rMin={rmin:g}; nuisance jobs were not started")
+        # Validate/repair the initial interval before distributing nuisances so
+        # every scan uses the same validated starting fit and lower range.
+        internal = workdir / "initial_poi.json"
+        repair_impact_initial_poi(args, card, target, label, mass, workdir,
+                                 workspace, internal, poi, rmin, rmax)
+        context = {"impact_run_id": uuid4().hex, "rmin": rmin, "rmax": rmax,
+                   "workspace": str(workspace), "workspace_sha256": job["workspace_sha256"],
+                   "initial_file": str(initial_file),
+                   "initial_file_sha256": hashlib.sha256(initial_file.read_bytes()).hexdigest()}
+        write_condor_status(context_file, context)
+        return {"impact_run_id": context["impact_run_id"],
+                "files": [str(initial_file), str(context_file)]}
+    raise WorkflowError("Impact initial range retries exhausted")
+
+
+def run_condor_impact_nuisance(payload, args, job, card, label, mass, workdir):
+    context = condor_impact_context(payload, args, job["initial"])
+    initial = Path(context["initial_file"])
+    shutil.copy2(initial, workdir / initial.name)
+    name = f".Impacts_{tag_for(args, job['target'])}_M{label}"
+    scan = workdir / f"higgsCombine_paramFit_{name}_{job['nuisance']}.MultiDimFit.mH{format_mass_for_combine(mass)}.root"
+    if scan.exists():
+        scan.unlink()
+    common = impact_common_command(args, card, job["target"], label, mass,
+                                   Path(context["workspace"]), context["rmin"], context["rmax"])
+    run_command([*common, "--doFits", "--named", job["nuisance"]], workdir)
+    return {"impact_run_id": context["impact_run_id"], "files": [str(scan)]}
+
+
+def run_condor_impact_final(payload, args, job, card, label, mass, workdir):
+    context = condor_impact_context(payload, args, job["initial"])
+    target = job["target"]
+    tag = tag_for(args, target)
+    clean_mass_outputs(workdir, tag, label, "impacts")
+    source_workspace = Path(context["workspace"])
+    workspace = workdir / source_workspace.name
+    shutil.copy2(source_workspace, workspace)
+    initial = Path(context["initial_file"])
+    shutil.copy2(initial, workdir / initial.name)
+    for index in job["nuisance_jobs"]:
+        status = completed_condor_job(payload, args, payload["jobs"][index])
+        for filename in status["files"]:
+            source = Path(filename)
+            shutil.copy2(source, workdir / source.name)
+    suffix = "_internal" if args.parameter == "alpha" else ""
+    internal = workdir / f"impacts_{tag}_M{label}{suffix}.json"
+    run_command(["combineTool.py", "-M", "Impacts", "-d", str(workspace),
+                 "-m", format_mass_for_combine(mass), "-n", f".Impacts_{tag}_M{label}",
+                 "-o", internal.name], workdir)
+    finish_impacts(args, card, target, label, mass, workdir, workspace, internal,
+                   json.loads(internal.read_text()), context["rmin"], context["rmax"])
+    physical = workdir / f"impacts_{tag}_M{label}.json"
+    return {"impact_run_id": context["impact_run_id"],
+            "files": [str(physical), str(physical.with_suffix(".pdf"))]}
 
 
 def run_condor_worker(manifest: Path, index: int) -> None:
@@ -4834,6 +5034,9 @@ def run_condor_worker(manifest: Path, index: int) -> None:
         status = {"batch_id": payload["batch_id"], "index": index,
                   "target": job["target"], "mode": args.mode,
                   "card_sha256": job["card_sha256"], "state": "running"}
+        kind = job.get("kind", "limits")
+        if "kind" in job:
+            status["kind"] = kind
         write_condor_status(status_path, status)
         try:
             if hashlib.sha256(card.read_bytes()).hexdigest() != job["card_sha256"]:
@@ -4841,12 +5044,36 @@ def run_condor_worker(manifest: Path, index: int) -> None:
             require_command("combine")
             require_command("combineTool.py")
             _validate_background_card(args, card)
-            label, mass = prepare_card_run(args, card, job["target"], workdir)
-            result = run_asymptotic(args, card, job["target"], label, mass, workdir)
-            for path in (result.observed, result.expected):
+            parents = {str(parent): completed_condor_job(payload, args, payload["jobs"][parent])["completion_id"]
+                       for parent in job.get("dependencies", [])}
+            label, mass = extract_mass_from_card(card, job["target"])
+            if kind == "limits":
+                clean_mass_outputs(workdir, tag_for(args, job["target"]), label, "limits")
+                result = run_asymptotic(args, card, job["target"], label, mass, workdir)
+                products = {"observed": str(result.observed), "expected": str(result.expected),
+                            "files": [str(result.observed), str(result.expected)]}
+            elif kind == "fitdiag":
+                clean_mass_outputs(workdir, tag_for(args, job["target"]), label, "fitdiag")
+                run_fitdiagnostics(args, card, job["target"], label, mass, workdir)
+                products = {"files": [str(workdir / f"fitDiagnostics.FitDiag_{tag_for(args, job['target'])}_M{label}.root")]}
+            elif kind == "impact_initial":
+                products = run_condor_impact_initial(args, job, card, label, mass, workdir)
+            elif kind == "impact_nuisance":
+                products = run_condor_impact_nuisance(payload, args, job, card, label, mass, workdir)
+            elif kind == "impact_final":
+                products = run_condor_impact_final(payload, args, job, card, label, mass, workdir)
+            elif kind == "impact_repair":
+                run_impacts(args, card, job["target"], label, mass, workdir)
+                physical = workdir / f"impacts_{tag_for(args, job['target'])}_M{label}.json"
+                products = {"files": [str(physical), str(physical.with_suffix(".pdf"))]}
+            else:
+                raise WorkflowError(f"Unknown Condor job kind: {kind}")
+            for filename in products["files"]:
+                path = Path(filename)
                 if not path.is_file() or path.stat().st_size == 0:
-                    raise WorkflowError(f"Missing/empty limit output: {path}")
-            status.update(state="success", observed=str(result.observed), expected=str(result.expected))
+                    raise WorkflowError(f"Missing/empty {kind} output: {path}")
+            status.update(products, state="success", completion_id=uuid4().hex,
+                          dependency_completions=parents)
         except Exception as exc:
             status.update(state="failed", error=str(exc))
             write_condor_status(status_path, status)
@@ -4855,45 +5082,52 @@ def run_condor_worker(manifest: Path, index: int) -> None:
         print(f"[CONDOR] completed job {index}: {job['target']} M-{label} ({args.mode})")
 
 
-def collect_condor_limits(batch: Path) -> None:
+def collect_condor_workflow(batch: Path) -> None:
     payload, args = load_condor_manifest(batch / "manifest.json")
     grouped = defaultdict(list)
+    publish = []
     incomplete = []
     # Check the entire batch before writing any plots. Never glob a previous
     # production's ROOT files or use current datacards for alpha rescaling.
     for job in payload["jobs"]:
-        status_path = Path(job["workdir"]) / "status.json"
-        status = json.loads(status_path.read_text()) if status_path.is_file() else {}
-        expected = {"batch_id": payload["batch_id"], "index": job["index"],
-                    "target": job["target"], "mode": args.mode,
-                    "card_sha256": job["card_sha256"], "state": "success"}
-        if any(status.get(key) != value for key, value in expected.items()):
-            incomplete.append(f"job {job['index']} {job['target']}: {status.get('state', 'pending')}")
+        try:
+            status = completed_condor_job(payload, args, job)
+            if job.get("kind") == "impact_initial":
+                condor_impact_context(payload, args, job["index"])
+        except WorkflowError as exc:
+            incomplete.append(str(exc))
             continue
-        card = Path(job["card"])
-        if hashlib.sha256(card.read_bytes()).hexdigest() != job["card_sha256"]:
-            raise WorkflowError(f"Submitted datacard changed: {card}")
-        outputs = [Path(status[key]) for key in ("observed", "expected")]
-        if any(not p.is_file() or p.stat().st_size == 0 for p in outputs):
-            incomplete.append(f"job {job['index']} {job['target']}: missing/empty ROOT output")
-            continue
-        grouped[job["target"]].append((card, *outputs))
+        if job.get("kind", "limits") == "limits":
+            grouped[job["target"]].append((Path(job["card"]), Path(status["observed"]), Path(status["expected"])))
+        elif job["kind"] in {"fitdiag", "impact_final", "impact_repair"}:
+            publish.append(job)
     if incomplete:
         raise WorkflowError("Condor batch is incomplete; no plots collected. Check job logs:\n  "
                             + "\n  ".join(incomplete))
-    print(f"[CONDOR COLLECT] mode={args.mode}; targets={','.join(grouped)}; batch={batch}")
-    require_command("combineTool.py")
+    print(f"[CONDOR COLLECT] mode={args.mode}; task={args.task}; batch={batch}")
+    if grouped:
+        require_command("combineTool.py")
     for target, rows in grouped.items():
         outdir = output_dir(args, target)
         outdir.mkdir(parents=True, exist_ok=True)
         collect_and_plot_limits(args, target, [r[0] for r in rows],
                                 [r[1] for r in rows], [r[2] for r in rows], outdir)
+    for job in publish:
+        outdir = output_dir(args, job["target"])
+        outdir.mkdir(parents=True, exist_ok=True)
+        for source in Path(job["workdir"]).iterdir():
+            if source.name == "status.json":
+                continue
+            if source.is_file() and source.suffix in {".root", ".json", ".pdf", ".png", ".txt"}:
+                shutil.copy2(source, outdir / source.name)
+            elif source.is_dir() and source.name.startswith(("impact_repair_M", "impact_poi_repair_M")):
+                shutil.copytree(source, outdir / source.name, dirs_exist_ok=True)
     print(f"[DONE] collected {len(payload['jobs'])} Condor jobs from {batch}")
 
 
 def run_combine(args: argparse.Namespace) -> None:
     if args.backend == "condor":
-        submit_condor_limits(args)
+        submit_condor_workflow(args)
         return
     require_command("combine")
     require_command("combineTool.py")
@@ -5017,7 +5251,7 @@ def build_parser() -> argparse.ArgumentParser:
     combine.add_argument(
         "--jobs", type=int, default=1,
         help=(
-            "Maximum concurrent mass/target jobs for --task limits; default: 1. "
+            "Local-only: maximum concurrent mass/target jobs for --task limits; default: 1. "
             "Blind and observed fits for one card run sequentially."
         ),
     )
@@ -5085,19 +5319,23 @@ def build_parser() -> argparse.ArgumentParser:
     combine.add_argument("--impact-masses", type=parse_float_list, default=None)
     combine.add_argument("--run-impacts-all-masses", dest="run_impacts_all_masses", action="store_true", default=True)
     combine.add_argument("--no-run-impacts-all-masses", dest="run_impacts_all_masses", action="store_false")
-    combine.add_argument("--impact-parallel", type=int, default=1)
+    combine.add_argument("--impact-parallel", type=int, default=1,
+                         help="Local-only: concurrent nuisance fits per target/mass (requires --local).")
     combine.add_argument("--repair-impacts", action="store_true",
                          help="Reuse existing impact workspaces/JSON; rerun only failed scans and boundary endpoints.")
 
-    batch = parser.add_argument_group("HTCondor limits (shared filesystem, SKFlatAnalyzer style)")
-    batch.add_argument("--backend", choices=("local", "condor"), default="local")
+    batch = parser.add_argument_group("execution (default: HTCondor, no concurrency cap)")
+    batch.add_argument("--backend", choices=("local", "condor"), default="condor",
+                       help="Execution backend; default: condor. --local selects CPU execution.")
+    batch.add_argument("--local", dest="backend", action="store_const", const="local",
+                       help="Run on local CPU cores; limits: --jobs N, impacts: --impact-parallel N.")
     batch.add_argument("--condor-dir", default=None,
                        help="New batch directory for submission; existing batch directory for --stage collect.")
     batch.add_argument("--condor-dry-run", "--no-exec", action="store_true",
-                       help="Write scripts/cards/manifest without calling condor_submit.")
+                       help="Prepare scripts/cards/workspaces/manifest without submitting jobs.")
     batch.add_argument("--condor-memory", "--memory", type=int, default=4000,
-                       help="Memory per single-CPU limit job in MiB (default: 4000).")
-    batch.add_argument("--condor-nmax", "--nmax", type=int, default=0,
+                       help="Memory per single-CPU Condor job in MiB (default: 4000).")
+    batch.add_argument("--condor-nmax", "--condor_nmax", "--nmax", type=int, default=0,
                        help="SKFlat/TAMSA concurrency_limits = n<N>.<USER>; 0 leaves it unset.")
     batch.add_argument("--condor-batch-name", "--batchname", default=None)
     batch.add_argument("--condor-cmssw-base", default=None,
@@ -5115,10 +5353,10 @@ def validate_args(args: argparse.Namespace) -> None:
     if args.eras is not None and args.target != "eras":
         raise WorkflowError("--eras requires --target eras; run combinations must keep their full era set.")
     if args.backend == "condor":
-        if args.stage not in {"run", "all"} or args.task != "limits":
-            raise WorkflowError("--backend condor requires --stage run/all --task limits.")
         if args.jobs != 1:
-            raise WorkflowError("--jobs is local-only; use --condor-nmax for the SKFlat site concurrency limit.")
+            raise WorkflowError("--jobs is local-only; add --local for CPU execution. Condor has no default concurrency cap.")
+        if args.impact_parallel != 1:
+            raise WorkflowError("--impact-parallel is local-only; add --local. Condor distributes nuisance fits as separate jobs.")
     if args.condor_dry_run and args.backend != "condor":
         raise WorkflowError("--condor-dry-run requires --backend condor.")
     if args.condor_memory < 1 or args.condor_nmax < 0:
@@ -5194,8 +5432,11 @@ def validate_args(args: argparse.Namespace) -> None:
 def print_configuration(args: argparse.Namespace) -> None:
     print("[CONFIG] workflow_tag=20260826_0541")
     print(f"[CONFIG] stage={args.stage}, task={args.task}")
-    if args.task == "limits":
-        print(f"[CONFIG] limit jobs={args.jobs}")
+    if args.backend == "condor":
+        cap = str(args.condor_nmax) if args.condor_nmax else "unset (pool scheduling only)"
+        print(f"[CONFIG] Condor concurrency cap={cap}")
+    elif args.task == "limits":
+        print(f"[CONFIG] local limit workers={args.jobs}")
     print(f"[CONFIG] target={args.target}, parameter={args.parameter}, mode={args.mode}")
     print(f"[CONFIG] selected targets={','.join(requested_targets(args))}, backend={args.backend}")
     print(f"[CONFIG] base_dir={args.base_dir}")
@@ -5287,15 +5528,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             collector.add_argument("--stage", choices=("collect",), required=True)
             collector.add_argument("--condor-dir", required=True)
             collect_args = collector.parse_args(argv)
-            collect_condor_limits(Path(collect_args.condor_dir).expanduser().resolve())
+            collect_condor_workflow(Path(collect_args.condor_dir).expanduser().resolve())
             return 0
         validate_args(args)
-        if args.backend == "condor":
+        if args.backend == "condor" and args.stage in {"run", "all"}:
             condor_environment(args)
             if args.condor_dir and Path(args.condor_dir).expanduser().exists():
                 raise WorkflowError(f"Condor batch directory already exists: {args.condor_dir}; choose a new directory.")
             if not args.condor_dry_run:
-                require_command("condor_submit")
+                require_command("condor_submit_dag" if args.task in {"impacts", "all"} else "condor_submit")
         if args.stage in {"cards", "all"}:
             prepare_resolution_coefficients(args)
         print_configuration(args)
@@ -5303,7 +5544,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             build_cards(args)
         if args.stage in {"run", "all"}:
             run_combine(args)
-        state = ("PREPARED" if args.condor_dry_run else "SUBMITTED") if args.backend == "condor" else "DONE"
+        state = (("PREPARED" if args.condor_dry_run else "SUBMITTED")
+                 if args.backend == "condor" and args.stage in {"run", "all"} else "DONE")
         print(
             f"[{state}] workflow_tag=20260826_0541, target={args.target}, parameter={args.parameter}, "
             f"mode={args.mode}, stage={args.stage}, task={args.task}"

@@ -24,6 +24,9 @@ if os.environ.get("FAIL_SYNTHETIC_COMBINE"):
 a = sys.argv
 mass = a[a.index("-m")+1]
 name = a[a.index("-n")+1]
+if a[a.index("-M")+1] == "FitDiagnostics":
+    Path("fitDiagnostics"+name+".root").write_text("synthetic diagnostics")
+    raise SystemExit(0)
 blind = "--run" in a and a[a.index("--run")+1] == "blind"
 keys = ("exp-2", "exp-1", "exp0", "exp+1", "exp+2")
 values = dict(zip(keys, (1., 2., 3., 4., 5.) if blind else (99.,)*5))
@@ -96,7 +99,7 @@ class EraSelectionTests(unittest.TestCase):
             self.assertNotIn("bin_2022", text)
 
 
-class CondorIntegrationTests(unittest.TestCase):
+class CondorFixture(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="condor limits ")
         self.addCleanup(self.tmp.cleanup)
@@ -111,27 +114,39 @@ class CondorIntegrationTests(unittest.TestCase):
         (self.root/"CMSSW/src").mkdir(parents=True)
         self.env = dict(os.environ, PATH=str(self.bin)+os.pathsep+os.environ["PATH"])
 
-    def prepare(self, mode="blind", masses="12,30"):
-        args = w.build_parser().parse_args([
-            "--stage", "run", "--backend", "condor", "--condor-dry-run",
+    def prepare(self, mode="blind", masses="12,30", task="limits", nmax=None, extra=()):
+        options = [
+            "--stage", "run", "--condor-dry-run", "--task", task,
             "--target", "eras", "--eras", "2018,2022", "--mode", mode,
             "--masses", masses, "--card-base", str(self.root/"cards"),
             "--output-base", str(self.root/"outputs"), "--condor-dir", str(self.root/"batch"),
             "--condor-cmssw-base", str(self.root/"CMSSW"),
-            "--condor-scram-arch", "el9_amd64_gcc12", "--condor-nmax", "40",
+            "--condor-scram-arch", "el9_amd64_gcc12",
             "--qcd-method", "mc", "--dy-method", "mc", "--strict",
             "--plot-limits-py", str(self.bin/"plotLimits.py"),
-        ])
+        ]
+        if nmax is not None:
+            options += ["--condor-nmax", str(nmax)]
+        options += list(extra)
+        args = w.build_parser().parse_args(options)
         for target, unit in (("2018", .01), ("2022", .02), ("Run2", .03)):
             for mass in (12, 30, 70):
                 card = w.datacard_path(args, target, str(mass))
                 card.parent.mkdir(parents=True, exist_ok=True)
                 card.write_text(f"# alpha_internal_unit = {unit}\n# alpha_internal_signal_yield = 25\n")
         w.validate_args(args)
-        with patch.object(w, "run_command") as command, patch.dict(os.environ, {"USER": "tester"}), \
+        def workspace_command(command, cwd, **kwargs):
+            if command[0] != "text2workspace.py":
+                raise AssertionError(f"Unexpected submission/preparation command: {command}")
+            Path(command[command.index("-o")+1]).write_text(json.dumps({"theta": [-7., 7.], "phi": [-7., 7.]}))
+            return 0
+        with patch.object(w, "run_command", side_effect=workspace_command) as command, \
+                patch.object(w, "impact_workspace_parameters", side_effect=lambda p: json.loads(Path(p).read_text())), \
+                patch.dict(os.environ, {"USER": "tester", "PATH": self.env["PATH"]}), \
                 contextlib.redirect_stdout(io.StringIO()):
-            batch = w.submit_condor_limits(args)
-        command.assert_not_called()
+            batch = w.submit_condor_workflow(args)
+        if task not in {"impacts", "all"}:
+            command.assert_not_called()
         self.batch = batch
         self.manifest = json.loads((batch/"manifest.json").read_text())
         return args
@@ -145,6 +160,7 @@ class CondorIntegrationTests(unittest.TestCase):
         return self.cli("--condor-worker", str(self.batch/"manifest.json"),
                         "--condor-index", str(index), env=env)
 
+class CondorIntegrationTests(CondorFixture):
     def test_blind_batch_preserves_selection_scaling_and_plot_labels(self):
         # Each mode uses an independent fixture, just like independent submissions.
         self.run_batch("blind")
@@ -163,8 +179,9 @@ class CondorIntegrationTests(unittest.TestCase):
         self.assertTrue(Path(submit_values["executable"]).is_file())
         self.assertTrue(Path(submit_values["initialdir"]).is_dir())
         for line in ("queue 4", "request_cpus = 1", "should_transfer_files = NO",
-                     "arguments = $(Process)", "concurrency_limits = n40."):
+                     "arguments = $(Process)"):
             self.assertIn(line, jds)
+        self.assertNotIn("concurrency_limits", jds)
         for job in jobs:
             # A later card build must not change the submitted fit or conversion.
             Path(job["original_card"]).write_text("# alpha_internal_unit = 999\n")
@@ -205,6 +222,20 @@ class CondorIntegrationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("failed", result.stdout)
         self.assertFalse((self.root/"outputs/alpha").exists())
+
+    def test_condor_default_local_opt_in_and_optional_concurrency(self):
+        defaults = w.build_parser().parse_args([])
+        self.assertEqual(defaults.backend, "condor")
+        self.assertEqual(defaults.condor_nmax, 0)
+        for task in ("limits", "impacts", "fitdiag", "checks", "all"):
+            w.validate_args(w.build_parser().parse_args(["--task", task]))
+        local = w.build_parser().parse_args(["--local", "--jobs", "4"])
+        w.validate_args(local)
+        self.assertEqual(local.backend, "local")
+        local = w.build_parser().parse_args(["--local", "--task", "impacts", "--impact-parallel", "4"])
+        w.validate_args(local)
+        self.prepare(masses="12", nmax=40)
+        self.assertIn("concurrency_limits = n40.tester", (self.batch/"submit.jds").read_text())
 
     def test_changed_snapshot_and_collection_option_override_are_rejected(self):
         self.prepare("unblind", masses="12")

@@ -70,15 +70,16 @@ The mirrored review source and detailed model documentation are in
 [combine_review](https://github.com/joonblee/combine_review).
 
 
-For limits only, `--jobs` caps concurrent mass/target jobs across all selected
-targets (default: 1). In the production `NIsoMuon` directory, run blind limits
-with up to 40 workers:
+Condor is the default execution backend, with no workflow concurrency cap.
+Use `--local` to run directly on CPU cores. For local limits, `--jobs` caps
+concurrent mass/target jobs (default: 1); local impacts use `--impact-parallel`.
+In the production `NIsoMuon` directory, run local blind limits with 40 workers:
 
 ```bash
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 python3 -u limit_workflow.py \
   --stage all --target runs --parameter alpha \
-  --mode blind --task limits --jobs 40 \
+  --mode blind --task limits --local --jobs 40 \
   --sigfit-dir ./sigfit_inputs \
   --qcd-method data-driven --dy-method data-driven \
   --r-max 100 --strict > limits_blind.log 2>&1
@@ -116,7 +117,7 @@ to build and run observed limits for 2018 locally:
 ```bash
 python3 -u limit_workflow.py \
   --stage all --task limits --target 2018 --mode unblind \
-  --parameter alpha --sigfit-dir ./sigfit_inputs --jobs 40 --r-max 100 --strict
+  --parameter alpha --sigfit-dir ./sigfit_inputs --local --jobs 40 --r-max 100 --strict
 ```
 
 For each unblind card, the observed limit comes from data and the expected
@@ -126,15 +127,32 @@ physical-limit JSON are under `limit_outputs/alpha/<mode>/<era>/`, named
 `limits_<era>_alpha.*`. Use `--stage all` to build the selected era cards first;
 `--stage run` requires existing cards for the requested mode and targets.
 
-## HTCondor limits
+## HTCondor execution (default)
 
-`--backend condor` supports `--task limits` with `--stage run` or `all`.
-`all` builds cards on the submission host before submitting; `run` snapshots
-existing cards. Each Condor process runs one target/mass, including both fits
-for an unblind card. Submission returns immediately; collection is a separate
-step after all jobs finish.
+No backend option is needed. `limits`, `impacts`, `fitdiag`, `checks` and
+`all` support Condor with `--stage run` or `all`. `--stage cards` only builds
+cards and submits nothing. `--stage all` builds cards before submitting;
+`--stage run` snapshots existing cards. `--backend local/condor` remains
+available for compatibility; `--local` is the explicit CPU-execution option.
 
-The `submit.jds`, `$(Process)` worker argument, `job_<N>.log/.err`,
+| Task | Condor jobs |
+| --- | --- |
+| `limits` | One job per target/mass; observed and blind-expected fits run sequentially inside it |
+| `impacts` | Initial-fit job, one job per nuisance, then a collection/validation/plot job for each target/mass |
+| `fitdiag`, `checks` | One FitDiagnostics/pulls job per target/mass |
+| `all` | Limit and FitDiagnostics jobs plus the full impact DAG |
+
+For fresh impacts, workspaces are built and their floating parameter lists
+read on the submission host. A DAG connects the subsequent fits: nuisance
+jobs start after the initial POI interval passes validation and any lower-range
+expansion; the final job waits for every nuisance fit. All nuisance fits use
+the same saved workspace, initial fit and range. The final Condor job runs
+the existing interval checks, failed-scan retries, physical QCD-boundary
+profiles, alpha conversion and impact plotting. These final repairs run
+serially within that job's allocated CPU. The statistical model and fit
+prescription are shared with local execution.
+
+The `submit.jds`, process-index worker argument, `job_<N>.log/.err`,
 `condor.log`, vanilla universe and optional `n<N>.<USER>` concurrency limit
 follow `SKFlatAnalyzer/python/SKFlat.py`. Workers initialise CMS via CVMFS
 and `scramv1 runtime -sh` in the active **Combine** `CMSSW_BASE`, using the
@@ -154,19 +172,46 @@ equivalent of the 2018 partial-unblinding example is:
 python3 -u limit_workflow.py \
   --stage all --task limits --target 2018 --mode unblind \
   --parameter alpha --sigfit-dir ./sigfit_inputs --r-max 100 --strict \
-  --backend condor --condor-nmax 40 \
   --condor-dir condor_jobs/2018_unblind
 ```
 
-`--jobs` is for local execution; do not pass `--jobs 40` to Condor.
-`--condor-nmax 40` uses the same site-configured `n40.<USER>` convention as
-SKFlatAnalyzer. Omit it on a pool without that concurrency-limit setup.
+To distribute blind impacts for Run-2, Run-3 and Run-2+3:
+
+```bash
+python3 -u limit_workflow.py \
+  --stage run --task impacts --target runs --mode blind \
+  --parameter alpha --masses 12,30,70 \
+  --allow-negative-r --r-min -50 --r-max 100 --strict \
+  --condor-dir condor_jobs/impacts_blind
+```
+
+Use `--task all` to submit limits, diagnostics and impacts together.
+`--impact-masses` still selects which masses receive impact jobs.
+`--repair-impacts` also supports Condor: it snapshots the existing workspace,
+scans, internal JSON and repair caches, then runs the repair for each selected
+target/mass as a Condor job. Existing original results are updated only when
+that batch is collected successfully.
+
+`--condor-nmax` defaults to **0**, so no `concurrency_limits` entry or
+workflow job cap is emitted. Normal pool and DAGMan policies still apply.
+Optionally add `--condor-nmax 40` (alias `--condor_nmax 40`) for the same
+site-configured `n40.<USER>` convention as SKFlatAnalyzer.
 `--condor-batch-name` sets the batch name. Aliases `--nmax`, `--memory`,
-`--batchname` and `--no-exec` match the SKFlat naming.
+`--batchname` and `--no-exec` match the SKFlat naming. `--jobs` and
+`--impact-parallel` are local-only; select `--local` to use them.
+
+Examples of local CPU execution:
+
+```bash
+python3 limit_workflow.py --local --stage run --task limits --target runs --jobs 40
+python3 limit_workflow.py --local --stage run --task impacts --target runs --impact-parallel 40
+```
 
 Add `--condor-dry-run` to prepare the submission without enqueuing jobs, then
-submit manually from the generated directory with `condor_submit submit.jds`.
-It still builds cards if `--stage all` was requested. Choose a new
+submit manually from the generated directory with the printed command:
+`condor_submit submit.jds` for flat jobs or `condor_submit_dag workflow.dag`
+for impacts/`all`. Dry-run still prepares workspaces for fresh impacts and
+builds cards if `--stage all` was requested. Choose a new
 `--condor-dir` for each submission; existing directories are not overwritten.
 Omitting it creates a unique directory under
 `<output-base>/condor/<parameter>/<mode>/`.
@@ -180,17 +225,23 @@ python3 condor_jobs/2018_unblind/limit_workflow.py \
 
 Collection restores the saved mode, targets, masses and options from the
 manifest; no other CLI options are accepted at this stage. It runs no fits.
+Limit collection and plotting run at this stage; impact plots have already
+been validated in the final DAG job and are published here.
 Each batch retains its workflow snapshot, datacards, `manifest.json`, and
 separate `jobs/job_<N>/` fit outputs and completion status. Later edits to
 the original cards do not change a queued fit or its alpha conversion.
-Pending/failed jobs, changed card snapshots and missing outputs stop
-collection before plotting. Final plots/JSON use the usual output directory;
-ROOT fit files and batch logs remain in the batch directory. Set
+Pending/failed jobs, changed snapshots, missing outputs and downstream
+results from a superseded dependency stop collection before publication.
+Final plots/JSON use the usual output directory. Impact workspaces/scans and
+repair reports are also published there for subsequent `--repair-impacts`;
+the batch retains its isolated originals and logs. Limit ROOT files remain
+in the batch directory. Set
 `--output-base` at submission to retain a separate production's final plots.
 
 The orchestration tests use synthetic Combine executables to exercise batch
-preparation, concurrent workers, collection, era selection, blinding and alpha
-conversion without ROOT. They do not validate a live pool or physical limits.
+preparation, concurrent workers, DAG dependencies, initial-range expansion,
+collection, era selection, blinding, repair and alpha conversion without ROOT.
+They do not validate a live pool or physical limits.
 
 ROOT-free statistical/card contract tests: `python3 -m unittest discover -s NIsoMuon/tests -v`.
 
@@ -209,7 +260,7 @@ python3 -u limit_workflow.py \
   --stage run --task impacts --repair-impacts \
   --target runs --parameter alpha --mode blind \
   --masses 30,70 --impact-masses 30,70 \
-  --impact-parallel 40 --sigfit-dir ./sigfit_inputs \
+  --local --impact-parallel 40 --sigfit-dir ./sigfit_inputs \
   --qcd-method data-driven --dy-method data-driven \
   --allow-negative-r --r-min -5 --r-max 10 \
   --output-base limit_outputs_impacts_retry --strict \
