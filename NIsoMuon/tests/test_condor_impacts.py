@@ -182,3 +182,44 @@ class CondorImpactTests(CondorFixture):
         w.collect_condor_workflow(self.batch)
         self.assertTrue((w.output_dir(args, "2018")/"impacts_2018_alpha_M12.pdf").is_file())
 
+    def test_resume_uses_current_code_and_only_failed_final_nodes(self):
+        self.prepare(masses="12", task="impacts")
+        self.complete_impacts()
+        finals = [j for j in self.manifest["jobs"] if j["kind"] == "impact_final"]
+        successful = [j for j in self.manifest["jobs"] if j["kind"] != "impact_final"]
+        preserved = {j["index"]: (Path(j["workdir"])/"status.json").read_bytes() for j in successful}
+        original_snapshot = (self.batch/"limit_workflow.py").read_bytes()
+        for job in finals:
+            path = Path(job["workdir"])/"status.json"
+            status = json.loads(path.read_text())
+            status.update(state="failed", error="Boundary fit needs two entries")
+            path.write_text(json.dumps(status))
+        directory = w.resume_condor_workflow(self.batch, dry_run=True)
+        request = json.loads((directory/"resume.json").read_text())
+        self.assertEqual(set(map(int, request["jobs"])), {j["index"] for j in finals})
+        self.assertEqual((self.batch/"limit_workflow.py").read_bytes(), original_snapshot)
+        self.assertEqual((directory/"limit_workflow.py").read_bytes(), Path(w.__file__).read_bytes())
+        for job in successful:
+            self.assertEqual((Path(job["workdir"])/"status.json").read_bytes(), preserved[job["index"]])
+        self.assertNotIn("concurrency_limits", (directory/"submit.jds").read_text())
+        self.assertNotIn("PARENT", (directory/"resume.dag").read_text())
+        for job in finals:
+            self.run_node(job)
+        w.collect_condor_workflow(self.batch)
+        self.assertIsNone(w.resume_condor_workflow(self.batch, dry_run=True))
+
+    def test_resume_includes_downstream_nodes_of_failed_initial_fit(self):
+        self.prepare(masses="12", task="impacts")
+        self.complete_impacts()
+        initial = self.manifest["jobs"][0]
+        path = Path(initial["workdir"])/"status.json"
+        status = json.loads(path.read_text())
+        status.update(state="failed", error="synthetic initial fit failure")
+        path.write_text(json.dumps(status))
+        directory = w.resume_condor_workflow(self.batch, dry_run=True)
+        request = json.loads((directory/"resume.json").read_text())
+        self.assertEqual(set(map(int, request["jobs"])), {0, 1, 2, 3})
+        dag = (directory/"resume.dag").read_text()
+        self.assertIn("PARENT J0 CHILD J1", dag)
+        self.assertIn("PARENT J0 J1 J2 CHILD J3", dag)
+

@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -305,6 +306,95 @@ class ImpactRepairTests(unittest.TestCase):
             report = json.loads((out / "impact_repair_M70/validation.json").read_text())
             self.assertEqual(report["expected_signal"], 1.25)
             self.assertEqual(report["boundary"], [qcd])
+
+
+class BoundaryProfileRetryTests(unittest.TestCase):
+    class File:
+        def __init__(self, path):
+            rows = json.loads(Path(path).read_text())
+            self.tree = SimpleNamespace()
+            self.tree.GetEntries = lambda: len(rows)
+            self.tree.GetBranch = lambda name: name in rows[0]
+            def get_entry(index):
+                for name, value in rows[index].items():
+                    setattr(self.tree, name, value)
+            self.tree.GetEntry = get_entry
+        def IsZombie(self):
+            return False
+        def Get(self, name):
+            return self.tree
+        def Close(self):
+            pass
+
+    def run_case(self, entries, accepted=True):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            output = directory / "higgsCombine.Boundary.MultiDimFit.mH25.root"
+            output.write_text('[{"previous": 1}]')
+            command = ["combine", "-M", "MultiDimFit", "workspace.root", "--algo", "fixed",
+                       "-P", "qcd", "--fixedPointPOIs", "qcd=0", "--floatOtherPOIs", "1",
+                       "--cminDefaultMinimizerStrategy", "2", "--setParameters", "r=0.2"]
+            calls = []
+            def run(command, cwd, **kwargs):
+                index = len(calls)
+                calls.append(command)
+                output.write_text(json.dumps(entries[min(index, len(entries)-1)]))
+                kwargs["stdout_path"].write_text(f"synthetic attempt {index}\n")
+                return 0
+            root = SimpleNamespace(TFile=SimpleNamespace(Open=self.File))
+            with patch.object(w, "RootReader", return_value=SimpleNamespace(ROOT=root)), \
+                    patch.object(w, "run_command", side_effect=run):
+                if accepted:
+                    self.assertEqual(w.run_boundary_impact_profile(command, directory, "qcd", "25", -2., 10.), (.3, .1))
+                    validation = json.loads((directory/"profile_validation.json").read_text())
+                    self.assertTrue(validation["passed"])
+                    self.assertEqual(validation["strategy"], 1 if len(calls) == 2 else 2)
+                else:
+                    with self.assertRaisesRegex(w.WorkflowError, "No endpoint accepted"):
+                        w.run_boundary_impact_profile(command, directory, "qcd", "25", -2., 10.)
+                    self.assertFalse((directory/"profile_validation.json").exists())
+            histories = list(directory.glob("attempts_*"))
+            self.assertEqual(len(histories), 1)
+            self.assertTrue((histories[0]/"previous.root").exists())
+            self.assertEqual(len(list(histories[0].glob("attempt*.root"))), len(calls))
+            for call in calls:
+                self.assertIn("--cminFallbackAlgo", call)
+                self.assertEqual(call[call.index("--fixedPointPOIs")+1], "qcd=0")
+                self.assertEqual(call[call.index("--setParameters")+1], "r=0.2")
+            return len(calls)
+
+    def test_one_entry_failure_retries_before_accepting_conditional_fit(self):
+        best = {"qcd": 2., "r": .2, "deltaNLL": 0.}
+        point = {"qcd": 0., "r": .3, "deltaNLL": .1}
+        self.assertEqual(self.run_case([[best], [best, point]]), 2)
+
+    def test_missing_entry_is_never_accepted_even_with_zero_command_exit(self):
+        self.assertEqual(self.run_case([[{"qcd": 2., "r": .2, "deltaNLL": 0.}]], False), 3)
+
+    def test_two_entries_still_require_valid_likelihood_and_floating_r(self):
+        for rvalue, delta in ((.3, .7), (-2., .1), (.3, math.nan)):
+            rows = [{"qcd": 2., "r": .2, "deltaNLL": 0.},
+                    {"qcd": 0., "r": rvalue, "deltaNLL": delta}]
+            with self.subTest(rvalue=rvalue, delta=delta):
+                self.assertEqual(self.run_case([rows], False), 3)
+
+    def test_observed_boundary_starts_at_validated_best_fit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            args = w.build_parser().parse_args(["--stage", "run", "--task", "impacts", "--mode", "unblind"])
+            nuisance = "CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP"
+            payload = {"POIs": [{"name": "r", "fit": [.2, 1.25, 2.]}],
+                       "params": [parameter(nuisance, [2., 2., 5.])]}
+            internal = out/"impacts.json"
+            internal.write_text(json.dumps(payload))
+            with patch.object(w, "impact_workspace_parameters", return_value={nuisance: (0., 100.)}), \
+                    patch.object(w, "run_command", return_value=0) as run, \
+                    patch.object(w, "read_boundary_impact_result", return_value=(1.3, .1)):
+                w.repair_impact_payload(args, out/"card", "2016preVFP", "25", 25.,
+                                        out, out/"workspace", internal, payload, -2., 10.)
+            command = run.call_args.args[0]
+            self.assertEqual(command[command.index("--setParameters")+1], "r=1.25")
+            self.assertNotIn("--expectSignal", command)
 
 
 class ReviewSBRepairTests(unittest.TestCase):

@@ -4058,8 +4058,12 @@ def read_boundary_impact_result(path, nuisance, bound, rmin, rmax):
         raise WorkflowError(f"Missing boundary fit: {path}")
     try:
         tree = source.Get("limit")
-        if not tree or tree.GetEntries() != 2:
-            raise WorkflowError(f"Boundary fit did not produce both entries: {path}")
+        entries = int(tree.GetEntries()) if tree else 0
+        if entries != 2:
+            raise WorkflowError(f"Boundary fit needs two entries, found {entries}: {path}; see {path.parent / 'fit.log'}")
+        for name in (nuisance, "r", "deltaNLL"):
+            if not tree.GetBranch(name):
+                raise WorkflowError(f"Boundary fit has no {name} branch: {path}")
         tree.GetEntry(1)
         endpoint = float(getattr(tree, nuisance))
         rvalue = float(tree.r)
@@ -4073,6 +4077,50 @@ def read_boundary_impact_result(path, nuisance, bound, rmin, rmax):
         return rvalue, delta
     finally:
         source.Close()
+
+
+def run_boundary_impact_profile(command, directory, nuisance, mass_arg, rmin, rmax):
+    """Retry the same conditional profile; never accept a missing fit entry."""
+    output = directory / f"higgsCombine.Boundary.MultiDimFit.mH{mass_arg}.root"
+    history = directory / ("attempts_" + uuid4().hex[:8])
+    history.mkdir()
+    if output.exists():
+        shutil.copy2(output, history / "previous.root")
+    validation = directory / "profile_validation.json"
+    if validation.exists():
+        shutil.copy2(validation, history / "previous_validation.json")
+        validation.unlink()
+    failures = []
+    for attempt, strategy in enumerate((2, 1, 0), 1):
+        if output.exists():
+            output.unlink()
+        trial = list(command)
+        trial[trial.index("--cminDefaultMinimizerStrategy") + 1] = str(strategy)
+        trial.extend(["--cminFallbackAlgo", "Minuit2,Migrad,1:1e-4",
+                      "--cminFallbackAlgo", "Minuit2,Migrad,0:1e-4"])
+        log = directory / "fit.log"
+        code = run_command(trial, directory, allow_failure=True, stdout_path=log)
+        archived_log = history / f"attempt{attempt}_strategy{strategy}.log"
+        if log.exists():
+            shutil.copy2(log, archived_log)
+        if output.exists():
+            shutil.copy2(output, history / f"attempt{attempt}_strategy{strategy}.root")
+        if code:
+            failures.append(f"strategy {strategy}: Combine exit {code}; {archived_log}")
+            continue
+        try:
+            rvalue, delta = read_boundary_impact_result(output, nuisance, 0.0, rmin, rmax)
+        except WorkflowError as exc:
+            failures.append(f"strategy {strategy}: {exc}; {archived_log}")
+            continue
+        validation.write_text(json.dumps({
+            "passed": True, "strategy": strategy, "r": rvalue,
+            "deltaNLL": delta, "failed_attempts": failures,
+            "history": str(history),
+        }, indent=2) + "\n")
+        return rvalue, delta
+    raise WorkflowError(f"Boundary profile failed for {nuisance} after strategies 2/1/0. "
+                        "No endpoint accepted.\n  " + "\n  ".join(failures))
 
 
 def repair_impact_payload(args, card, target, label, mass, outdir,
@@ -4203,12 +4251,15 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
                                 f"see {repair_dir / 'retry_pass3_strategy0.log'}")
         params.update(accepted)
     jobs = []
+    # Combine resets r to the range midpoint unless --setParameters is given.
+    # Start observed boundary fits at the validated POI best fit instead of a
+    # potentially distant midpoint. Preserve the Asimov injection in blind mode.
+    poi_fit = impact_fit_triplet(payload)
+    start_r = expected_signal if args.mode == "blind" else poi_fit[1]
+    start = [] if "--setParameters" in blind else ["--setParameters", f"r={start_r:.12g}"]
     for nuisance in sorted(boundary):
         directory = repair_dir / nuisance
         directory.mkdir(parents=True, exist_ok=True)
-        stale = directory / f"higgsCombine.Boundary.MultiDimFit.mH{mass_arg}.root"
-        if stale.exists():
-            stale.unlink()
         # Scan only the nuisance; r remains a floating other POI. The second
         # tree entry is the conditional profile and its deltaNLL is relative
         # to the unrestricted fit in the SAME Combine invocation.
@@ -4217,19 +4268,19 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
                    "--saveInactivePOI", "1", "--fixedPointPOIs", f"{nuisance}=0",
                    "--cminDefaultMinimizerStrategy", "2",
                    "--cminDefaultMinimizerTolerance", "1e-4",
-                   *explicit_range_args(rmin, rmax, card), *blind,
+                   *explicit_range_args(rmin, rmax, card), *start, *blind,
                    "-n", ".Boundary", "-v", "1"]
         jobs.append((nuisance, directory, command))
     if jobs:
         with ThreadPoolExecutor(max_workers=min(args.impact_parallel, len(jobs))) as executor:
-            futures = {executor.submit(run_command, command, directory,
-                       stdout_path=directory / "fit.log"): nuisance
+            futures = {executor.submit(run_boundary_impact_profile, command, directory,
+                       nuisance, mass_arg, rmin, rmax): nuisance
                        for nuisance, directory, command in jobs}
+            results = {}
             for future in as_completed(futures):
-                future.result()
+                results[futures[future]] = future.result()
         for nuisance, directory, _ in jobs:
-            path = directory / f"higgsCombine.Boundary.MultiDimFit.mH{mass_arg}.root"
-            rvalue, delta = read_boundary_impact_result(path, nuisance, 0.0, rmin, rmax)
+            rvalue, delta = results[nuisance]
             apply_impact_boundary_endpoint(params[nuisance], 0.0, rvalue, delta)
             print(f"[IMPACT BOUNDARY] {target} M{label} {nuisance}: "
                   f"endpoint=0 r={rvalue:.8g} deltaNLL={delta:.8g}", flush=True)
@@ -4901,7 +4952,9 @@ def completed_condor_job(payload, args, job):
     if "kind" in job:
         expected["kind"] = job["kind"]
     if any(status.get(key) != value for key, value in expected.items()):
-        raise WorkflowError(f"job {job['index']} {job['target']}: {status.get('state', 'pending')}")
+        error = f"; {status['error']}" if status.get("error") else ""
+        raise WorkflowError(f"job {job['index']} {job['target']} {job.get('kind', 'limits')}: "
+                            f"{status.get('state', 'pending')}{error}")
     card = Path(job["card"])
     if hashlib.sha256(card.read_bytes()).hexdigest() != job["card_sha256"]:
         raise WorkflowError(f"Submitted datacard changed: {card}")
@@ -5033,7 +5086,9 @@ def run_condor_worker(manifest: Path, index: int) -> None:
             raise WorkflowError(f"Condor job {index} is already running in {workdir}") from exc
         status = {"batch_id": payload["batch_id"], "index": index,
                   "target": job["target"], "mode": args.mode,
-                  "card_sha256": job["card_sha256"], "state": "running"}
+                  "card_sha256": job["card_sha256"], "state": "running",
+                  "worker_script": str(Path(__file__).resolve()),
+                  "worker_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
         kind = job.get("kind", "limits")
         if "kind" in job:
             status["kind"] = kind
@@ -5080,6 +5135,98 @@ def run_condor_worker(manifest: Path, index: int) -> None:
             raise
         write_condor_status(status_path, status)
         print(f"[CONDOR] completed job {index}: {job['target']} M-{label} ({args.mode})")
+
+
+def resume_condor_workflow(batch: Path, dry_run=False, nmax=None, memory=None):
+    """Resubmit incomplete nodes with current code and retain successful fits."""
+    manifest = batch / "manifest.json"
+    payload, args = load_condor_manifest(manifest)
+    selected = {}
+    for job in payload["jobs"]:
+        try:
+            completed_condor_job(payload, args, job)
+            if job.get("kind") == "impact_initial":
+                condor_impact_context(payload, args, job["index"])
+        except WorkflowError as exc:
+            selected[job["index"]] = str(exc)
+    # Include downstream nodes if an invalid context requires a parent rerun,
+    # even when the old parent's completion status itself still says success.
+    changed = True
+    while changed:
+        changed = False
+        for job in payload["jobs"]:
+            if job["index"] not in selected and set(job.get("dependencies", [])) & selected.keys():
+                selected[job["index"]] = "dependency will be rerun"
+                changed = True
+    if not selected:
+        print("[CONDOR RESUME] All jobs are complete; nothing to submit.")
+        return None
+    if nmax is not None:
+        args.condor_nmax = nmax
+    if memory is not None:
+        args.condor_memory = memory
+    if args.condor_nmax < 0 or args.condor_memory < 1:
+        raise WorkflowError("Resume requires non-negative --condor-nmax and positive --condor-memory.")
+    user = os.environ.get("USER", "")
+    if args.condor_nmax and not re.fullmatch(r"[A-Za-z0-9_.-]+", user):
+        raise WorkflowError("A valid USER is required for the SKFlat concurrency limit.")
+    if not dry_run:
+        require_command("condor_submit_dag")
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid4().hex[:8]
+    directory = batch / f"resume_{run_id}"
+    directory.mkdir()
+    snapshot = directory / "limit_workflow.py"
+    shutil.copy2(Path(__file__).resolve(), snapshot)
+    cmssw = Path(payload["cmssw_base"])
+    if not (cmssw / "src").is_dir():
+        raise WorkflowError(f"Combine CMSSW src directory does not exist: {cmssw / 'src'}")
+    wrapper = directory / "run_job.sh"
+    wrapper.write_text("\n".join([
+        "#!/bin/bash", "set -eo pipefail", "export LC_ALL=C ROOT_HIST=0",
+        "export CMS_PATH=/cvmfs/cms.cern.ch", 'source "$CMS_PATH/cmsset_default.sh"',
+        f"export SCRAM_ARCH={shlex.quote(payload['scram_arch'])}",
+        f"cd {shlex.quote(str(cmssw / 'src'))}", 'eval "$(scramv1 runtime -sh)"',
+        "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1",
+        f"cd {shlex.quote(str(directory))}",
+        f"exec python3 -u {shlex.quote(str(snapshot))} --condor-worker "
+        f'{shlex.quote(str(manifest))} --condor-index "$1"', "",
+    ]))
+    wrapper.chmod(0o755)
+    lines = [f"executable = {wrapper}", f"initialdir = {directory}",
+             f"jobbatchname = NIsoMuon_resume_{run_id}", "universe = vanilla",
+             "arguments = $(jobindex)", "getenv = True", "should_transfer_files = NO",
+             "log = condor.log", "output = job_$(jobindex).log", "error = job_$(jobindex).err",
+             "request_cpus = 1", f"request_memory = {args.condor_memory}MB"]
+    if args.condor_nmax:
+        lines.append(f"concurrency_limits = n{args.condor_nmax}.{user}")
+    if args.condor_requirements:
+        lines.append(f"requirements = {args.condor_requirements}")
+    (directory / "submit.jds").write_text("\n".join([*lines, "queue 1", ""]))
+    dag = []
+    for job in payload["jobs"]:
+        index = job["index"]
+        if index not in selected:
+            continue
+        dag.extend([f"JOB J{index} submit.jds", f'VARS J{index} jobindex="{index}"'])
+        parents = [i for i in job.get("dependencies", []) if i in selected]
+        if parents:
+            dag.append("PARENT " + " ".join(f"J{i}" for i in parents) + f" CHILD J{index}")
+    (directory / "resume.dag").write_text("\n".join(dag) + "\n")
+    (directory / "resume.json").write_text(json.dumps({
+        "original_manifest": str(manifest), "jobs": selected,
+        "worker_sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+        "condor_nmax": args.condor_nmax, "condor_memory": args.condor_memory,
+    }, indent=2) + "\n")
+    print(f"[CONDOR RESUME] resubmit={len(selected)}, retain={len(payload['jobs'])-len(selected)}; "
+          f"jobs={','.join(map(str, selected))}")
+    print(f"[CONDOR RESUME] new worker snapshot and logs: {directory}")
+    if dry_run:
+        print(f"[CONDOR RESUME] prepared only: cd {shlex.quote(str(directory))} && condor_submit_dag resume.dag")
+    else:
+        run_command(["condor_submit_dag", "resume.dag"], directory)
+    print(f"[CONDOR RESUME] after completion: python3 {shlex.quote(str(snapshot))} "
+          f"--stage collect --condor-dir {shlex.quote(str(batch))}")
+    return directory
 
 
 def collect_condor_workflow(batch: Path) -> None:
@@ -5158,8 +5305,8 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawTextHelpFormatter,
         description="NIsoMuon datacard + Combine limit/impact workflow. Use --target runs for Run2/Run3/full, or --target eras --eras 2018,2022 for separate era results.",
     )
-    parser.add_argument("--stage", choices=("cards", "run", "all", "collect"), default="all",
-                        help="collect = collect and plot a completed Condor batch from --condor-dir.")
+    parser.add_argument("--stage", choices=("cards", "run", "all", "collect", "resume"), default="all",
+                        help="collect publishes a completed Condor batch; resume retries incomplete nodes using current code.")
     parser.add_argument("--target", type=canonical_target, default="run2",
                         help="run2, run3, full, runs, eras, all, or one era (e.g. 2018).")
     parser.add_argument("--eras", type=parse_era_list, default=None,
@@ -5520,6 +5667,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if args.condor_index is None:
                 raise WorkflowError("--condor-worker requires --condor-index.")
             run_condor_worker(Path(args.condor_worker).resolve(), args.condor_index)
+            return 0
+        if args.stage == "resume":
+            resumer = argparse.ArgumentParser(description="Resume incomplete Condor nodes with current code.")
+            resumer.add_argument("--stage", choices=("resume",), required=True)
+            resumer.add_argument("--condor-dir", required=True)
+            resumer.add_argument("--condor-dry-run", "--no-exec", action="store_true")
+            resumer.add_argument("--condor-nmax", "--condor_nmax", type=int, default=None)
+            resumer.add_argument("--condor-memory", type=int, default=None)
+            request = resumer.parse_args(argv)
+            resume_condor_workflow(Path(request.condor_dir).expanduser().resolve(),
+                                   request.condor_dry_run, request.condor_nmax, request.condor_memory)
             return 0
         if args.stage == "collect":
             # The saved mode/era/card selection is authoritative. Reject extra

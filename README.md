@@ -243,6 +243,35 @@ preparation, concurrent workers, DAG dependencies, initial-range expansion,
 collection, era selection, blinding, repair and alpha conversion without ROOT.
 They do not validate a live pool or physical limits.
 
+## Recovering an incomplete Condor batch
+
+After updating the repository, run recovery with the **current** driver:
+
+```bash
+python3 limit_workflow.py --stage resume \
+  --condor-dir condor_jobs/2016preVFP_unblind
+```
+
+This submits only failed, pending or stale nodes and their affected downstream
+nodes. Successful limits, diagnostics, initial fits and nuisance scans are
+retained. If only `impact_final` nodes failed, only those final nodes are
+resubmitted. Recovery creates a new code snapshot, DAG and logs under
+`<batch>/resume_<timestamp>_<id>/`; the original workflow snapshot, manifest,
+cards and fit inputs are preserved. Worker completion records include the
+code path and SHA256. `--condor-dry-run` prepares recovery without submitting;
+`--condor-nmax` and `--condor-memory` optionally override its saved resources.
+
+When recovery finishes, publish using the current driver and original batch:
+
+```bash
+python3 limit_workflow.py --stage collect \
+  --condor-dir condor_jobs/2016preVFP_unblind
+```
+
+The original batch snapshot intentionally keeps the original code. Run
+`--stage resume` from the updated top-level `limit_workflow.py` to use a fix.
+Collection now reports each failed node's kind and recorded error directly.
+
 ROOT-free statistical/card contract tests: `python3 -m unittest discover -s NIsoMuon/tests -v`.
 
 ## Repairing incomplete blind impacts
@@ -250,6 +279,16 @@ ROOT-free statistical/card contract tests: `python3 -m unittest discover -s NIso
 After a completed impact run, use `--repair-impacts` with `--stage run --task impacts` and the same `--output-base`. This preserves existing workspaces and original ROOT scans. Only missing scans and collapsed nuisance intervals are retried with strategy 2. A zero shift of the POI is permitted when the nuisance interval itself is valid.
 
 For a QCD shape lower interval truncated by its physical zero bound, the workflow runs a conditional MultiDimFit with the shape parameter fixed at zero and r floating. It records the conditional r and deltaNLL in `boundary_endpoints`; a boundary profile is accepted only if two fit entries exist, r lies inside its range, and deltaNLL is below 0.51 (0.5 plus numerical tolerance). The statistical model and datacards are unchanged.
+
+Observed boundary profiles start at the validated initial POI best fit;
+blind profiles preserve their original signal injection. Missing conditional
+entries, failed commands or invalid endpoint results trigger strategies 2, 1
+and 0 with Minuit2/Migrad fallbacks, without changing fit ranges or likelihood
+acceptance criteria. Each attempt's log and ROOT file, plus any previous
+boundary output, is archived in a unique `attempts_*` subdirectory.
+`fit.log` is the latest attempt and `profile_validation.json` records a
+successful endpoint. A one-entry output is never accepted just because the
+Combine command exits zero.
 
 The full nuisance list is checked against the workspace. Missing scans or invalid intervals cause a non-zero exit, even when Combine collection returns zero. The original internal JSON is retained as `*.before_repair.json`. Retry logs, boundary fit ROOT files and `validation.json` are stored under each target's `impact_repair_M<mass>/` directory. JSON and impact plots are updated only after successful validation. A subsequent standalone combineTool collection from the original ROOT files does not include these repaired endpoints; use the workflow's repaired internal JSON.
 
