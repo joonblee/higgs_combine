@@ -243,6 +243,102 @@ preparation, concurrent workers, DAG dependencies, initial-range expansion,
 collection, era selection, blinding, repair and alpha conversion without ROOT.
 They do not validate a live pool or physical limits.
 
+## Optional resolution-based mass scan
+
+`NIsoMuon/limit_workflow.py` still defaults to the available simulated masses.
+Add `--interpolate-signal` to build and fit each intermediate hypothesis. The
+limits themselves are never interpolated. Run from the production directory
+with the existing ROOT inputs, `sigfit_inputs/` and Combine environment:
+
+```bash
+# Run from NIsoMuon; keep mass_scan_grid.json beside the script.
+workflow=./limit_workflow.py
+
+python3 "$workflow" --stage all --task limits --target runs \
+  --parameter alpha --mode blind --interpolate-signal \
+  --sigfit-dir ./sigfit_inputs --backend condor --r-max 100 \
+  --condor-dir condor_jobs/interpolated_blind \
+  --plot-limits-py "$PWD/python/plotLimits.py" --strict
+
+# After every Condor job has finished, collect and plot the results.
+python3 condor_jobs/interpolated_blind/limit_workflow.py \
+  --stage collect --condor-dir condor_jobs/interpolated_blind
+```
+
+For one era, replace `--target runs` with e.g. `--target 2016preVFP`.
+`--mode` retains its existing behaviour; the scan option does not unblind data.
+Execution defaults to Condor, matching the current production workflow.
+`--stage all` builds cards and submits jobs; it does not wait for their completion.
+Use the printed collect command after the jobs finish. A single-era full scan
+submits 229 mass jobs; each unblind mass job performs the observed fit and a
+separate blind-expected fit. There is no default workflow concurrency cap;
+`--condor-nmax 40` optionally applies the existing site concurrency limit.
+For local execution instead, use `--local --jobs 40`. `--jobs` is local-only.
+Omit `--masses` to use the complete shared grid. With interpolation enabled,
+`--masses 12,12.5,15,20` instead selects exactly those hypotheses (including
+off-grid points inside the supported interval). Without interpolation, the
+existing simulated-mass selection is unchanged.
+
+The frozen `NIsoMuon/mass_scan_grid.json` contains **229 hypotheses from 12 to
+70 GeV**, including all 13 original sample masses. It is common to every era,
+Run 2, Run 3 and Run 2+3. The reference curve is the equal-era arithmetic mean
+of the eight stored fits to `sigma_m/m = a*m+b`, with
+`a=0.0001331148680501898 /GeV`, `b=0.012312862256709963`. This is a sampling
+reference, not a fit to the combined signal distribution. Successive scan
+steps are at most half this reference sigma, rounded down to 0.001 GeV; the
+additional original sample masses can shorten a step. Before those insertions,
+the spacing grows from about 0.083 GeV to 0.75 GeV. The JSON pins the source
+fit commit and all eight coefficient pairs. The grid is not regenerated from
+the requested era or from new local fits. To deliberately replace it, provide
+`--mass-grid-file FILE` with `{"schema_version":1,"masses":[12,12.5,15,20,70]}`.
+These values are **mass hypotheses, not histogram bin edges**. Per-era fitted
+resolution, `--n-sigma`, source histogram bin integration and window truncation
+remain unchanged.
+
+At an existing sample mass, signal inputs are read directly as before. Between
+samples, the selected signal yield and each requested Up/Down yield are
+interpolated log-linearly in mass, separately for each era. Each anchor is
+integrated in its own original counting window. This is the counting-yield
+prescription implemented in `SKPlotMaker/sigFit_v2.py`; it does not require
+regenerating `signal_interpolation.json`. Applying the same log interpolation
+to nominal and varied yields also interpolates their multiplicative ratios
+log-linearly. Independent anchor Sumw2 errors are propagated through the
+interpolation and used for the existing signal MC-stat nuisance. They are not
+an interpolation-model uncertainty. Luminosity and nuisance correlations are
+unchanged. Optional signal generator variations are included if requested.
+In xsec mode, a supplied mass-dependent reference cross-section map is also
+log-interpolated; alpha mode retains its per-card internal scaling.
+
+Background yields, QCD fit derivatives/covariance and transfer statistics, DY
+light-jet statistics/NF terms, and other background variations are read at
+**each new window**. They are not interpolated from the old cards. No new
+background fit is required solely to add scan points, provided the current
+producer ROOT files contain their full templates and QCDStat/DYAux inputs.
+The original nominal and systematic signal ROOT files at bracketing masses
+are also required. Missing/non-positive signal inputs and extrapolation fail
+before existing cards are removed. The supplied grid starts at 12 GeV; it
+does not infer an 11 GeV signal from samples starting at 12 GeV.
+
+Default outputs are `datacards_NIsoMuon_interpolated/` and
+`limit_outputs_interpolated/`. Explicit non-default `--card-base` and
+`--output-base` are honoured. To separate generation from fitting, first use
+`--stage cards`; later use `--stage run --interpolate-signal` with the same
+grid/masses and card base. The run stage requires no histogram/sigfit inputs
+but checks that all requested cards exist and match the grid fingerprint.
+The grid JSON must remain alongside the standalone script if it is copied.
+Condor submissions snapshot the grid beside the worker script and save its
+fingerprint in the manifest. Workers, collection and resume use that snapshot,
+so later checkout/custom-grid changes do not change submitted hypotheses.
+
+`signal_interpolation_audit.json` beside `card_summary.json` records the grid,
+resolution inputs, anchor yields/errors/windows, per-point anchor choices and
+leave-one-out residuals for yields and systematic ratios. Review these
+residuals before adopting the interpolated scan as a final analysis result;
+no new interpolation nuisance is added automatically. The same checks can be
+reproduced with the upstream signal fitter. A small `--masses` subset can
+have too few native anchors for a leave-one-out check; use the full scan to
+obtain closure over the full mass range.
+
 ## Recovering an incomplete Condor batch
 
 After updating the repository, run recovery with the **current** driver:
@@ -307,3 +403,4 @@ python3 -u limit_workflow.py \
 ```
 
 For these six selected results, success is six `[IMPACT CHECK]` lines followed by the final `[DONE]`. Failure prints an `[ERROR]` with the location of the corresponding log. This repair does not rerun AsymptoticLimits or rebuild background estimates.
+

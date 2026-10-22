@@ -11,6 +11,23 @@ This driver orchestrates all stages (external inputs and plotting dependencies b
   5. convert alpha limit/impact JSON files back to physical alpha_qZ';
   6. make the limit and impact plots.
 
+Optional dense mass scan
+-----------------------
+The default still uses only simulated signal masses. Add --interpolate-signal
+to use the frozen, era-independent hypotheses in mass_scan_grid.json (next to
+this script), or --mass-grid-file FILE for a different explicit grid. --masses
+selects explicit hypotheses instead of the full grid. Signal counting yields
+and their Up/Down variations are interpolated log-linearly between neighbouring
+simulated masses within each era, in each anchor's own counting window, as in
+SKPlotMaker/sigFit_v2.py. Anchor MC errors are propagated analytically. Exact
+sample masses retain their original inputs. No extrapolation is permitted.
+The era-specific resolution fits still define the counting windows; background
+yields, QCD/DY auxiliary statistics, other variations and (only in unblind mode)
+observations are integrated afresh at every hypothesis. This interpolates the
+signal model, not the resulting limits, and does not rebin the input histograms.
+Default card/output directories gain an _interpolated suffix. A signal input
+audit and leave-one-out closure report accompany the new cards. Original ROOT
+inputs and sigfit inputs are required for card creation, but not for --stage run.
 Execution defaults to Condor, with no workflow concurrency cap. Use --local
 for CPU execution (--jobs N for limits; --impact-parallel N for impacts).
 Fresh Condor impacts use a DAG: initial fit -> one job per nuisance -> final
@@ -1501,6 +1518,240 @@ def file_for_process(
     raise WorkflowError(f"Unknown ROOT source: {source}")
 
 
+def prepare_mass_scan(args: argparse.Namespace) -> None:
+    """Resolve the same frozen hypotheses for cards and run, independent of era."""
+    if not args.interpolate_signal:
+        if args.mass_grid_file:
+            raise WorkflowError("--mass-grid-file requires --interpolate-signal.")
+        return
+    path = resolve_path(
+        args.mass_grid_file or str(Path(__file__).with_name("mass_scan_grid.json")),
+        "Shared mass grid (keep mass_scan_grid.json next to limit_workflow.py)",
+    )
+    payload = json.loads(path.read_text())
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise WorkflowError("Mass grid must be a JSON object with schema_version=1 and masses.")
+    grid = validate_scan_masses(payload.get("masses"))
+    if grid != sorted(grid):
+        raise WorkflowError("Shared mass grid must be strictly increasing.")
+    masses = validate_scan_masses(args.masses) if args.masses is not None else grid
+    if min(masses) < grid[0] or max(masses) > grid[-1]:
+        raise WorkflowError("Requested masses fall outside the shared grid's supported range.")
+    args.masses = sorted(masses)
+    args.mass_grid_source = path
+    args.mass_grid_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+    args.mass_grid_payload = payload
+    if args.card_base == "datacards_NIsoMuon":
+        args.card_base = "datacards_NIsoMuon_interpolated"
+    if args.output_base == "limit_outputs":
+        args.output_base = "limit_outputs_interpolated"
+
+
+def validate_scan_masses(values: Any) -> List[float]:
+    if not isinstance(values, (list, tuple)) or not values:
+        raise WorkflowError("Mass scan requires a non-empty list of masses.")
+    masses = [float(value) for value in values]
+    if any(not math.isfinite(mass) or mass <= 0 for mass in masses):
+        raise WorkflowError("Mass scan values must be finite and positive.")
+    # Filenames and Combine's -m argument must retain distinct hypotheses.
+    if len({mass_label(mass) for mass in masses}) != len(masses):
+        raise WorkflowError("Duplicate mass labels in the requested scan.")
+    if any(abs(float(format_mass_for_combine(mass)) - mass) > 1e-7 for mass in masses):
+        raise WorkflowError("Mass scan values exceed the supported eight significant digits.")
+    if any(b - a <= 1e-6 for a, b in zip(sorted(masses), sorted(masses)[1:])):
+        raise WorkflowError("Mass scan values must be separated by more than 1e-6 GeV.")
+    return masses
+
+
+def signal_bracket(masses: Sequence[float], mass: float) -> Tuple[float, float]:
+    for anchor in masses:
+        if abs(anchor - mass) < 1e-6:
+            return anchor, anchor
+    ordered = sorted(masses)
+    for low, high in zip(ordered, ordered[1:]):
+        if low < mass < high:
+            return low, high
+    raise WorkflowError(f"Signal mass {mass:g} is not bracketed by samples; extrapolation is disabled.")
+
+
+def interpolate_signal_yield(
+    mass: float, low_mass: float, low: YieldResult, high_mass: float, high: YieldResult,
+) -> YieldResult:
+    """Positive counting yield; independent anchor Sumw2 errors, not model error."""
+    for value in (low, high):
+        if (not math.isfinite(value.value) or value.value <= 0
+                or not math.isfinite(value.error) or value.error < 0):
+            raise WorkflowError("Signal interpolation requires positive finite yields and valid Sumw2 errors.")
+    if low_mass == high_mass and abs(mass - low_mass) < 1e-6:
+        return low
+    if not low_mass < mass < high_mass:
+        raise WorkflowError("Signal interpolation requires two bracketing masses.")
+    weight = (mass - low_mass) / (high_mass - low_mass)
+    value = math.exp((1 - weight) * math.log(low.value) + weight * math.log(high.value))
+    error = value * math.hypot((1 - weight) * low.error / low.value,
+                               weight * high.error / high.value)
+    return YieldResult(value, error, 1, 0)
+
+
+def signal_template_requests(args: argparse.Namespace, year: str) -> List[Tuple[str, str]]:
+    requests = [("nominal", hist_path(args.region))]
+    if "sig" in effective_experimental_processes(args):
+        variations = {**EXP_SYST, **BTAG_SYST}
+        if year in L1_PREFIRE_YEARS:
+            variations.update(L1_PREFIRE_SYST)
+        requests.extend(("experimental", hist_path(syst_region(args, suffix)))
+                        for pair in variations.values() for suffix in pair)
+    if args.enable_generator_theory and "sig" in args.generator_theory_processes:
+        indices = {SCALE_CENTRAL_INDEX}
+        for direction in (*SCALE_NUISANCE_DIRECTIONS, SCALE_DIAGONAL_DIRECTION):
+            indices.update(scale_pair(direction))
+        suffixes = ([f"PDFScale{i}" for i in sorted(indices)]
+                    + [f"PDFAlphaS{i}" for i in ALPHAS_VARIATION_INDICES]
+                    + [f"PDFError{i}" for i in PDF_EIGENVECTOR_INDICES])
+        requests.extend(("theory", hist_path(syst_region(args, suffix))) for suffix in suffixes)
+    return requests
+
+
+class SignalInterpolator:
+    """Read original ROOT anchors; keep every background operation in RootReader."""
+
+    def __init__(self, reader: RootReader, args: argparse.Namespace,
+                 signal_files: Mapping[float, Mapping[str, str]], years: Sequence[str]):
+        self.reader, self.args, self.signal_files = reader, args, signal_files
+        self.years = tuple(years)
+        self.anchors = {year: sorted(mass for mass, files in signal_files.items() if year in files)
+                        for year in years}
+        self.cache: Dict[Tuple[str, float, str, str], YieldResult] = {}
+
+    def bracket(self, year: str, mass: float) -> Tuple[float, float]:
+        try:
+            return signal_bracket(self.anchors[year], mass)
+        except WorkflowError as exc:
+            raise WorkflowError(f"{year}: {exc}") from exc
+
+    def window(self, year: str, mass: float) -> Tuple[float, float]:
+        resolution = relative_resolution(self.args, year, mass)
+        if not math.isfinite(resolution) or resolution <= 0:
+            raise WorkflowError(f"Invalid signal resolution for {year} M-{mass:g}.")
+        if not math.isfinite(self.args.n_sigma) or self.args.n_sigma <= 0:
+            raise WorkflowError("Signal interpolation requires finite positive --n-sigma.")
+        return mass_window(self.args, year, mass)
+
+    def native(self, year: str, mass: float, source: str, path: str) -> YieldResult:
+        key = (year, mass, source, path)
+        if key not in self.cache:
+            filename = file_for_process(self.args, year, "sig", self.signal_files[mass][year], source)
+            window = self.window(year, mass)
+            result = self.reader.integral(filename, path, *window)
+            if result is None:
+                raise WorkflowError(f"Missing signal interpolation anchor: {year} M-{mass:g}, {filename}:{path}")
+            # Do not floor invalid yields or silently drop a missing Up/Down side.
+            interpolate_signal_yield(mass, mass, result, mass, result)
+            self.cache[key] = result
+        return self.cache[key]
+
+    def evaluate(self, year: str, mass: float, source: str, path: str,
+                 bracket: Optional[Tuple[float, float]] = None) -> YieldResult:
+        low, high = bracket or self.bracket(year, mass)
+        return interpolate_signal_yield(mass, low, self.native(year, low, source, path),
+                                        high, self.native(year, high, source, path))
+
+    def preflight(self, masses: Sequence[float]) -> None:
+        # Fail before clean_card_targets, even when --strict was omitted.
+        for year in self.years:
+            required = set()
+            for mass in masses:
+                required.update(self.bracket(year, mass))
+                low, high = self.window(year, mass)
+                if not all(math.isfinite(x) for x in (low, high)):
+                    raise WorkflowError(f"Invalid interpolation window for {year} M-{mass:g}.")
+            # Include interior native anchors to produce leave-one-out closure.
+            lo, hi = min(required), max(required)
+            required.update(m for m in self.anchors[year] if lo <= m <= hi)
+            for anchor in sorted(required):
+                for source, path in signal_template_requests(self.args, year):
+                    self.native(year, anchor, source, path)
+
+    def reader_for_mass(self, mass: float) -> Tuple[Any, Dict[str, str]]:
+        redirects = {}
+        files = {}
+        for year in self.years:
+            low, high = self.bracket(year, mass)
+            if low == high:
+                files[year] = self.signal_files[low][year]
+                continue
+            # A virtual basename is used only as an internal routing key. No ROOT
+            # file is created, and background paths cannot match this prefix.
+            files[year] = f"__interpolated_signal_M-{mass_label(mass)}.root"
+            for source in ("nominal", "experimental", "theory"):
+                filename = file_for_process(self.args, year, "sig", files[year], source)
+                redirects[filename] = (year, source)
+        return InterpolatedSignalReader(self, mass, redirects), files
+
+    def write_audit(self, root: Path, masses: Sequence[float]) -> None:
+        anchors, closure = [], []
+        nominal_path = hist_path(self.args.region)
+        for (year, mass, source, path), result in sorted(self.cache.items()):
+            anchors.append({"era": year, "mass": mass, "source": source, "histogram": path,
+                            "file": file_for_process(self.args, year, "sig", self.signal_files[mass][year], source),
+                            "window": list(self.window(year, mass)),
+                            "yield": result.value, "mc_stat_error": result.error})
+        for year in self.years:
+            native = sorted(m for era, m, source, path in self.cache
+                            if era == year and source == "nominal" and path == nominal_path)
+            for left, middle, right in zip(native, native[1:], native[2:]):
+                truth = self.native(year, middle, "nominal", nominal_path)
+                pred = self.evaluate(year, middle, "nominal", nominal_path, (left, right))
+                ratios = {}
+                for source, path in signal_template_requests(self.args, year):
+                    if source == "nominal":
+                        continue
+                    varied_truth = self.native(year, middle, source, path)
+                    varied_pred = self.evaluate(year, middle, source, path, (left, right))
+                    ratios[path] = (varied_pred.value / pred.value) / (varied_truth.value / truth.value) - 1
+                closure.append({"era": year, "mass": middle, "anchors": [left, right],
+                                "actual_yield": truth.value, "predicted_yield": pred.value,
+                                "relative_yield_residual": pred.value / truth.value - 1,
+                                "systematic_ratio_relative_residuals": ratios})
+        payload = {
+            "schema_version": 1, "grid_file": str(self.args.mass_grid_source),
+            "grid_sha256": self.args.mass_grid_sha256, "masses": list(masses),
+            "resolution_file": str(self.args.resolution_source),
+            "resolution_coefficients": self.args.resolution_coefficients,
+            "n_sigma": self.args.n_sigma, "absolute_resolution": self.args.absolute_resolution,
+            "region": self.args.region, "base_dir": self.args.base_dir,
+            "trigger": self.args.trigger, "mode": self.args.mode,
+            "background_methods": {"QCD": self.args.qcd_method, "DY": self.args.dy_method},
+            "method": "piecewise log-linear counting yields in native anchor windows; no extrapolation",
+            "statistical_error": "independent anchor Sumw2 propagated by derivatives of log-linear yield",
+            "closure_note": "leave-one-out counting-yield and nuisance-ratio residuals; no automatic interpolation nuisance",
+            "points": [{"era": year, "mass": mass,
+                        "anchors": list(self.bracket(year, mass)),
+                        "source": "simulated" if self.bracket(year, mass)[0] == self.bracket(year, mass)[1] else "interpolated"}
+                       for year in self.years for mass in masses],
+            "anchor_inputs": anchors, "leave_one_out_closure": closure,
+        }
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "signal_interpolation_audit.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+class InterpolatedSignalReader:
+    def __init__(self, model: SignalInterpolator, mass: float, redirects: Mapping[str, Tuple[str, str]]):
+        self.model, self.mass, self.redirects = model, mass, redirects
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.model.reader, name)
+
+    def integral(self, filename: str, path: str, low: float, high: float) -> Optional[YieldResult]:
+        if filename not in self.redirects:
+            return self.model.reader.integral(filename, path, low, high)
+        year, source = self.redirects[filename]
+        expected = self.model.window(year, self.mass)
+        if any(abs(x - y) > 1e-8 for x, y in zip((low, high), expected)):
+            raise WorkflowError("Interpolated signal requested outside its configured counting window.")
+        return self.model.evaluate(year, self.mass, source, path)
+
+
 def read_required(
     reader: RootReader,
     audit: AuditLog,
@@ -2551,11 +2802,19 @@ def lookup_xsec(args: argparse.Namespace, xsec_map: Mapping[float, float], mass:
     else:
         matches = [(abs(key - mass), value) for key, value in xsec_map.items()]
         if not matches or min(matches)[0] > 1.0e-6:
-            raise WorkflowError(
-                f"No alpha=1 reference cross section was supplied for M-{mass_label(mass)}. "
-                "Use --signal-xsec-map or --signal-reference-xsec-pb."
-            )
-        xsec = min(matches)[1]
+            if getattr(args, "interpolate_signal", False) and xsec_map:
+                low, high = signal_bracket(sorted(xsec_map), mass)
+                xsec = interpolate_signal_yield(
+                    mass, low, YieldResult(xsec_map[low], 0, 1, 0),
+                    high, YieldResult(xsec_map[high], 0, 1, 0),
+                ).value
+            else:
+                raise WorkflowError(
+                    f"No alpha=1 reference cross section was supplied for M-{mass_label(mass)}. "
+                    "Use --signal-xsec-map or --signal-reference-xsec-pb."
+                )
+        else:
+            xsec = min(matches)[1]
     if xsec <= 0.0 or not math.isfinite(xsec):
         raise WorkflowError(f"Invalid reference cross section for mass {mass}: {xsec}")
     return xsec
@@ -2804,6 +3063,16 @@ def write_datacard(
         f"# background_contract = {BACKGROUND_CONTRACT}",
         f"# background_methods = DY:{args.dy_method};QCD:{args.qcd_method}",
     ]
+    if getattr(args, "interpolate_signal", False):
+        lines.extend([
+            "# signal_mass_scan = interpolated",
+            f"# mass_grid_sha256 = {args.mass_grid_sha256}",
+            "# Signal counting yields/Up/Down variations: piecewise log-linear; exact samples retained.",
+        ])
+        for channel in channels:
+            low, high = args.signal_interpolator.bracket(channel.year, channel.mass)
+            source = "simulated" if low == high else "interpolated"
+            lines.append(f"# signal_source {channel.year} = {source}; anchors = {low:g},{high:g}")
 
     raw_total = sum(ch.raw_rates["sig"] for ch in channels)
     card_total = sum(ch.rates["sig"] for ch in channels)
@@ -3095,19 +3364,32 @@ def build_cards(args: argparse.Namespace) -> List[CardInfo]:
                 if metadata[0] != metadata[1]:
                     raise WorkflowError(f"{year}: nominal/RunSyst QCD statistical metadata differ; existing cards were not removed.")
         signal_files = scan_signal_files(args)
-        masses = sorted(signal_files)
-        if args.masses:
-            masses = [m for m in masses if any(abs(m-r) < 1.0e-6 for r in args.masses)]
+        interpolate = getattr(args, "interpolate_signal", False)
+        model = None
+        if interpolate:
+            masses = list(args.masses)
+            model = SignalInterpolator(reader, args, signal_files, requested_years)
+            model.preflight(masses)
+            args.signal_interpolator = model
+        else:
+            masses = sorted(signal_files)
+            if args.masses:
+                masses = [m for m in masses if any(abs(m-r) < 1.0e-6 for r in args.masses)]
         if not masses:
             raise WorkflowError("No requested signal mass files were found.")
-        clean_card_targets(args)
         xsec_map = load_xsec_map(args) if args.parameter == "xsec" else {}
+        if interpolate and args.parameter == "xsec":
+            for mass in masses:
+                lookup_xsec(args, xsec_map, mass)
+        clean_card_targets(args)
         cards: List[CardInfo] = []
 
         for mass in masses:
-            files_by_year = signal_files[mass]
+            mass_reader, files_by_year = (
+                model.reader_for_mass(mass) if model is not None else (reader, signal_files[mass])
+            )
             channels_by_year, audit = build_channels_for_mass(
-                reader, args, mass, files_by_year, requested_years
+                mass_reader, args, mass, files_by_year, requested_years
             )
             audit.print_and_check(mass_label(mass), args.strict)
 
@@ -3134,6 +3416,8 @@ def build_cards(args: argparse.Namespace) -> List[CardInfo]:
                 print(f"[CARD] {card.path}")
 
         write_card_summaries(args, cards)
+        if model is not None:
+            model.write_audit(Path(args.card_base) / args.parameter / args.mode, masses)
         return cards
     finally:
         reader.close()
@@ -3162,6 +3446,18 @@ def cards_for_target(args: argparse.Namespace, target: str) -> List[Path]:
             if any(abs(mass-r) < 1.0e-6 for r in args.masses):
                 selected.append(card)
         cards = selected
+    if getattr(args, "interpolate_signal", False):
+        found = [extract_mass_from_card(card, target)[1] for card in cards]
+        missing = [mass for mass in args.masses if not any(abs(mass - other) < 1e-6 for other in found)]
+        if missing:
+            preview = ", ".join(mass_label(mass) for mass in missing[:10])
+            raise WorkflowError(f"Missing {len(missing)} scan cards for {target}: {preview}. "
+                                "Build them first with --stage cards --interpolate-signal and the same grid/masses.")
+        for card in cards:
+            contents = card.read_text()
+            if ("# signal_mass_scan = interpolated\n" not in contents
+                    or f"# mass_grid_sha256 = {args.mass_grid_sha256}\n" not in contents):
+                raise WorkflowError(f"Scan provenance/grid mismatch in {card}; rebuild scan cards.")
     return cards
 
 
@@ -4817,6 +5113,13 @@ def submit_condor_workflow(args: argparse.Namespace) -> Path:
                   output_base=str(Path(args.output_base).expanduser().resolve()))
     plot_path = shutil.which(args.plot_limits_py) or args.plot_limits_py
     config["plot_limits_py"] = str(Path(plot_path).expanduser().resolve())
+    if args.interpolate_signal:
+        # Workers/collect/resume must use the submitted grid even if the
+        # production checkout or an external custom grid changes later.
+        grid_snapshot = batch / "mass_scan_grid.json"
+        shutil.copy2(args.mass_grid_source, grid_snapshot)
+        config["mass_grid_file"] = str(grid_snapshot)
+        config["mass_grid_sha256"] = args.mass_grid_sha256
     jobs = []
     for target, card in selected:
         saved_card = batch / "cards" / target / card.name
@@ -4940,6 +5243,13 @@ def load_condor_manifest(path: Path) -> Tuple[Dict[str, Any], argparse.Namespace
     config.update(payload["config"])
     args = argparse.Namespace(**config)
     validate_args(args)
+    if args.interpolate_signal:
+        expected_grid_hash = config.get("mass_grid_sha256")
+        if not expected_grid_hash:
+            raise WorkflowError("Interpolated Condor batch has no saved mass-grid fingerprint.")
+        prepare_mass_scan(args)
+        if args.mass_grid_sha256 != expected_grid_hash:
+            raise WorkflowError("Submitted interpolation mass grid changed; refusing to reuse this batch.")
     return payload, args
 
 
@@ -5319,6 +5629,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--masses", type=parse_float_list, default=None)
+    parser.add_argument(
+        "--interpolate-signal", action="store_true",
+        help="Calculate limits on the shared resolution-based mass grid using signal interpolation. "
+             "Default: simulated masses only. --masses can select explicit scan hypotheses.",
+    )
+    parser.add_argument(
+        "--mass-grid-file", default=None,
+        help="Frozen mass-grid JSON (schema_version=1, masses=[...]); requires --interpolate-signal. "
+             "Default: mass_scan_grid.json beside this script, shared by all eras/runs.",
+    )
 
     inputs = parser.add_argument_group("ROOT inputs and selection")
     inputs.add_argument("--base-dir", default=DEFAULT_BASE_DIR)
@@ -5578,6 +5898,10 @@ def validate_args(args: argparse.Namespace) -> None:
 
 def print_configuration(args: argparse.Namespace) -> None:
     print("[CONFIG] workflow_tag=20260826_0541")
+    if getattr(args, "interpolate_signal", False):
+        print(f"[CONFIG] signal interpolation: {len(args.masses)} hypotheses, "
+              f"{min(args.masses):g}--{max(args.masses):g} GeV")
+        print(f"[CONFIG] shared mass grid={args.mass_grid_source}, sha256={args.mass_grid_sha256}")
     print(f"[CONFIG] stage={args.stage}, task={args.task}")
     if args.backend == "condor":
         cap = str(args.condor_nmax) if args.condor_nmax else "unset (pool scheduling only)"
@@ -5689,6 +6013,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             collect_condor_workflow(Path(collect_args.condor_dir).expanduser().resolve())
             return 0
         validate_args(args)
+        prepare_mass_scan(args)
         if args.backend == "condor" and args.stage in {"run", "all"}:
             condor_environment(args)
             if args.condor_dir and Path(args.condor_dir).expanduser().exists():
@@ -5716,5 +6041,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
