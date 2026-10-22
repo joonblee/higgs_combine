@@ -118,7 +118,7 @@ for src in args.input:
             # Keep ROOT's x-axis padding so endpoint markers remain inside the frame.
             axis = plot.CreateAxisHists(len(pads), list(graph_sets[-1].values())[0], False)
             DrawAxisHists(pads, axis, pads[0])
-        plot.StyleLimitBand(graph_sets[-1])
+        plot.StyleLimitBand(graph_sets[-1], overwrite_style_dict={"obs": {"MarkerSize": 0.2}})
         plot.DrawLimitBand(pads[0], graph_sets[-1], legend=legend)
         pads[0].RedrawAxis()
         pads[0].RedrawAxis("g")
