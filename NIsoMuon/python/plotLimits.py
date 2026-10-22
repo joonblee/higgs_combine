@@ -115,7 +115,8 @@ for src in args.input:
     if len(splitsrc) == 1:
         graph_sets.append(plot.StandardLimitsFromJSONFile(file, args.show.split(",")))
         if axis is None:
-            axis = plot.CreateAxisHists(len(pads), list(graph_sets[-1].values())[0], True)
+            # Keep ROOT's x-axis padding so endpoint markers remain inside the frame.
+            axis = plot.CreateAxisHists(len(pads), list(graph_sets[-1].values())[0], False)
             DrawAxisHists(pads, axis, pads[0])
         plot.StyleLimitBand(graph_sets[-1])
         plot.DrawLimitBand(pads[0], graph_sets[-1], legend=legend)
@@ -145,7 +146,7 @@ for src in args.input:
             settings.update({x.split("=")[0]: eval(x.split("=")[1]) for x in splitsrc[2].split(",")})
         plot.Set(graphs[-1], **settings)
         if axis is None:
-            axis = plot.CreateAxisHists(len(pads), graphs[-1], True)
+            axis = plot.CreateAxisHists(len(pads), graphs[-1], False)
             DrawAxisHists(pads, axis, pads[0])
         graphs[-1].Draw("PLSAME")
         legend.AddEntry(graphs[-1], "", "PL")
