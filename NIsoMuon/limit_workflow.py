@@ -4789,10 +4789,20 @@ def finish_impacts(args, card, target, label, mass, outdir, workspace, internal_
 
 
 def find_value_for_mass(mapping: Mapping[float, float], mass: float, description: str) -> float:
-    matches = [(abs(key-mass), value) for key, value in mapping.items()]
-    if not matches or min(matches)[0] > 1.0e-6:
+    # CollectLimits can expose a ROOT Float_t mass as its exact binary32 value,
+    # e.g. 32.553 -> 32.553001403808594. Match the submitted hypothesis or its
+    # binary32 representation, rather than widening the tolerance for all masses.
+    matches = [(key, value) for key, value in mapping.items()
+               if abs(key - mass) <= 1.0e-6
+               or abs(float(ctypes.c_float(key).value) - mass) <= 1.0e-9]
+    if not matches:
         raise WorkflowError(f"No {description} matches mass {mass}.")
-    return min(matches)[1]
+    if len(matches) != 1:
+        raise WorkflowError(
+            f"Ambiguous {description} matches mass {mass}: "
+            + ", ".join(f"{key:.17g}" for key, _ in matches)
+        )
+    return matches[0][1]
 
 
 def rescale_limit_json(

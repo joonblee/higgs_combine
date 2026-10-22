@@ -1,5 +1,6 @@
 """Exercise interpolated scan cards through Condor snapshot/worker/collect."""
 import contextlib
+import ctypes
 import io
 import json
 import os
@@ -70,6 +71,28 @@ class CondorSignalInterpolationTests(CondorFixture):
         result = self.worker(0)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Submitted interpolation mass grid changed", result.stdout)
+
+    def test_float32_collected_masses_preserve_alpha_conversion(self):
+        args = self.prepare_scan(masses="32.553,66.784,70", custom_grid=False)
+        collect = self.bin/"combineTool.py"
+        code = collect.read_text().replace("import json, sys", "import ctypes, json, sys")
+        code = code.replace('Path(a[stop+1]).write_text(json.dumps(payload))',
+                            'payload = {str(ctypes.c_float(float(k)).value): v for k, v in payload.items()}\n'
+                            'Path(a[stop+1]).write_text(json.dumps(payload))')
+        collect.write_text(code)
+        for index in range(3):
+            result = self.worker(index)
+            self.assertEqual(result.returncode, 0, result.stdout)
+        result = self.cli("--stage", "collect", "--condor-dir", str(self.batch))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        limits = json.loads((w.output_dir(args, "2016preVFP")/"limits_2016preVFP_alpha.json").read_text())
+        self.assertIn("32.553001403808594", limits)
+        for job in self.manifest["jobs"]:
+            _, mass = w.extract_mass_from_card(Path(job["card"]), "2016preVFP")
+            row = limits[str(ctypes.c_float(mass).value)]
+            unit = w.alpha_unit_from_card(Path(job["card"]))
+            self.assertAlmostEqual(row["exp0"], 3.*unit)
+            self.assertAlmostEqual(row["obs"], 3.5*unit)
 
     def test_resume_snapshot_uses_same_grid_and_fractional_hypotheses(self):
         self.prepare_scan()
