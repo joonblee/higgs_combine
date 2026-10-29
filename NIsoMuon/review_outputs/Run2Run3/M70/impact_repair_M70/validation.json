@@ -1,19 +1,22 @@
 {
   "target": "Run2Run3",
-  "mass": 70.0,
+  "mass": 70,
   "expected": 140,
   "present": 140,
   "retried": [
-    "CMS_NPS26009_MCstat_other_BJetOS_2022EE",
-    "CMS_NPS26009_MCstat_signal_BJetOS_2016preVFP",
-    "CMS_NPS26009_MCstat_ttbar_BJetOS_2022EE",
+    "CMS_NPS26009_LightJetStat_DY_BJetOS_2017",
+    "CMS_NPS26009_MCstat_ttbar_BJetOS_2018",
+    "CMS_NPS26009_MCstat_ttbar_BJetOS_2022",
+    "CMS_NPS26009_NFStat_DY_BJetOS_2016preVFP",
+    "CMS_NPS26009_NFStat_DY_BJetOS_2017",
     "CMS_NPS26009_NFStat_DY_BJetOS_2018",
-    "CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP",
-    "CMS_NPS26009_eff_m_trigger_2016preVFP",
-    "CMS_NPS26009_pdf_NNPDF31",
-    "CMS_NPS26009_stat_QCD_BJetOS_2016preVFP",
-    "CMS_NPS26009_topmass_ttbar_BJetOS",
-    "CMS_btag_fixedWP_bc_uncorrelated_2023BPix"
+    "CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix",
+    "CMS_NPS26009_eff_m_id_Run3",
+    "CMS_btag_fixedWP_light_uncorrelated_2016postVFP",
+    "CMS_l1_prefiring_2018",
+    "CMS_res_j_2016postVFP",
+    "CMS_scale_j_2023",
+    "lumi_1"
   ],
   "boundary": [
     "CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP",
@@ -25,7 +28,32 @@
     "CMS_NPS26009_bckgShape_QCD_BJetOS_2023",
     "CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix"
   ],
-  "expected_signal": 0.94921875,
+  "boundary_profiled": [
+    "CMS_NPS26009_bckgShape_QCD_BJetOS_2016postVFP",
+    "CMS_NPS26009_bckgShape_QCD_BJetOS_2016preVFP",
+    "CMS_NPS26009_bckgShape_QCD_BJetOS_2017",
+    "CMS_NPS26009_bckgShape_QCD_BJetOS_2018",
+    "CMS_NPS26009_bckgShape_QCD_BJetOS_2022",
+    "CMS_NPS26009_bckgShape_QCD_BJetOS_2022EE",
+    "CMS_NPS26009_bckgShape_QCD_BJetOS_2023",
+    "CMS_NPS26009_bckgShape_QCD_BJetOS_2023BPix"
+  ],
+  "tiny_gaussian_profiled": [
+    "CMS_NPS26009_stat_QCD_BJetOS_2022EE"
+  ],
+  "initial_poi": {
+    "passed": true,
+    "repaired": false,
+    "units": "internal_r",
+    "fit": [
+      0.4801076352596283,
+      1.0,
+      1.5315755605697632
+    ],
+    "rmin": 0.0,
+    "rmax": 100.0
+  },
+  "expected_signal": 1.0,
   "fit_name": ".ReviewSBImpacts_Run2Run3_M70",
   "passed": true
 }
