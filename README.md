@@ -150,6 +150,28 @@ python3 combine_review.py --stage resume --condor-dir "$REVIEW_BATCH"
 python3 combine_review.py --stage collect --condor-dir "$REVIEW_BATCH"
 ```
 
+Batches created by the first Condor review backend (commit `85a89eb`) had an
+output-name bug for bias fits: Combine appends `.123456` to MultiDimFit output
+names when `-t` is positive, but the backend expected no seed suffix. After
+updating the checkout and waiting for that batch's jobs/DAG manager to leave
+the queue, migrate and resume that known version with:
+
+```bash
+python3 combine_review.py --stage resume --upgrade-backend \
+  --condor-dir "$REVIEW_BATCH"
+```
+
+This archives the original manifest/code and affected status records, updates
+only the known filename contract and backend snapshot, and keeps the original
+fit commands, seeds, cards and toys. A bias chunk is recovered without rerunning
+its fits only when all commands exited zero and its sole recorded failure was
+the missing expected filename; all corrected output files and command logs must
+exist, and the saved-toy dependency must still match. Interval audit/repair is
+still required downstream. Other failures are retried as usual. This migration
+accepts only the original published backend/helper fingerprints; arbitrary
+snapshot edits are rejected. Collection now prints the worker's recorded error
+and log directory instead of only a generic failed-status message.
+
 Resume uses the frozen code/input snapshot, retains valid completed jobs and
 resubmits failed, pending or stale nodes and their affected descendants. It
 refuses to submit a second DAG while jobs in the same batch remain queued.

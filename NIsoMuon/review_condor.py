@@ -51,9 +51,11 @@ def root_name(command):
     name = option(command, "-n", "Test")
     mass = option(command, "-m", "120")
     seed = option(command, "-s")
-    if method == "GenerateOnly" and seed is None:
-        seed = "123456"
-    return f"higgsCombine{name}.{method}.mH{mass}" + (f".{seed}" if seed else "") + ".root"
+    # Combine's bin/combine.cpp adds the seed for positive toy counts,
+    # nondefault seeds, or --saveToys, regardless of the selected method.
+    seed = "123456" if seed is None else seed
+    toy_suffix = float(option(command, "-t", "0")) > 0 or seed != "123456" or "--saveToys" in command
+    return f"higgsCombine{name}.{method}.mH{mass}" + (f".{seed}" if toy_suffix else "") + ".root"
 
 
 def capture(review, args, task, card):
@@ -388,8 +390,10 @@ def complete(manifest, index, cache=None):
         raise RuntimeError(f"job {index} {job['kind']}: pending")
     status = json.loads(path.read_text())
     fingerprint = hashlib.sha256(json.dumps(job, sort_keys=True).encode()).hexdigest()
-    if not status.get("success") or status.get("batch_id") != manifest["batch_id"] or status.get("job_sha256") != fingerprint:
-        raise RuntimeError(f"job {index} {job['kind']}: failed or stale status")
+    if not status.get("success"):
+        raise RuntimeError(f"job {index} {job['kind']}: {status.get('error', 'failed without an error record')}; logs: {job['workdir']}")
+    if status.get("batch_id") != manifest["batch_id"] or status.get("job_sha256") != fingerprint:
+        raise RuntimeError(f"job {index} {job['kind']}: stale status; logs: {job['workdir']}")
     if not status.get("outputs"):
         raise RuntimeError(f"job {index}: no output fingerprints")
     for name, value in status["outputs"].items():
@@ -538,6 +542,105 @@ def collect(batch, manifest):
     print(f"[COLLECT] Review outputs saved: {destination}")
 
 
+# Only this published backend is migrated: its commands are retained verbatim.
+LEGACY_BIAS_BACKEND_SHA256 = "5a93b7f6e3a67c0fcba33815cbe53208745706509b0b250114f5c101b3885de6"
+LEGACY_BIAS_HELPER_SHA256 = "42c38cbf2f61a14e35d668c5de9fd384086122f0a5923a17c99de3080f0cca2a"
+
+
+def upgrade_backend(review, batch, manifest):
+    """Repair only the known output-name contract; retain original fit commands.
+
+    An old chunk is recovered only if all commands returned zero and its sole
+    recorded failure was the missing expected filename. This establishes worker
+    completion, not fit quality: downstream interval audits remain required.
+    """
+    old_module = batch / "review_condor.py"
+    old_helper = batch / "combine_review.py"
+    current_module = Path(__file__).resolve()
+    current_helper = Path(review.__file__).resolve()
+    if digest(old_module) == digest(current_module) and digest(old_helper) == digest(current_helper):
+        print("[UPGRADE] Batch already uses this backend")
+        return manifest
+    if digest(old_module) != LEGACY_BIAS_BACKEND_SHA256 or digest(old_helper) != LEGACY_BIAS_HELPER_SHA256:
+        raise RuntimeError("--upgrade-backend only supports the published v1 bias-filename bug; this batch snapshot is different")
+    updated = copy.deepcopy(manifest)
+    mapping = {}
+    for job in updated["jobs"]:
+        if job["kind"] != "bias_chunk":
+            continue
+        if len(job["commands"]) != len(job["files"]):
+            raise RuntimeError("Unexpected bias chunk command/output count")
+        names = []
+        for command, old in zip(job["commands"], job["files"]):
+            new = str(Path(command["cwd"]) / root_name(command["cmd"]))
+            if new != old:
+                mapping[old] = new
+            names.append(new)
+        if len(names) != len(job["files"]):
+            raise RuntimeError("Unexpected bias chunk layout")
+        job["files"] = names
+    if not mapping:
+        raise RuntimeError("No legacy bias chunks found; no batch files changed")
+    for job in updated["jobs"]:
+        for merge in job.get("merges", []):
+            merge["sources"] = [mapping.get(name, name) for name in merge["sources"]]
+    archive = batch / ("backend_upgrade_" + uuid4().hex[:8])
+    archive.mkdir()
+    backups = [(batch / "manifest.json", archive / "manifest.json"),
+               (old_module, archive / old_module.name), (old_helper, archive / old_helper.name)]
+    recovered = []
+    cache = {}
+    for job, old_job in zip(updated["jobs"], manifest["jobs"]):
+        if job["kind"] != "bias_chunk":
+            continue
+        path = Path(job["workdir"]) / "status.json"
+        if not path.is_file():
+            continue
+        status = json.loads(path.read_text())
+        old_fingerprint = hashlib.sha256(json.dumps(old_job, sort_keys=True).encode()).hexdigest()
+        if (status.get("success") or status.get("batch_id") != manifest["batch_id"]
+            or status.get("job_sha256") != old_fingerprint
+            or not status.get("error", "").startswith("RuntimeError: Required output missing or empty:")):
+            continue
+        # Reaching the original output check means every chunk command exited 0.
+        if not all(Path(name).is_file() and Path(name).stat().st_size for name in job["files"]):
+            continue
+        if not all((Path(job["workdir"]) / f"command_{i}.log").is_file() for i in range(len(job["commands"]))):
+            continue
+        try:
+            for parent in job["dependencies"]:
+                previous = complete(manifest, parent, cache)
+                if status.get("dependencies", {}).get(str(parent)) != previous["completion_id"]:
+                    raise RuntimeError("stale toy generation")
+        except (RuntimeError, OSError, ValueError):
+            continue
+        backups.append((path, archive / f"status_job_{job['index']}.json"))
+        repaired = copy.deepcopy(status)
+        repaired["previous_error"] = repaired.pop("error")
+        repaired.update(success=True, recovered_output_names=True,
+            job_sha256=hashlib.sha256(json.dumps(job, sort_keys=True).encode()).hexdigest(),
+            outputs={name: digest(name) for name in job["files"]})
+        recovered.append((path, repaired))
+    for source, destination in backups:
+        shutil.copy2(source, destination)
+    try:
+        shutil.copy2(current_module, old_module)
+        shutil.copy2(current_helper, old_helper)
+        for path in (old_module, old_helper):
+            updated["inputs"][str(path)] = digest(path)
+        updated["backend_upgrade"] = {"archive": str(archive), "recovered_bias_chunks": len(recovered),
+                                      "reason": "Combine appends default seed when -t is positive"}
+        for path, status in recovered:
+            dump(path, status)
+        dump(batch / "manifest.json", updated)
+    except Exception:
+        for destination, source in reversed(backups):
+            shutil.copy2(source, destination)
+        raise
+    print(f"[UPGRADE] Fixed {len(mapping)} toy filenames; recovered {len(recovered)} completed bias chunks; backup={archive}")
+    return updated
+
+
 def main(review, args):
     if args.condor_worker:
         if args.condor_index is None:
@@ -547,6 +650,8 @@ def main(review, args):
             raise RuntimeError("Invalid --condor-index")
         execute(review, manifest, args.condor_index)
         return 0
+    if getattr(args, "upgrade_backend", False) and args.stage != "resume":
+        raise RuntimeError("--upgrade-backend requires --stage resume")
     if args.stage == "run":
         prepare(review, args)
         return 0
@@ -557,6 +662,10 @@ def main(review, args):
         collect(batch, manifest)
     else:
         active_batch(batch)
+        if getattr(args, "upgrade_backend", False):
+            if args.condor_dry_run:
+                raise RuntimeError("--upgrade-backend cannot be combined with --condor-dry-run")
+            manifest = upgrade_backend(review, batch, manifest)
         indices, cache = [], {}
         for job in manifest["jobs"]:
             try:

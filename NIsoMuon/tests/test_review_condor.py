@@ -30,6 +30,20 @@ scale lnN 1.1 0.9/1.2
 
 
 class ReviewCondorTests(unittest.TestCase):
+    def test_combine_filename_seed_rules_include_positive_toys(self):
+        # Literal expectations from Combine bin/combine.cpp, not the planner.
+        base = ['combine', '-M', 'MultiDimFit', '-m', '20', '-n', '.Bias']
+        self.assertEqual(condor.root_name(base + ['-t', '500', '--pickToy', '17']),
+                         'higgsCombine.Bias.MultiDimFit.mH20.123456.root')
+        self.assertEqual(condor.root_name(base + ['-t', '-1']),
+                         'higgsCombine.Bias.MultiDimFit.mH20.root')
+        self.assertEqual(condor.root_name(base + ['-s', '123456']),
+                         'higgsCombine.Bias.MultiDimFit.mH20.root')
+        self.assertEqual(condor.root_name(base + ['-t', '-1', '--saveToys']),
+                         'higgsCombine.Bias.MultiDimFit.mH20.123456.root')
+        self.assertEqual(condor.root_name(base + ['-s', '7']),
+                         'higgsCombine.Bias.MultiDimFit.mH20.7.root')
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
@@ -297,6 +311,56 @@ class ReviewCondorTests(unittest.TestCase):
         original = review.card_path(argparse.Namespace(**{**vars(self.args), 'mass': 20}))
         original.write_text('edited after submission')
         condor.load_batch(batch)  # The submitted card snapshot is independent.
+
+    def test_legacy_upgrade_recovers_finished_toys_and_preserves_other_statuses(self):
+        self.manifest['inputs'] = {}
+        old_module = self.batch / 'review_condor.py'
+        old_helper = self.batch / 'combine_review.py'
+        old_module.write_text('# known legacy backend')
+        old_helper.write_text('# known legacy helper')
+        for p in (old_module, old_helper):
+            self.manifest['inputs'][str(p)] = condor.digest(p)
+        toy = self.root / 'toys.root'
+        toy.write_text('saved toys')
+        parent = self.planner.add('bias_generate', self.args, files=[toy])
+        chunk = self.planner.add('bias_chunk', self.args, [parent])
+        work = Path(self.manifest['jobs'][chunk]['workdir'])
+        command = ['combine', '-M', 'MultiDimFit', '-m', '20', '-n', '.Bias', '-t', '500', '--pickToy', '1']
+        old_output = str(work / 'higgsCombine.Bias.MultiDimFit.mH20.root')
+        new_output = str(work / 'higgsCombine.Bias.MultiDimFit.mH20.123456.root')
+        Path(new_output).write_text('completed fit')
+        (work / 'command_0.log').write_text('fit exited zero')
+        job = self.manifest['jobs'][chunk]
+        job.update(commands=[{'cmd': command, 'cwd': str(work)}], files=[old_output])
+        final = self.planner.add('bias_collect', self.args, [chunk],
+                                 merges=[{'sources': [old_output], 'destination': str(self.root / 'merged.root')}])
+        parent_job = self.manifest['jobs'][parent]
+        parent_status = {'success': True, 'batch_id': 'test', 'completion_id': 'generation',
+                         'job_sha256': condor.hashlib.sha256(json.dumps(parent_job, sort_keys=True).encode()).hexdigest(),
+                         'outputs': {str(toy): condor.digest(toy)}, 'dependencies': {}}
+        parent_path = Path(parent_job['workdir']) / 'status.json'
+        condor.dump(parent_path, parent_status)
+        parent_before = parent_path.read_bytes()
+        status = {'success': False, 'batch_id': 'test', 'completion_id': 'fit-completion',
+                  'job_sha256': condor.hashlib.sha256(json.dumps(job, sort_keys=True).encode()).hexdigest(),
+                  'dependencies': {str(parent): 'generation'},
+                  'error': 'RuntimeError: Required output missing or empty: ' + old_output}
+        condor.dump(work / 'status.json', status)
+        condor.dump(self.batch / 'manifest.json', self.manifest)
+        original_command = copy.deepcopy(job['commands'])
+        with patch.object(condor, 'LEGACY_BIAS_BACKEND_SHA256', condor.digest(old_module)), \
+             patch.object(condor, 'LEGACY_BIAS_HELPER_SHA256', condor.digest(old_helper)):
+            upgraded = condor.upgrade_backend(review, self.batch, self.manifest)
+        self.assertEqual(upgraded['jobs'][chunk]['files'], [new_output])
+        self.assertEqual(upgraded['jobs'][chunk]['commands'], original_command)
+        self.assertEqual(upgraded['jobs'][final]['merges'][0]['sources'], [new_output])
+        self.assertEqual(parent_path.read_bytes(), parent_before)
+        recovered = condor.complete(upgraded, chunk)
+        self.assertTrue(recovered['recovered_output_names'])
+        self.assertEqual(recovered['completion_id'], 'fit-completion')
+        archive = Path(upgraded['backend_upgrade']['archive'])
+        self.assertEqual((archive / 'review_condor.py').read_text(), '# known legacy backend')
+        self.assertTrue((archive / 'status_job_1.json').is_file())
 
 
 if __name__ == '__main__':

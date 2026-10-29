@@ -1286,6 +1286,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Condor representative-mass suite: validation, r=1 fits/impacts, r=0 scans/correlations, bias audits, HybridNew")
     parser.add_argument("--condor-dir", help="new batch directory; required for collect/resume")
     parser.add_argument("--condor-dry-run", action="store_true", help="prepare workspace, snapshots and DAG without submitting")
+    parser.add_argument("--upgrade-backend", action="store_true",
+        help="with --stage resume, migrate the known v1 bias output-name bug and preserve completed toy fits")
     parser.add_argument("--condor-memory", type=int, default=4000, help="MiB per single-CPU worker")
     parser.add_argument("--condor-max-jobs", type=int, default=0, help="DAG active-job cap; 0 means no cap")
     parser.add_argument("--condor-requirements", default=None, help="additional site ClassAd requirements")
