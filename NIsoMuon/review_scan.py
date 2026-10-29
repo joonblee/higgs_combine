@@ -175,11 +175,27 @@ def retry_point(command, index, value, origin, directory, run_command):
             if record["exit_code"]:
                 raise RuntimeError("Single-point scan command failed")
             rows = read_rows(verify.one(attempt, "higgsCombine*.MultiDimFit.mH*.root"))
-            # --saveFitResult saves the INITIAL global fit, not the grid profile.
-            info = verify.fit_info(attempt)
-            verify.check_fit(info, .001)
+            # MultiDimFit's Grid branch never calls saveResult(), even with
+            # --saveFitResult. Obtain a saved reference using the None branch.
+            baseline = list(cmd)
+            verify.change(baseline, '--algo', 'none')
+            for flag in ('--firstPoint', '--lastPoint', '--points'):
+                verify.remove(baseline, flag)
+            initial_dir = attempt / 'initial'
+            record['initial_fit_command'] = baseline
+            record['initial_fit_directory'] = str(initial_dir)
+            record['initial_fit_exit_code'] = run_command(baseline, initial_dir, log=initial_dir / 'fit.log')
+            if record['initial_fit_exit_code']:
+                raise RuntimeError('Independent initial fit command failed')
+            info = verify.fit_info(initial_dir)
             record["initial_fit"] = info
+            verify.check_fit(info, .001)
             initial = reference(rows)
+            baseline_rows = read_rows(verify.one(initial_dir, 'higgsCombine*.MultiDimFit.mH*.root'))
+            saved = reference(baseline_rows)
+            if (abs(saved['nll'] + saved['nll0'] - initial['nll'] - initial['nll0']) > REFERENCE_TOLERANCE
+                    or abs(saved['r'] - initial['r']) > 1e-4):
+                raise RuntimeError('Independent saved fit does not match the grid initial minimum')
             step = (float(verify.option(cmd, '--rMax')) - float(verify.option(cmd, '--rMin'))) / int(verify.option(cmd, '--points'))
             if abs(initial["r"] - origin["r"]) > step:
                 raise RuntimeError("Retry changed the initial best-fit r")

@@ -999,6 +999,43 @@ def refresh_scan_validation(review, batch, manifest):
     return updated
 
 
+PRE_SCAN_FIT_RESULT_MODULE = 'd2d7efa7e0fde37ec4346243000e4899924f3a98abf33ecaf7c4eb76fdd15c85'
+PRE_SCAN_FIT_RESULT_BACKEND = 'c3a410139887efe968d46c7577d96cc232ba68e34ff28be66c70cdf08137b062'
+
+
+def refresh_scan_fit_result(review, batch, manifest):
+    """Repair the known grid saveFitResult assumption without invalidating successes."""
+    if not any(j['kind'] == 'scan_collect' for j in manifest['jobs']):
+        return manifest
+    source = Path(review.__file__).resolve().parent
+    module = batch / 'review_scan.py'
+    if digest(module) == digest(source / module.name):
+        return manifest
+    if (digest(module) != PRE_SCAN_FIT_RESULT_MODULE or
+            digest(batch / 'review_condor.py') not in
+            {PRE_SCAN_FIT_RESULT_BACKEND, digest(source / 'review_condor.py')}):
+        raise RuntimeError('Unknown scan saveFitResult helper snapshot')
+    archive = batch / ('scan_fit_result_upgrade_' + uuid4().hex[:8])
+    archive.mkdir()
+    names = ('review_scan.py', 'review_condor.py', 'manifest.json')
+    for name in names:
+        shutil.copy2(batch / name, archive / name)
+    updated = copy.deepcopy(manifest)
+    try:
+        for name in names[:-1]:
+            shutil.copy2(source / name, batch / name)
+            updated['inputs'][str(batch / name)] = digest(batch / name)
+        updated['scan_fit_result_patch'] = {'archive': str(archive),
+            'preserves_job_configs_and_successful_collectors': True}
+        dump(batch / 'manifest.json', updated)
+    except Exception:
+        for name in names:
+            shutil.copy2(archive / name, batch / name)
+        raise
+    print(f'[SCAN FIT RESULT] Updated saved-reference fit; successful jobs retained; backup={archive}')
+    return updated
+
+
 def main(review, args):
     if args.condor_worker:
         if args.condor_index is None:
@@ -1037,6 +1074,7 @@ def main(review, args):
             manifest = upgrade_backend(review, batch, manifest)
         if not args.condor_dry_run:
             manifest = refresh_scan_validation(review, batch, manifest)
+            manifest = refresh_scan_fit_result(review, batch, manifest)
         indices, cache = [], {}
         for job in manifest["jobs"]:
             try:

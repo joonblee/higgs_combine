@@ -180,9 +180,12 @@ level-4 crossings must be bracketed. Missing, invalid or above-cut interior
 points are retried individually at their original coordinates with tighter
 minimiser settings; no new grid, dataset or statistical model is substituted.
 At least two successful retries must agree within 0.005 in deltaNLL. Their
-initial global fits must have status 0, covariance quality at least 2 and
+independent `--algo none --saveFitResult` reference fits must have status 0, covariance quality at least 2 and
 EDM at most 0.001; their NLL reference must agree with the original within
-0.001. These saved fit statuses refer to the initial fits: the original grid
+0.001. The saved reference must also match the retry grid's initial minimum
+within 0.001 in NLL and 0.0001 in r. `--algo grid` does not save a separate
+RooFitResult, even with `--saveFitResult`. These saved fit statuses refer to
+the independent reference fits: the original grid
 does not provide a saved per-point RooFitResult/EDM audit. The raw grid ROOT
 file remains unchanged, and plots use a separate `scan_validated_M<MASS>.root`
 with the legend `Background-only Asimov`. Failed or missing tail points outside
@@ -197,6 +200,9 @@ inspect the server-local ROOT rows and record whether each gap was a missing
 entry, an invalid value or a point removed by the plotting cut. Unknown helper
 snapshots are rejected. Run `--stage collect` once the scan collectors finish;
 an old successful collector without the new audit is no longer sufficient.
+For a batch already upgraded by `00690ae`, resume additionally prints
+`[SCAN FIT RESULT]` and updates the known saved-reference helper. Only failed
+jobs rerun; the successful M70 collector and all completed chunks are retained.
 
 If a node failed, first ensure this batch's DAG manager and workers have left
 the queue (including held jobs), then run:

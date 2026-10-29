@@ -89,10 +89,20 @@ class ScanTests(unittest.TestCase):
         commands = []
         def run(cmd, directory, **kwargs):
             commands.append(cmd)
+            directory.mkdir(parents=True, exist_ok=True)
             (directory / 'higgsCombine.Scan.MultiDimFit.mH20.root').write_text('mock ROOT')
+            if condor.option(cmd, '--algo') == 'none':
+                (directory / 'multidimfit.Scan.root').write_text('saved reference fit')
             return 0
         info = {'status': 0, 'covQual': 3, 'EDM': 1e-6, 'parameters': {'r': 0.}}
-        with patch.object(scan, 'read_rows', side_effect=profiles), patch.object(verify, 'fit_info', return_value=info):
+        profiles = iter(profiles)
+        def read(path):
+            return [row(0., -1., 0.)] if path.parent.name == 'initial' else next(profiles)
+        def fit_info(directory):
+            # Reproduce Combine's output contract: Grid has no multidimfit file.
+            verify.one(directory, 'multidimfit*.root')
+            return info
+        with patch.object(scan, 'read_rows', side_effect=read), patch.object(verify, 'fit_info', side_effect=fit_info):
             directory = Path(tempfile.mkdtemp(prefix='retry_', dir=self.root))
             value = scan.retry_point(command, 9, 1.75, initial or row(0., -1., 0.), directory, run)
         return value, commands
@@ -105,10 +115,18 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(len(attempts), 2)
         for cmd in commands:
             for flag, expected in [('-t', '-1'), ('--expectSignal', '0'), ('--setParameters', 'r=0'),
-                                   ('--points', '12'), ('--rMin', '-3'), ('--rMax', '3'),
-                                   ('--firstPoint', '9'), ('--lastPoint', '9')]:
+                                   ('--rMin', '-3'), ('--rMax', '3')]:
                 self.assertEqual(condor.option(cmd, flag), expected)
+            if condor.option(cmd, '--algo') == 'grid':
+                self.assertEqual(condor.option(cmd, '--points'), '12')
+                self.assertEqual(condor.option(cmd, '--firstPoint'), '9')
+                self.assertEqual(condor.option(cmd, '--lastPoint'), '9')
+            else:
+                self.assertEqual(condor.option(cmd, '--algo'), 'none')
+                self.assertIn('--saveFitResult', cmd)
+                self.assertNotIn('--firstPoint', cmd)
             self.assertIn('/inputs/workspace.root', cmd)
+        self.assertEqual(len(commands), 4)
 
     def test_one_good_retry_or_disagreeing_retries_cannot_pass(self):
         good = [row(0., -1., 0.), row(1.75)]
@@ -122,6 +140,9 @@ class ScanTests(unittest.TestCase):
         changed = [row(0., -1., 0., nll=.1), row(1.75, nll=.1)]
         with self.assertRaisesRegex(RuntimeError, 'No two consistent profiles'):
             self.retry([changed] * 4)
+        history = json.loads(next(self.root.glob('retry_*/attempts.json')).read_text())
+        self.assertTrue(all('does not match the grid initial minimum' in a['error']
+                            for a in history['attempts']))
 
     def test_validator_preserves_raw_file_and_fails_before_publishing_unresolved_holes(self):
         source = self.root / 'source.root'
@@ -249,6 +270,35 @@ class ScanMigrationTests(unittest.TestCase):
     def test_old_successful_collector_cannot_be_collected_without_point_audit(self):
         with self.assertRaisesRegex(RuntimeError, 'scan point audit missing; run --stage resume'):
             condor.collect(self.batch, self.manifest)
+
+    def test_fit_result_refresh_preserves_all_job_configs_and_completed_collector(self):
+        module = self.batch/'review_scan.py'
+        module.write_text('known old grid saveFitResult reader')
+        self.manifest['inputs'][str(module)] = condor.digest(module)
+        job = self.manifest['jobs'][self.collector]
+        for filename in job['files']:
+            Path(filename).write_text('completed M70 collector output')
+        status_path = Path(job['workdir'])/'status.json'
+        condor.dump(status_path, {'success': True, 'batch_id': 'test', 'completion_id': 'retained',
+            'job_sha256': hashlib.sha256(json.dumps(job, sort_keys=True).encode()).hexdigest(),
+            'dependencies': {str(self.chunk): str(self.chunk)},
+            'outputs': {name: condor.digest(name) for name in job['files']}})
+        before = status_path.read_bytes()
+        condor.dump(self.batch/'manifest.json', self.manifest)
+        with patch.object(condor, 'PRE_SCAN_FIT_RESULT_MODULE', condor.digest(module)), \
+             patch.object(condor, 'PRE_SCAN_FIT_RESULT_BACKEND', condor.digest(self.batch/'review_condor.py')):
+            updated = condor.refresh_scan_fit_result(review, self.batch, self.manifest)
+        self.assertEqual(updated['jobs'], self.manifest['jobs'])
+        self.assertEqual(status_path.read_bytes(), before)
+        self.assertEqual(condor.complete(updated, self.collector)['completion_id'], 'retained')
+        self.assertIs(condor.refresh_scan_fit_result(review, self.batch, updated), updated)
+
+    def test_fit_result_refresh_rejects_unrecognised_module(self):
+        (self.batch/'review_scan.py').write_text('unrecognised module')
+        before = (self.batch/'manifest.json').read_bytes()
+        with self.assertRaisesRegex(RuntimeError, 'Unknown scan saveFitResult'):
+            condor.refresh_scan_fit_result(review, self.batch, self.manifest)
+        self.assertEqual((self.batch/'manifest.json').read_bytes(), before)
 
 
 if __name__ == '__main__':
