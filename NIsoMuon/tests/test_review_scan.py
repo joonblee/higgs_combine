@@ -218,6 +218,128 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(condor.option(plot, '--main-label'), 'Background-only Asimov')
 
 
+class ContinuationTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.command = ['combine', '-M', 'MultiDimFit', '/inputs/workspace.root', '-m', '20',
+            '-t', '-1', '--expectSignal', '0', '--setParameters', 'r=0',
+            '--algo', 'grid', '--points', '12', '--rMin', '-3', '--rMax', '3', '--saveNLL', '-n', '.Scan']
+        self.commands = []
+
+    def run_walk(self, center_shift=0., anchor_shift=0., bad_edm=False, floating_r=False, common_offset=0.):
+        def run(cmd, directory, **kwargs):
+            self.commands.append(cmd)
+            directory.mkdir(parents=True, exist_ok=True)
+            if condor.option(cmd, '-M') == 'GenerateOnly':
+                (directory/'higgsCombine.Scan.GenerateOnly.mH20.123456.root').write_text('fixed nominal Asimov')
+                return 0
+            pars = dict(p.split('=') for p in condor.option(cmd, '--setParameters').split(','))
+            r = float(pars['r'])
+            offset = center_shift if directory.name == 'center' else 0.
+            if directory.name == 'walk_4':
+                offset += anchor_shift
+            # A changing initial NLL makes it essential to use nll+nll0.
+            data = row(r, -1., 0., nll=.5*r*r + offset + common_offset - 2*r)
+            data['nll0'] = 100. + 2*r
+            (directory/'higgsCombine.Scan.MultiDimFit.mH20.root').write_text(json.dumps([data]))
+            info = {'status': 0, 'covQual': 3, 'EDM': .01 if bad_edm else 1e-7,
+                    'parameters': {'theta': r/10.}}
+            if floating_r or '--freezeParameters' not in cmd:
+                info['parameters']['r'] = r
+            (directory/'multidimfit.Scan.root').write_text(json.dumps(info))
+            return 0
+        with patch.object(scan, 'read_rows', side_effect=lambda p: json.loads(p.read_text())), \
+             patch.object(verify, 'fit_info', side_effect=lambda d: json.loads((d/'multidimfit.Scan.root').read_text())):
+            return scan.continuation_profile(self.command, 1.75, row(0., -1., 0.),
+                {'parameters': {'theta': 0., 'r': 0.}}, row(1.25), self.root/'walk', 1, .001, 4, run)
+
+    def test_frozen_profile_carries_nuisance_seeds_and_matches_center_and_neighbour(self):
+        point, record = self.run_walk()
+        self.assertAlmostEqual(point['deltaNLL'], .5*1.75**2)
+        self.assertEqual(len(record['steps']), 7)  # Reference, centre, four steps, target.
+        previous_r = 0.
+        for cmd in self.commands:
+            if condor.option(cmd, '-M') == 'GenerateOnly':
+                self.assertEqual(condor.option(cmd, '-t'), '-1')
+                self.assertEqual(condor.option(cmd, '--expectSignal'), '0')
+                self.assertEqual(condor.option(cmd, '--setParameters'), 'r=0')
+                self.assertNotIn('--algo', cmd)
+                continue
+            pars = dict(p.split('=') for p in condor.option(cmd, '--setParameters').split(','))
+            self.assertAlmostEqual(float(pars['theta']), previous_r/10.)
+            previous_r = float(pars['r'])
+            for flag, expected in [('--algo', 'none'),
+                                   ('--rMin', '-3'), ('--rMax', '3')]:
+                self.assertEqual(condor.option(cmd, flag), expected)
+            self.assertIn('REMOVE_CONSTANT_ZERO_POINT=1', cmd)
+            if '--freezeParameters' in cmd:
+                self.assertEqual(condor.option(cmd, '--freezeParameters'), 'r')
+            self.assertIn('--saveFitResult', cmd)
+            self.assertNotIn('--setParameterRanges', cmd)
+            self.assertNotIn('-t', cmd)
+            self.assertNotIn('--expectSignal', cmd)
+            self.assertEqual(condor.option(cmd, '-D'),
+                str(self.root/'walk/asimov/higgsCombine.Scan.GenerateOnly.mH20.123456.root') + ':toys/toy_asimov')
+
+    def test_shifted_center_is_rejected_before_walking(self):
+        point, record = self.run_walk(center_shift=.01)
+        self.assertIsNone(point)
+        self.assertIn('centre', record['error'])
+        self.assertEqual(len(record['steps']), 2)
+
+    def test_common_constant_offset_cancels_against_the_matching_reference(self):
+        point, record = self.run_walk(common_offset=37.)
+        self.assertTrue(record['passed'])
+        self.assertAlmostEqual(point['deltaNLL'], .5*1.75**2)
+
+    def test_neighbour_disagreement_is_rejected_before_target(self):
+        point, record = self.run_walk(anchor_shift=.02)
+        self.assertIsNone(point)
+        self.assertIn('neighbour', record['error'])
+        self.assertEqual(len(record['steps']), 6)
+
+    def test_bad_conditional_edm_and_accidentally_floating_poi_are_rejected(self):
+        point, record = self.run_walk(bad_edm=True)
+        self.assertIsNone(point)
+        self.assertIn('EDM', record['error'])
+        self.root = self.root/'second'
+        point, record = self.run_walk(floating_r=True)
+        self.assertIsNone(point)
+        self.assertIn('still floating', record['error'])
+
+    def test_grid_failure_can_recover_only_with_two_consistent_continuations(self):
+        def run(cmd, directory, **kwargs):
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory/'higgsCombine.Scan.MultiDimFit.mH20.root').write_text('mock ROOT')
+            return 0
+        info = {'status': 0, 'covQual': 3, 'EDM': 1e-7, 'parameters': {'r': 0., 'theta': 0.}}
+        with patch.object(scan, 'read_rows', return_value=[row(0., -1., 0.)]), \
+             patch.object(verify, 'fit_info', return_value=info), \
+             patch.object(scan, 'continuation_profile', side_effect=[(row(1.75), {'method': 'continuation'}),
+                 (row(1.75), {'method': 'continuation'})]) as walk:
+            point, history = scan.retry_point(self.command, 9, 1.75, row(0., -1., 0.),
+                self.root/'retry', run, anchor=row(1.25))
+        self.assertEqual(walk.call_count, 2)
+        self.assertEqual(point, row(1.75))
+        self.assertEqual(len(history), 6)
+
+    def test_inconsistent_continuation_paths_cannot_be_published(self):
+        def run(cmd, directory, **kwargs):
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory/'higgsCombine.Scan.MultiDimFit.mH20.root').write_text('mock ROOT')
+            return 0
+        info = {'status': 0, 'covQual': 3, 'EDM': 1e-7, 'parameters': {'r': 0., 'theta': 0.}}
+        answers = [(row(1.75, delta=d), {'method': 'continuation'}) for d in [1., 1.1, 1.2, 1.3]]
+        with patch.object(scan, 'read_rows', return_value=[row(0., -1., 0.)]), \
+             patch.object(verify, 'fit_info', return_value=info), \
+             patch.object(scan, 'continuation_profile', side_effect=answers):
+            with self.assertRaisesRegex(RuntimeError, 'No two consistent profiles'):
+                scan.retry_point(self.command, 9, 1.75, row(0., -1., 0.),
+                    self.root/'retry', run, anchor=row(1.25))
+
+
 class ScanMigrationTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -299,6 +421,19 @@ class ScanMigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Unknown scan saveFitResult'):
             condor.refresh_scan_fit_result(review, self.batch, self.manifest)
         self.assertEqual((self.batch/'manifest.json').read_bytes(), before)
+
+    def test_continuation_refresh_preserves_job_configs(self):
+        module = self.batch/'review_scan.py'
+        module.write_text('known 70299 scan helper')
+        self.manifest['inputs'][str(module)] = condor.digest(module)
+        condor.dump(self.batch/'manifest.json', self.manifest)
+        with patch.object(condor, 'PRE_SCAN_CONTINUATION_MODULE', condor.digest(module)), \
+             patch.object(condor, 'PRE_SCAN_CONTINUATION_BACKEND', condor.digest(self.batch/'review_condor.py')):
+            updated = condor.refresh_scan_fit_result(review, self.batch, self.manifest)
+        self.assertEqual(updated['jobs'], self.manifest['jobs'])
+        self.assertIn('scan_continuation_patch', updated)
+        condor.complete(updated, self.chunk)
+        condor.complete(updated, self.fit)
 
 
 if __name__ == '__main__':

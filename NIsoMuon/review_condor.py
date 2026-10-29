@@ -1001,6 +1001,8 @@ def refresh_scan_validation(review, batch, manifest):
 
 PRE_SCAN_FIT_RESULT_MODULE = 'd2d7efa7e0fde37ec4346243000e4899924f3a98abf33ecaf7c4eb76fdd15c85'
 PRE_SCAN_FIT_RESULT_BACKEND = 'c3a410139887efe968d46c7577d96cc232ba68e34ff28be66c70cdf08137b062'
+PRE_SCAN_CONTINUATION_MODULE = 'e884c7f4a004f9e782e58299a6471bfa59dc0be3527d93b2401e41b6486d3d87'
+PRE_SCAN_CONTINUATION_BACKEND = 'c962fddc36a7e896b1ccfbc88689226f024595296df7a6f763b4b7ae603cc58d'
 
 
 def refresh_scan_fit_result(review, batch, manifest):
@@ -1011,11 +1013,12 @@ def refresh_scan_fit_result(review, batch, manifest):
     module = batch / 'review_scan.py'
     if digest(module) == digest(source / module.name):
         return manifest
-    if (digest(module) != PRE_SCAN_FIT_RESULT_MODULE or
+    continuation = digest(module) == PRE_SCAN_CONTINUATION_MODULE
+    if (digest(module) not in {PRE_SCAN_FIT_RESULT_MODULE, PRE_SCAN_CONTINUATION_MODULE} or
             digest(batch / 'review_condor.py') not in
-            {PRE_SCAN_FIT_RESULT_BACKEND, digest(source / 'review_condor.py')}):
+            {PRE_SCAN_FIT_RESULT_BACKEND, PRE_SCAN_CONTINUATION_BACKEND, digest(source / 'review_condor.py')}):
         raise RuntimeError('Unknown scan saveFitResult helper snapshot')
-    archive = batch / ('scan_fit_result_upgrade_' + uuid4().hex[:8])
+    archive = batch / (('scan_continuation_upgrade_' if continuation else 'scan_fit_result_upgrade_') + uuid4().hex[:8])
     archive.mkdir()
     names = ('review_scan.py', 'review_condor.py', 'manifest.json')
     for name in names:
@@ -1025,14 +1028,15 @@ def refresh_scan_fit_result(review, batch, manifest):
         for name in names[:-1]:
             shutil.copy2(source / name, batch / name)
             updated['inputs'][str(batch / name)] = digest(batch / name)
-        updated['scan_fit_result_patch'] = {'archive': str(archive),
+        updated['scan_continuation_patch' if continuation else 'scan_fit_result_patch'] = {'archive': str(archive),
             'preserves_job_configs_and_successful_collectors': True}
         dump(batch / 'manifest.json', updated)
     except Exception:
         for name in names:
             shutil.copy2(archive / name, batch / name)
         raise
-    print(f'[SCAN FIT RESULT] Updated saved-reference fit; successful jobs retained; backup={archive}')
+    action = 'SCAN CONTINUATION' if continuation else 'SCAN FIT RESULT'
+    print(f'[{action}] Updated checked scan retry helper; successful jobs retained; backup={archive}')
     return updated
 
 

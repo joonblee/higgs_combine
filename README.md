@@ -204,6 +204,26 @@ For a batch already upgraded by `00690ae`, resume additionally prints
 `[SCAN FIT RESULT]` and updates the known saved-reference helper. Only failed
 jobs rerun; the successful M70 collector and all completed chunks are retained.
 
+If isolated grid retries still produce no conditional entry, a continuation
+fallback fixes only r and profiles all original nuisance parameters with
+`--algo none --saveFitResult`. It walks in four or eight steps from the verified
+global minimum to a valid neighbouring grid point, carrying each fit's nuisance
+parameters to the next start, then fits the missing coordinate. This retains
+the original model, bounds and mass window. A nominal background-only Asimov
+dataset is saved with GenerateOnly before changing any nuisance starting value;
+all subsequent fits explicitly load that fixed `toys/toy_asimov` dataset with
+`-D`. They never regenerate Asimov data at shifted nuisance seeds. Every conditional fit
+requires status 0, covariance quality at least 2 and EDM at most 0.001. Common
+NLL differences use a new free-r reference on that same saved dataset. All
+fits in a path remove Combine's seed-dependent constant zero point with
+`REMOVE_CONSTANT_ZERO_POINT=1`; the likelihood and its derivatives are unchanged.
+Normalisation is checked at the saved centre (0.001 tolerance) and against
+the original neighbour (0.005 tolerance). At least two independent retry paths
+must agree within 0.005 in deltaNLL; an unresolved disagreement is not averaged
+or replaced by an interpolated point. Conditional RooFitResults, commands and
+step-by-step NLL records are retained. A known `70299ac` snapshot is refreshed
+on resume with `[SCAN CONTINUATION]`; successful collectors remain complete.
+
 If a node failed, first ensure this batch's DAG manager and workers have left
 the queue (including held jobs), then run:
 

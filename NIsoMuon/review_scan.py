@@ -156,9 +156,118 @@ def crossing_brackets(points, best_r):
     return result
 
 
-def retry_point(command, index, value, origin, directory, run_command):
+def continuation_profile(command, value, origin, seed, anchor, directory,
+                         strategy, tolerance, steps, run_command):
+    """Profile with r fixed, carrying nuisance seeds from the previous fit.
+
+    Absolute NLL differences must reproduce both the global minimum and an
+    existing good grid neighbour. Never infer a missing point from the curve.
+    """
     import validate_bias_repair as verify
-    candidates, attempts = [], []
+    directory.mkdir(parents=True)
+    record = {'method': 'frozen_poi_continuation', 'directory': str(directory),
+              'passed': False, 'strategy': strategy,
+              'tolerance': tolerance, 'anchor': anchor, 'steps': []}
+    info = seed
+    reference_nll = origin['nll'] + origin['nll0']
+    try:
+        # Generate at the ORIGINAL nominal settings before changing nuisance
+        # seeds. Fresh -t -1 fits with shifted --setParameters could otherwise
+        # generate a different Asimov dataset at every continuation step.
+        generation = list(command)
+        for flag in ('--algo', '--points', '--firstPoint', '--lastPoint'):
+            verify.remove(generation, flag)
+        for flag in ('--saveNLL', '--saveFitResult'):
+            verify.remove(generation, flag, False)
+        verify.change(generation, '-M', 'GenerateOnly')
+        if '--saveToys' not in generation:
+            generation.append('--saveToys')
+        if verify.option(generation, '-t') != '-1' or float(verify.option(generation, '--expectSignal')) != 0:
+            raise RuntimeError('Continuation requires the original background-only Asimov setup')
+        data_dir = directory / 'asimov'
+        record['dataset_generation'] = {'command': generation, 'directory': str(data_dir)}
+        record['dataset_generation']['exit_code'] = run_command(generation, data_dir, log=data_dir / 'generation.log')
+        if record['dataset_generation']['exit_code']:
+            raise RuntimeError('Nominal Asimov dataset generation failed')
+        data_file = verify.one(data_dir, 'higgsCombine*.GenerateOnly.mH*.root')
+        record['dataset_generation'].update(file=str(data_file), sha256=digest(data_file))
+
+        def fit_at(r, name, fixed=True):
+            nonlocal info
+            cmd = list(command)
+            for flag in ('--points', '--firstPoint', '--lastPoint'):
+                verify.remove(cmd, flag)
+            for flag in ('-t', '--expectSignal', '--toysFile'):
+                verify.remove(cmd, flag)
+            verify.change(cmd, '-D', str(data_file) + ':toys/toy_asimov')
+            # CachingAddNLL otherwise chooses a seed-dependent constant offset.
+            # Remove only that constant and compute all differences against a
+            # reference fitted with the same setting and fixed saved dataset.
+            cmd.extend(['--X-rtd', 'REMOVE_CONSTANT_ZERO_POINT=1'])
+            verify.remove(cmd, '--skipInitialFit', False)
+            verify.remove(cmd, '--cminPoiOnlyFit', False)
+            verify.change(cmd, '--algo', 'none')
+            parameters = {**info['parameters'], 'r': r}
+            verify.change(cmd, '--setParameters', ','.join(
+                f'{k}={v:.17g}' for k, v in sorted(parameters.items())))
+            if fixed:
+                frozen = set((cmd[cmd.index('--freezeParameters') + 1].split(',')
+                              if '--freezeParameters' in cmd else [])) | {'r'}
+                verify.change(cmd, '--freezeParameters', ','.join(sorted(frozen)))
+            verify.change(cmd, '--cminDefaultMinimizerStrategy', strategy)
+            verify.change(cmd, '--cminDefaultMinimizerTolerance', tolerance)
+            if '--saveFitResult' not in cmd:
+                cmd.append('--saveFitResult')
+            where = directory / name
+            item = {'r': r, 'command': cmd, 'directory': str(where)}
+            record['steps'].append(item)
+            item['exit_code'] = run_command(cmd, where, log=where / 'fit.log')
+            if item['exit_code']:
+                raise RuntimeError(f'Conditional fit command failed at r={r:g}')
+            info = verify.fit_info(where)
+            item['conditional_fit'] = info
+            verify.check_fit(info, .001)
+            if fixed and 'r' in info['parameters']:
+                raise RuntimeError('The supposedly fixed POI is still floating')
+            rows = read_rows(verify.one(where, 'higgsCombine*.MultiDimFit.mH*.root'))
+            if len(rows) != 1 or abs(rows[0]['r'] - r) > 1e-4:
+                raise RuntimeError(f'Wrong frozen-r output at r={r:g}')
+            saved = reference(rows)
+            item['nll'] = saved['nll'] + saved['nll0']
+            item['deltaNLL'] = item['nll'] - reference_nll
+            return item['deltaNLL']
+
+        fit_at(origin['r'], 'global_reference', fixed=False)
+        reference_nll = record['steps'][-1]['nll']
+        center = fit_at(origin['r'], 'center')
+        if abs(center) > REFERENCE_TOLERANCE:
+            raise RuntimeError('Conditional centre does not reproduce the global NLL')
+        for i in range(1, steps + 1):
+            target = origin['r'] + (anchor['r'] - origin['r']) * i / steps
+            delta = fit_at(target, f'walk_{i}')
+            if delta < -REFERENCE_TOLERANCE or delta >= 1000:
+                raise RuntimeError('Invalid conditional NLL on the continuation path')
+        if abs(delta - anchor['deltaNLL']) > PROFILE_TOLERANCE:
+            raise RuntimeError('Conditional neighbour does not reproduce the existing grid NLL')
+        delta = fit_at(value, 'target')
+        point = {'r': value, 'deltaNLL': delta,
+                 'quantileExpected': math.erfc(math.sqrt(max(0., delta))),
+                 'nll': origin['nll'], 'nll0': origin['nll0']}
+        if row_issues(point, origin):
+            raise RuntimeError('Invalid final conditional profile')
+        record['point'] = point
+        record['passed'] = True
+        return point, record
+    except (RuntimeError, OSError, ValueError) as exc:
+        record['error'] = str(exc)
+        return None, record
+    finally:
+        dump(directory / 'continuation.json', record)
+
+
+def retry_point(command, index, value, origin, directory, run_command, anchor=None):
+    import validate_bias_repair as verify
+    candidates, attempts, references = [], [], []
     for strategy, tolerance in ((1, .01), (2, .01), (1, .001), (2, .001)):
         attempt = directory / f"s{strategy}_t{tolerance}"
         attempt.mkdir(parents=True)
@@ -199,6 +308,9 @@ def retry_point(command, index, value, origin, directory, run_command):
             step = (float(verify.option(cmd, '--rMax')) - float(verify.option(cmd, '--rMin'))) / int(verify.option(cmd, '--points'))
             if abs(initial["r"] - origin["r"]) > step:
                 raise RuntimeError("Retry changed the initial best-fit r")
+            if abs(saved['nll'] + saved['nll0'] - origin['nll'] - origin['nll0']) > REFERENCE_TOLERANCE:
+                raise RuntimeError('Saved reference differs from the original global NLL')
+            references.append(info)
             points = [r for r in rows if r["quantileExpected"] != -1.]
             if len(points) != 1 or abs(points[0]["r"] - value) > 1e-4:
                 raise RuntimeError("Missing or wrong single-point profile entry")
@@ -222,6 +334,18 @@ def retry_point(command, index, value, origin, directory, run_command):
             if spread <= PROFILE_TOLERANCE:
                 # Select the lower NLL, never the point closest to an expected curve.
                 return min(candidates, key=lambda p: p["deltaNLL"]), attempts
+    if anchor is not None and references:
+        print(f'[SCAN CONTINUATION] r={value:g}, checked neighbour r={anchor["r"]:g}', flush=True)
+        for strategy, tolerance, steps in ((1, .01, 4), (2, .01, 4), (1, .001, 8), (2, .001, 8)):
+            point, record = continuation_profile(command, value, origin, references[0], anchor,
+                directory / f'continuation_s{strategy}_t{tolerance}_n{steps}',
+                strategy, tolerance, steps, run_command)
+            attempts.append(record)
+            dump(directory / 'attempts.json', {'attempts': attempts})
+            if point is not None:
+                candidates.append(point)
+            if len(candidates) >= 2 and max(p['deltaNLL'] for p in candidates) - min(p['deltaNLL'] for p in candidates) <= PROFILE_TOLERANCE:
+                return min(candidates, key=lambda p: p['deltaNLL']), attempts
     raise RuntimeError(f"No two consistent profiles at r={value:g}; see {directory}")
 
 
@@ -247,7 +371,9 @@ def validate_scan(root_file, command, output, label, low, high, count, run_comma
             for index in holes:
                 value = coordinate(index, low, high, count)
                 print(f"[SCAN RETRY] grid point {index}, r={value:g}", flush=True)
-                point, history = retry_point(command, index, value, origin, attempt / f"point_{index}", run_command)
+                anchor = min((p for i, p in good.items() if first <= i <= last and i not in holes),
+                             key=lambda p: abs(p['r'] - value))
+                point, history = retry_point(command, index, value, origin, attempt / f"point_{index}", run_command, anchor=anchor)
                 good[index] = point
                 report["repairs"].append({"index": index, "r": value, "point": point, "attempts": history})
                 dump(report_path, report)
