@@ -32,6 +32,9 @@ Execution defaults to Condor, with no workflow concurrency cap. Use --local
 for CPU execution (--jobs N for limits; --impact-parallel N for impacts).
 Fresh Condor impacts use a DAG: initial fit -> one job per nuisance -> final
 collection/validation/plotting. --stage collect publishes a completed batch.
+Collapsed QCD-stat Gaussian impact scans with tiny absolute widths can use
+explicit centre and prior-sigma conditional profiles. Both endpoints must show
+the expected one-sigma likelihood rise before their measured impacts are used.
 
 Uncertainty policy in this revision
 -----------------------------------
@@ -4419,6 +4422,101 @@ def run_boundary_impact_profile(command, directory, nuisance, mass_arg, rmin, rm
                         "No endpoint accepted.\n  " + "\n  ".join(failures))
 
 
+def tiny_gaussian_impact_candidate(param, bounds):
+    """Use explicit profiles for collapsed, very small absolute QCD-stat units.
+
+    Small width alone is never evidence of a small impact: conditional r values
+    and the actual likelihood rise are measured before accepting the endpoints.
+    """
+    prior, fit = param.get('prefit', []), param.get('fit', [])
+    if (param.get('type') != 'Gaussian' or '_stat_QCD_' not in param.get('name', '')
+        or len(prior) != 3 or len(fit) != 3
+        or not all(math.isfinite(v) for v in [*prior, *fit])
+        or not fit[0] == fit[1] == fit[2] or not prior[0] < prior[1] < prior[2]):
+        return False
+    low, high = prior[1] - prior[0], prior[2] - prior[1]
+    return (0 < max(low, high) < 1e-9 and math.isclose(low, high, rel_tol=1e-6)
+            and abs(fit[1] - prior[1]) <= low * 1e-3
+            and bounds[0] <= prior[0] and prior[2] <= bounds[1])
+
+
+def read_tiny_impact_profile(path, nuisance, value, width, target_delta, rmin, rmax):
+    ROOT = RootReader().ROOT
+    source = ROOT.TFile.Open(str(path))
+    if not source or source.IsZombie():
+        raise WorkflowError(f'Missing tiny-nuisance profile: {path}')
+    try:
+        tree = source.Get('limit')
+        if not tree or int(tree.GetEntries()) != 2:
+            raise WorkflowError(f'Tiny-nuisance profile requires initial and conditional entries: {path}')
+        if any(not tree.GetBranch(n) for n in (nuisance, 'r', 'deltaNLL')):
+            raise WorkflowError(f'Missing tiny-nuisance profile branch: {path}')
+        tree.GetEntry(1)
+        coordinate, rvalue, delta = float(getattr(tree, nuisance)), float(tree.r), float(tree.deltaNLL)
+        tolerance = .001 if target_delta == 0 else .01
+        if (not all(math.isfinite(x) for x in (coordinate, rvalue, delta))
+            or abs(coordinate - value) > max(width * 1e-5, 1e-300)
+            or not rmin < rvalue < rmax or abs(delta - target_delta) > tolerance):
+            raise WorkflowError(f'Tiny-nuisance profile rejected: theta={coordinate}, r={rvalue}, deltaNLL={delta}; {path}')
+        return {'value': coordinate, 'r': rvalue, 'deltaNLL': delta,
+                'target_deltaNLL': target_delta, 'source': str(path)}
+    finally:
+        source.Close()
+
+
+def repair_tiny_gaussian_impact(param, workspace, directory, mass_arg, rmin, rmax, range_args, blind, initial_r):
+    """Profile centre and both prior-sigma points; accept only a 1-sigma NLL rise."""
+    nuisance = param['name']
+    prior = param['prefit']
+    width = .5 * (prior[2] - prior[0])
+    # Retain every original attempt, including failed profiles.
+    root = directory / nuisance / ('attempts_' + uuid4().hex[:8])
+    root.mkdir(parents=True)
+    points = []
+    for side, value, target_delta in (('centre', prior[1], 0.), ('lower', prior[0], .5), ('upper', prior[2], .5)):
+        path = root / side
+        path.mkdir()
+        failures = []
+        result = None
+        for strategy in (2, 1, 0):
+            attempt = path / f'strategy{strategy}'
+            attempt.mkdir()
+            start = [] if '--setParameters' in blind else ['--setParameters', f'r={initial_r:.17g}']
+            command = ['combine', '-M', 'MultiDimFit', str(workspace), '-m', mass_arg,
+                '--algo', 'fixed', '-P', nuisance, '--floatOtherPOIs', '1', '--saveInactivePOI', '1',
+                '--fixedPointPOIs', f'{nuisance}={value:.17g}',
+                '--cminDefaultMinimizerStrategy', str(strategy), '--cminDefaultMinimizerTolerance', '1e-4',
+                '--cminFallbackAlgo', 'Minuit2,Migrad,1:1e-4',
+                '--cminFallbackAlgo', 'Minuit2,Migrad,0:1e-4',
+                *range_args, *start, *blind, '-n', '.TinyProfile', '-v', '2']
+            log = attempt / 'fit.log'
+            code = run_command(command, attempt, allow_failure=True, stdout_path=log)
+            output = attempt / f'higgsCombine.TinyProfile.MultiDimFit.mH{mass_arg}.root'
+            try:
+                if code:
+                    raise WorkflowError(f'Combine exit {code}')
+                result = read_tiny_impact_profile(output, nuisance, value, width, target_delta, rmin, rmax)
+                result['strategy'] = strategy
+                break
+            except WorkflowError as exc:
+                failures.append(str(exc))
+        if result is None:
+            raise WorkflowError(f'Tiny Gaussian {nuisance} {side} profile failed: {failures}; logs: {path}')
+        result['failed_attempts'] = failures
+        points.append(result)
+    centre, lower, upper = points
+    if abs(centre['r'] - initial_r) > 1e-4 * max(1., abs(initial_r)):
+        raise WorkflowError(f'Tiny Gaussian centre disagrees with initial POI: {nuisance}')
+    candidate = dict(param)
+    candidate.update(fit=[lower['value'], centre['value'], upper['value']],
+                     r=[lower['r'], centre['r'], upper['r']])
+    candidate['impact_r'] = max(abs(candidate['r'][i] - candidate['r'][1]) for i in (0, 2))
+    candidate['explicit_gaussian_profiles'] = {'method': 'conditional-profiles-at-prior-sigma',
+        'centre': centre, 'lower': lower, 'upper': upper, 'prior_width': width}
+    param.update(candidate)
+    (root / 'validation.json').write_text(json.dumps({'passed': True, **candidate['explicit_gaussian_profiles']}, indent=2) + '\n')
+
+
 def repair_impact_payload(args, card, target, label, mass, outdir,
                           workspace, internal_json, payload, rmin, rmax):
     """Reuse good scans; retry failed scans and profile truncated QCD endpoints."""
@@ -4433,7 +4531,8 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
                 and bounds[name][0] == 0.0)
 
     boundary = {name for name, sides in bad.items() if truncated_qcd(name, sides)}
-    retry = sorted(set(missing) | (set(bad) - set(boundary)))
+    tiny = {n for n in bad if tiny_gaussian_impact_candidate(params[n], bounds[n])}
+    retry = sorted(set(missing) | (set(bad) - set(boundary) - tiny))
     tag = tag_for(args, target)
     name = getattr(args, "impact_fit_name", f".Impacts_{tag}_M{label}")
     mass_arg = format_mass_for_combine(mass)
@@ -4462,6 +4561,10 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
     backup = internal_json.with_suffix(".before_repair.json")
     if not backup.exists():
         shutil.copy2(internal_json, backup)
+    for nuisance in sorted(tiny):
+        repair_tiny_gaussian_impact(params[nuisance], workspace, repair_dir / 'tiny_gaussian_profiles',
+            mass_arg, rmin, rmax, explicit_range_args(rmin, rmax, card), blind, impact_fit_triplet(payload)[1])
+        print(f"[IMPACT TINY PROFILE] {nuisance}: measured impact_r={params[nuisance]['impact_r']:.8g}", flush=True)
     if retry:
         initial = f"higgsCombine_initialFit_{name}.MultiDimFit.mH{mass_arg}.root"
         if not (outdir / initial).exists():
@@ -4588,7 +4691,7 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
                                if p.get("boundary_endpoints"))
     report = {"target": target, "mass": mass, "expected": len(bounds),
               "present": len(params), "retried": retry, "boundary": recorded_boundary,
-              "boundary_profiled": sorted(boundary), "initial_poi": poi_report,
+              "boundary_profiled": sorted(boundary), "tiny_gaussian_profiled": sorted(tiny), "initial_poi": poi_report,
               "expected_signal": expected_signal, "fit_name": name,
               "passed": True}
     (repair_dir / "validation.json").write_text(json.dumps(report, indent=2) + "\n")

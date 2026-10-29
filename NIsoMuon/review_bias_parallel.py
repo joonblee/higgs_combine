@@ -118,14 +118,14 @@ def find_completed(source, tasks):
 
 def prepare(review, main_manifest, parent_job, args, audit_path, completion_id):
     child = Path(parent_job['repair_dir'])
-    if child.exists():
+    if child.exists() and any(child.iterdir()):
         raise RuntimeError(f'Repair DAG directory already exists: {child}; inspect the prepared batch instead of replacing it')
     mass = int(args.mass)
     source = review.outdir(args)
     data, inputs, tasks = context(audit_path, source, args.target, mass)
     available, proofs = find_completed(source, tasks)
     inputs.update(proofs)
-    child.mkdir(parents=True)
+    child.mkdir(parents=True, exist_ok=True)
     for name in SOURCES:
         original = Path(main_manifest['batch']) / name
         dest = child / name

@@ -2,6 +2,8 @@
 
 Physics commands are captured from the local helper, then partitioned without
 changing the dataset, nuisance model, grid or seeds. No observed data are used.
+Resume refreshes the exact known 8e52715 snapshot to repair Sub-DAG directory
+preparation and enable checked conditional profiles for tiny Gaussian impacts.
 """
 from __future__ import annotations
 
@@ -355,6 +357,9 @@ def write_submission(batch, manifest, indices, dag_name):
     for index in indices:
         job = manifest["jobs"][index]
         if job.get("subdag"):
+            # DAGMan validates DIR while parsing the outer DAG, before the
+            # audit parent has generated the inner DAG description.
+            Path(job['subdag']).parent.mkdir(parents=True, exist_ok=True)
             dag.append(f"SUBDAG EXTERNAL J{index} {job['subdag']} DIR {Path(job['subdag']).parent}")
             # Lazy generation is required: the audit parent creates this DAG.
         else:
@@ -799,6 +804,44 @@ def refresh_child_dags(batch, manifest, indices):
             write_submission(child_path, child, pending, 'workflow.dag')
 
 
+# Exact published 8e52715 snapshot: compatible orchestration/profile repair.
+COMPATIBLE_REVIEW_PATCH = {
+    'combine_review.py': 'a474ca889e693bccda97b4b155b1f009e934250f30f748cd908869f95d242ff4',
+    'review_condor.py': '936cb13e8a91ac4669a28a352930d0568acc761e6703ff68979df48cbd506c7a',
+    'review_bias_parallel.py': '29e9777e444b689359dcce8d44af86d16f28f93f2c602471e533fb072d5af7e3',
+    'limit_workflow.py': '823d838417b5f64c24b307757c27b3ee2e73b009e48e6eab0710a86363bba5ae',
+}
+
+
+def refresh_compatible_review_patch(review, batch, manifest):
+    """Refresh this known failed snapshot without changing cards or fit configs."""
+    if not all((batch / name).is_file() and digest(batch / name) == value
+               for name, value in COMPATIBLE_REVIEW_PATCH.items()):
+        return manifest
+    archive = batch / ('review_patch_' + uuid4().hex[:8])
+    archive.mkdir()
+    shutil.copy2(batch / 'manifest.json', archive / 'manifest.json')
+    for name in COMPATIBLE_REVIEW_PATCH:
+        shutil.copy2(batch / name, archive / name)
+    updated = copy.deepcopy(manifest)
+    try:
+        for name in COMPATIBLE_REVIEW_PATCH:
+            source = Path(review.__file__).resolve().parent / name
+            shutil.copy2(source, batch / name)
+            updated['inputs'][str(batch / name)] = digest(batch / name)
+        updated['compatible_review_patch'] = {
+            'archive': str(archive), 'patch': 'create-subdag-dir-and-profile-tiny-gaussian',
+            'preserves_cards_workspaces_toys_and_job_configs': True}
+        dump(batch / 'manifest.json', updated)
+    except Exception:
+        for name in COMPATIBLE_REVIEW_PATCH:
+            shutil.copy2(archive / name, batch / name)
+        shutil.copy2(archive / 'manifest.json', batch / 'manifest.json')
+        raise
+    print(f'[REVIEW PATCH] Updated known 8e52715 snapshot; completed jobs retained; backup={archive}')
+    return updated
+
+
 def main(review, args):
     if args.condor_worker:
         if args.condor_index is None:
@@ -822,6 +865,8 @@ def main(review, args):
         collect(batch, manifest)
     else:
         active_batch(batch)
+        if not args.condor_dry_run:
+            manifest = refresh_compatible_review_patch(review, batch, manifest)
         if getattr(args, "upgrade_backend", False) and getattr(args, "parallel_bias_repair", False):
             raise RuntimeError("Run the filename migration and parallel migration separately")
         if getattr(args, "parallel_bias_repair", False):

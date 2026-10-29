@@ -216,6 +216,29 @@ child working directory. See the
 Workers do not submit jobs themselves. `--stage collect` validates child job
 completion, output fingerprints and dependency completions recursively.
 
+For batches frozen at `8e52715`, update the checkout and run ordinary resume
+after the batch and its child jobs have left the queue:
+
+```bash
+git pull --ff-only
+python3 combine_review.py --stage resume --condor-dir "$REVIEW_BATCH"
+```
+
+Resume recognises the exact published helper fingerprints, archives the old
+snapshot and manifest under `review_patch_*`, and prints `[REVIEW PATCH]`.
+Completed fits, cards, workspaces, saved toys and job configurations are retained.
+New Sub-DAG directories are created before outer-DAG parsing; audit preparation
+accepts an empty directory, while refusing to overwrite existing repair files.
+There is no need to delete or recreate the M20 directory manually.
+
+Collapsed QCD-stat Gaussian impact intervals with tiny absolute prior widths
+are checked using conditional profiles at the centre and both prior-sigma
+points. A small width never implies zero impact: the measured POI values and
+deltaNLL (zero at the centre and 0.5 at each endpoint, within numerical
+tolerances) must pass validation before publication. Failed checks remain
+errors. Reports and per-strategy logs are retained under
+`impact_repair_M<MASS>/tiny_gaussian_profiles/`.
+
 Individual tasks also support Condor, for example:
 
 ```bash

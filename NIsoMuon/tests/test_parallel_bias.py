@@ -162,6 +162,7 @@ class ParallelBiasTests(unittest.TestCase):
         self.assertIn('SUBDAG EXTERNAL J1 ', dag)
         self.assertIn(' DIR ', dag)
         self.assertIn('PARENT J0 CHILD J1', dag)
+        self.assertTrue(Path(manifest['jobs'][child]['subdag']).parent.is_dir())
         self.assertFalse(Path(manifest['jobs'][child]['subdag']).exists())
         with patch.object(backend.subprocess, 'run') as run:
             backend.submit(self.batch, manifest, 'workflow.dag')
@@ -218,6 +219,51 @@ class ParallelBiasTests(unittest.TestCase):
         self.assertEqual(added['dependencies'], [completed])
         self.assertEqual(updated['jobs'][legacy]['dependencies'], [added['index']])
         self.assertIn(str(self.batch / 'review_bias_parallel.py'), updated['inputs'])
+
+    def test_precreated_empty_subdag_directory_is_accepted(self):
+        Path(self.parent['repair_dir']).mkdir(parents=True)
+        child = self.prepare()
+        self.assertEqual(len(child['jobs']), 2)
+
+    def test_submission_directory_can_be_used_by_audit_prepare(self):
+        main = {**self.main, 'jobs': [], 'requirements': None, 'filesystem_domain': None}
+        planner = backend.Planner(review, self.batch, main)
+        audit, child = backend.add_parallel_audit(planner, self.args, [])
+        backend.write_submission(self.batch, main, [audit, child], 'workflow.dag')
+        parent = main['jobs'][audit]
+        parallel.prepare(review, main, parent, self.args, self.audit, 'audit-completion')
+        repair_dir = Path(parent['repair_dir'])
+        self.assertTrue((repair_dir / 'workflow.dag').is_file())
+        self.assertEqual(len(backend.load_batch(repair_dir)[1]['jobs']), 2)
+
+    def test_existing_repair_results_are_never_overwritten(self):
+        directory = Path(self.parent['repair_dir'])
+        directory.mkdir(parents=True)
+        result = directory / 'manifest.json'
+        result.write_text('existing result')
+        with self.assertRaisesRegex(RuntimeError, 'already exists'):
+            self.prepare()
+        self.assertEqual(result.read_text(), 'existing result')
+
+    def test_known_snapshot_patch_preserves_jobs_inputs_and_prior_snapshot(self):
+        main = {**self.main, 'jobs': [], 'inputs': {}}
+        planner = backend.Planner(review, self.batch, main)
+        planner.add('completed_fit', self.args)
+        before = copy.deepcopy(main['jobs'])
+        known = {}
+        for name in backend.COMPATIBLE_REVIEW_PATCH:
+            path = self.batch / name
+            path.write_text('legacy ' + name)
+            known[name] = backend.digest(path)
+            main['inputs'][str(path)] = known[name]
+        backend.dump(self.batch / 'manifest.json', main)
+        with patch.object(backend, 'COMPATIBLE_REVIEW_PATCH', known):
+            updated = backend.refresh_compatible_review_patch(review, self.batch, main)
+        self.assertEqual(updated['jobs'], before)
+        archive = Path(updated['compatible_review_patch']['archive'])
+        for name in known:
+            self.assertEqual((archive / name).read_text(), 'legacy ' + name)
+            self.assertEqual(updated['inputs'][str(self.batch / name)], backend.digest(self.batch / name))
 
 
 if __name__ == '__main__':
