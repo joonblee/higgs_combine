@@ -6,6 +6,8 @@ Resume refreshes the exact known 8e52715 snapshot to repair Sub-DAG directory
 preparation and enable checked conditional profiles for tiny Gaussian impacts.
 Known incomplete repair DAGs also receive tighter seeded retries on resume;
 completed workers and their original acceptance criteria are retained.
+Known pre-audit scans receive a point-completeness audit and an Asimov plot
+label on resume; completed scan chunks and all unrelated jobs are retained.
 """
 from __future__ import annotations
 
@@ -156,7 +158,9 @@ class Planner:
             merged = output / root_name(command)
             self.final(task, args, chunks, skip=[original],
                        merges=[{"destination": str(merged), "sources": files}],
-                       files=[merged, output / f"scan_{args.target}_M{label}_Bonly.pdf"])
+                       files=[merged, output / f"scan_{args.target}_M{label}_Bonly.pdf",
+                              output / f"scan_validation_M{label}.json", output / f"scan_validated_M{label}.root"])
+            self.jobs[-1]['scan_validation'] = 'NIsoMuon_scan_validation_v1'
         elif task == "hybrid":
             generation, *grid = commands
             generated = Path(generation["cwd"]) / root_name(generation["cmd"])
@@ -273,7 +277,7 @@ def prepare(review, args):
     batch.mkdir(parents=True)
     inputs = {}
     script_dir = Path(review.__file__).resolve().parent
-    for name in ("combine_review.py", "review_condor.py", "review_bias_parallel.py", "limit_workflow.py", "audit_bias_intervals.py",
+    for name in ("combine_review.py", "review_condor.py", "review_scan.py", "review_bias_parallel.py", "limit_workflow.py", "audit_bias_intervals.py",
                  "repair_bias_intervals.py", "validate_bias_repair.py"):
         source = script_dir / name
         if not source.is_file():
@@ -553,6 +557,8 @@ def collect(batch, manifest):
     errors = []
     for job in manifest["jobs"]:
         try:
+            if job['kind'] == 'scan_collect' and job.get('scan_validation') != 'NIsoMuon_scan_validation_v1':
+                raise RuntimeError(f"job {job['index']}: scan point audit missing; run --stage resume first")
             complete(manifest, job["index"], cache)
         except (RuntimeError, OSError, ValueError) as exc:
             errors.append(str(exc))
@@ -931,6 +937,68 @@ def refresh_bias_refinement(review, batch, manifest):
     return updated
 
 
+# Published pre-audit helpers (7a6410d on the user's batch, or 1f1485a).
+PRE_SCAN_AUDIT_HELPERS = {
+    'combine_review.py': {'a474ca889e693bccda97b4b155b1f009e934250f30f748cd908869f95d242ff4'},
+    'review_condor.py': {'178ba99ee48db49ffd45dae29e84a91d0c39ce701888281a5da67e495e11027c',
+                         '2a93744c22019fe3a9b1ee71013b419607f4e0ca2091255b2f78a3020081a15a'},
+}
+
+
+def refresh_scan_validation(review, batch, manifest):
+    """Invalidate only old scan collectors, preserving their verified chunks."""
+    selected = [j for j in manifest['jobs'] if j['kind'] == 'scan_collect'
+                and j.get('scan_validation') != 'NIsoMuon_scan_validation_v1']
+    if not selected:
+        return manifest
+    source = Path(review.__file__).resolve().parent
+    for name, known in PRE_SCAN_AUDIT_HELPERS.items():
+        if digest(batch / name) not in known | {digest(source / name)}:
+            raise RuntimeError(f'Unknown pre-audit scan helper snapshot: {batch / name}')
+    module = batch / 'review_scan.py'
+    if module.exists() and digest(module) != digest(source / module.name):
+        raise RuntimeError(f'Unknown scan audit module: {module}')
+    updated = copy.deepcopy(manifest)
+    for old in selected:
+        job = updated['jobs'][old['index']]
+        label = review.mass_label(job['config']['mass'])
+        output = review.outdir(argparse.Namespace(**job['config']))
+        job['scan_validation'] = 'NIsoMuon_scan_validation_v1'
+        job['files'].extend(str(output / name) for name in
+                            (f'scan_validation_M{label}.json', f'scan_validated_M{label}.root')
+                            if str(output / name) not in job['files'])
+    archive = batch / ('scan_validation_upgrade_' + uuid4().hex[:8])
+    archive.mkdir()
+    names = ('combine_review.py', 'review_condor.py', 'review_scan.py')
+    shutil.copy2(batch / 'manifest.json', archive / 'manifest.json')
+    existing = {name for name in names if (batch / name).exists()}
+    for name in existing:
+        shutil.copy2(batch / name, archive / name)
+    for job in selected:
+        status = Path(job['workdir']) / 'status.json'
+        if status.exists():
+            shutil.copy2(status, archive / f"job_{job['index']}_status.json")
+    try:
+        for name in names:
+            shutil.copy2(source / name, batch / name)
+            updated['inputs'][str(batch / name)] = digest(batch / name)
+        updated['scan_validation_patch'] = {'archive': str(archive),
+            'collectors': [j['index'] for j in selected],
+            'preserves_scan_chunks_cards_workspaces_and_unrelated_jobs': True}
+        dump(batch / 'manifest.json', updated)
+    except Exception:
+        for name in names:
+            if name in existing:
+                shutil.copy2(archive / name, batch / name)
+            elif (batch / name).exists():
+                (batch / name).unlink()
+        shutil.copy2(archive / 'manifest.json', batch / 'manifest.json')
+        raise
+    print(f"[SCAN AUDIT] Updated {len(selected)} scan collectors; completed chunks and "
+          f"unrelated jobs retained; backup={archive}")
+    return updated
+
+
 def main(review, args):
     if args.condor_worker:
         if args.condor_index is None:
@@ -967,6 +1035,8 @@ def main(review, args):
             if args.condor_dry_run:
                 raise RuntimeError("--upgrade-backend cannot be combined with --condor-dry-run")
             manifest = upgrade_backend(review, batch, manifest)
+        if not args.condor_dry_run:
+            manifest = refresh_scan_validation(review, batch, manifest)
         indices, cache = [], {}
         for job in manifest["jobs"]:
             try:

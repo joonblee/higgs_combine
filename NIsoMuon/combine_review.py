@@ -18,6 +18,8 @@ Default assumptions
 * Review outputs are isolated under review_outputs/<TARGET>/M<MASS>/.
 * Local execution is the default. --backend condor uses review_condor.py to
   snapshot inputs and submit single-CPU jobs on shared storage.
+* B-only scans audit the plotted grid and both level-1/4 crossings before
+  plotting. Only internal holes are retried; raw grid outputs are preserved.
 
 Examples
 --------
@@ -460,13 +462,17 @@ def task_scan(args: argparse.Namespace, card: Path) -> None:
         return
 
     root_file = find_one(output, f"higgsCombine.{tag}.MultiDimFit.mH*.root")
+    import review_scan
+    validated = review_scan.validate_scan(root_file, cmd, output, mass_label(args.mass),
+                                           rmin, args.r_max, args.scan_points, run_command)
     plotter = shutil.which("plot1DScan.py")
     if not plotter:
         print(f"[WARNING] plot1DScan.py not found; retained {root_file}", file=sys.stderr)
         return
     plot_base = f"scan_{args.target}_M{mass_label(args.mass)}_Bonly"
     status = run_command(
-        [plotter, str(root_file), "--POI", "r", "-o", plot_base],
+        [plotter, str(validated), "--POI", "r", "-o", plot_base,
+         "--main-label", "Background-only Asimov"],
         output,
         dry_run=args.dry_run,
         log=output / f"scan_plot_M{mass_label(args.mass)}.log",

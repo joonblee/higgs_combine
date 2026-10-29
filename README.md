@@ -172,6 +172,32 @@ FitDiagnostics summaries are JSON; fitted status/covariance, scans, bias and
 HybridNew outputs still require statistical review. Job completion alone is
 not evidence that those checks pass.
 
+Likelihood-scan collectors now write `scan_validation_M<MASS>.json` before
+plotting. The audit checks the original bin-centred grid coordinates, finite
+NLL values, consistent initial minima across chunks, and complete grid support
+through the plotted region below `2*deltaNLL=7`. Both sides of the level-1 and
+level-4 crossings must be bracketed. Missing, invalid or above-cut interior
+points are retried individually at their original coordinates with tighter
+minimiser settings; no new grid, dataset or statistical model is substituted.
+At least two successful retries must agree within 0.005 in deltaNLL. Their
+initial global fits must have status 0, covariance quality at least 2 and
+EDM at most 0.001; their NLL reference must agree with the original within
+0.001. These saved fit statuses refer to the initial fits: the original grid
+does not provide a saved per-point RooFitResult/EDM audit. The raw grid ROOT
+file remains unchanged, and plots use a separate `scan_validated_M<MASS>.root`
+with the legend `Background-only Asimov`. Failed or missing tail points outside
+the bracketed plotted region are reported separately rather than declared
+converged. Unresolved interior holes or unbracketed crossings prevent collection.
+
+For the published pre-audit review batch, after its queue is empty, use the
+same `--stage resume` command below. It prints `[SCAN AUDIT]`, backs up the
+known helper snapshots and updates only the M20/M70 scan collectors. Completed
+scan chunks, bias repairs, impacts and other jobs are retained. The collectors
+inspect the server-local ROOT rows and record whether each gap was a missing
+entry, an invalid value or a point removed by the plotting cut. Unknown helper
+snapshots are rejected. Run `--stage collect` once the scan collectors finish;
+an old successful collector without the new audit is no longer sufficient.
+
 If a node failed, first ensure this batch's DAG manager and workers have left
 the queue (including held jobs), then run:
 
