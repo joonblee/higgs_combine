@@ -72,6 +72,28 @@ Detailed model documentation and historical review material are in
 [combine_review](https://github.com/joonblee/combine_review). Use the current
 `higgs_combine/NIsoMuon` scripts for the Condor review backend described below.
 
+### Current result files
+
+The current blind production is under `NIsoMuon/limit_outputs/alpha/blind/`;
+the completed review is under `NIsoMuon/review_outputs/Run2Run3/`. The final
+M20 bias summary is in `M20/bias_checks/parallel_verified/`, and the final M70
+summary is in `M70/bias_checks/bias_M70_verified.igsfei3e/`. Use these repaired
+summaries rather than the preliminary `bias/bias_summary_*.json` files.
+
+`review_outputs/condor_audit/review_20261029_091925/` retains the completed
+main/child manifests, worker statuses, repair results and successful-attempt
+records. Its byte-identical `results/` export was removed: references to the
+original batch's `results/<TARGET>/M<MASS>/...` resolve to the canonical
+`review_outputs/<TARGET>/M<MASS>/...` copy when inspecting the archived JSONs.
+The full runtime batch, ROOT outputs and raw logs remain server-local; this
+JSON export is a review record, not a relocatable Condor batch.
+
+Superseded production snapshots, old repair attempts, before-repair payloads
+and retired one-off cleanup tools were removed from the working tree. Their
+previous versions remain in Git history. Active audit/repair modules are still
+required by fresh submissions and are retained, together with the numerical
+validation reports and reusable production scan caches.
+
 
 
 ## Condor review and validation

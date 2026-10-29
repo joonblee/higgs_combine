@@ -8,3 +8,16 @@
 ./NIsoMuon/limit_outputs/alpha/unblind/*/*.json
 ./NIsoMuon/limit_outputs/alpha/unblind/*/*.txt
 ./NIsoMuon/limit_outputs/alpha/unblind/*/*.png
+
+# Generated caches and local scheduler state.
+__pycache__/
+*.py[cod]
+NIsoMuon/condor_jobs/
+
+# Superseded payloads and minimiser-attempt backups.
+*.before_repair.json
+NIsoMuon/limit_outputs/**/attempts_*/
+NIsoMuon/review_outputs/condor_audit/*/backend_upgrade_*/
+NIsoMuon/review_outputs/condor_audit/*/bias_parallel_upgrade_*/
+NIsoMuon/review_outputs/condor_audit/*/bias_refinement_upgrade_*/
+NIsoMuon/review_outputs/condor_audit/*/review_patch_*/
