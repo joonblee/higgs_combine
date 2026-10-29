@@ -16,9 +16,19 @@ Default assumptions
 * Existing internal-r expected-limit JSON lives under
     limit_outputs/alpha/blind/<TARGET>/limits_<TARGET>_alpha_internal.json
 * Review outputs are isolated under review_outputs/<TARGET>/M<MASS>/.
+* Local execution is the default. --backend condor uses review_condor.py to
+  snapshot inputs and submit single-CPU jobs on shared storage.
 
 Examples
 --------
+  # Submit the representative-mass review suite, then collect when complete.
+  python3 combine_review.py --backend condor --review-suite --bias-toys 500 \
+      --condor-dir condor_jobs/review_new --output-base review_outputs
+  python3 combine_review.py --stage collect --condor-dir condor_jobs/review_new
+
+  # Signal-injected Asimov fit (internal r=1, not alpha=1).
+  python3 combine_review.py 30 --task fitdiag --inject-r 1 --r-min 0
+
   # The immediate NPS validation check requested for M=20
   python3 combine_review.py 20 --task validate
 
@@ -87,7 +97,16 @@ TASKS = (
     "sb-impacts",
     "bias",
     "correlation",
+    "fitdiag",
 )
+
+# Only populated by the Condor collector after its dependencies were validated.
+# Keys identify commands already executed by distributed jobs.
+_REVIEW_COMMAND_CACHE = set()
+
+
+def command_key(cmd, cwd):
+    return (str(Path(cwd).resolve()), tuple(map(str, cmd)))
 
 
 def mass_label(mass: float) -> str:
@@ -160,6 +179,9 @@ def run_command(
     log: Optional[Path] = None,
 ) -> int:
     cwd.mkdir(parents=True, exist_ok=True)
+    if command_key(cmd, cwd) in _REVIEW_COMMAND_CACHE:
+        print(f"[CONDOR REUSE] {list(cmd)}", flush=True)
+        return 0
     printable = " ".join(str(x) for x in cmd)
     print(f"[RUN] (cd {cwd} && {printable})", flush=True)
     if dry_run:
@@ -184,6 +206,7 @@ def run_command(
             print(line, end="")
             stream.write(line)
         completed.wait()
+        completed.stdout.close()
         return int(completed.returncode)
 
 
@@ -1176,6 +1199,49 @@ def task_correlation(args: argparse.Namespace, card: Path) -> None:
     f.Close()
     print(f"[SAVED] {pdf}")
     print(f"[SAVED] {root_out}")
+    save_fitdiag_summary(args, fit_file, 0.0, output / f"fitdiag_summary_r0_M{label}.json")
+
+
+def task_fitdiag(args: argparse.Namespace, card: Path) -> None:
+    """Signal-injected Asimov fit and portable fitted-parameter summary."""
+    workspace = ensure_workspace(args, card)
+    output = outdir(args)
+    injection = 1.0 if args.inject_r is None else args.inject_r
+    tag = f"ReviewFitDiag_{args.target}_M{mass_label(args.mass)}"
+    command = ["combine", "-M", "FitDiagnostics", str(workspace),
+        "-m", mass_for_combine(args.mass), "-t", "-1", "--expectSignal", f"{injection:.12g}",
+        "--setParameters", f"r={injection:.12g}",
+        "--rMin", f"{safe_negative_rmin(card, args.r_min):.12g}",
+        "--rMax", f"{args.r_max:.12g}", "--robustFit", "1",
+        "--saveWithUncertainties", "--saveNormalizations", "-n", f".{tag}"]
+    if run_command(command, output, dry_run=args.dry_run, log=output / "fitdiag.log"):
+        raise RuntimeError("Signal-injected FitDiagnostics failed")
+    if args.dry_run:
+        return
+    save_fitdiag_summary(args, output / f"fitDiagnostics.{tag}.root", injection,
+                         output / f"fitdiag_summary_M{mass_label(args.mass)}.json")
+
+
+def save_fitdiag_summary(args, path, injection, destination):
+    import ROOT
+    source = ROOT.TFile.Open(str(path))
+    if not source or source.IsZombie():
+        raise RuntimeError(f"Cannot open FitDiagnostics output: {path}")
+    result = {"mass": args.mass, "target": args.target, "injected_r": injection,
+              "root_file": str(path), "fits": {}}
+    try:
+        for name in ("fit_b", "fit_s"):
+            fit = source.Get(name)
+            if not fit:
+                raise RuntimeError(f"Missing RooFitResult {name}")
+            result["fits"][name] = {"status": int(fit.status()), "covQual": int(fit.covQual()),
+                "EDM": float(fit.edm()), "parameters": {p.GetName(): {
+                    "value": float(p.getVal()), "error": float(p.getError()),
+                    "error_low": float(p.getErrorLo()), "error_high": float(p.getErrorHi())
+                } for p in fit.floatParsFinal()}}
+    finally:
+        source.Close()
+    Path(destination).write_text(json.dumps(result, indent=2) + "\n")
 
 
 def write_metadata(args: argparse.Namespace, card: Path) -> None:
@@ -1213,13 +1279,29 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=__doc__,
     )
-    parser.add_argument("mass", type=float, help="signal mass hypothesis in GeV, e.g. 20 or 70")
+    parser.add_argument("mass", type=float, nargs="?", help="signal mass hypothesis in GeV, e.g. 20 or 70")
+    parser.add_argument("--backend", choices=("local", "condor"), default="local")
+    parser.add_argument("--stage", choices=("run", "collect", "resume"), default="run")
+    parser.add_argument("--review-suite", action="store_true",
+        help="Condor representative-mass suite: validation, r=1 fits/impacts, r=0 scans/correlations, bias audits, HybridNew")
+    parser.add_argument("--condor-dir", help="new batch directory; required for collect/resume")
+    parser.add_argument("--condor-dry-run", action="store_true", help="prepare workspace, snapshots and DAG without submitting")
+    parser.add_argument("--condor-memory", type=int, default=4000, help="MiB per single-CPU worker")
+    parser.add_argument("--condor-max-jobs", type=int, default=0, help="DAG active-job cap; 0 means no cap")
+    parser.add_argument("--condor-requirements", default=None, help="additional site ClassAd requirements")
+    parser.add_argument("--condor-filesystem-domain", default=None, help="shared filesystem domain override, only when storage is actually shared")
+    parser.add_argument("--condor-cmssw-base", default=None)
+    parser.add_argument("--condor-scram-arch", default=None)
+    parser.add_argument("--scan-chunk-size", type=int, default=20, help="grid points per Condor scan job")
+    parser.add_argument("--bias-chunk-size", type=int, default=25, help="saved toys fitted sequentially per single-CPU Condor job")
+    parser.add_argument("--condor-worker", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--condor-index", type=int, default=None, help=argparse.SUPPRESS)
     parser.add_argument(
         "--task",
         type=parse_tasks,
         default=["validate"],
         help=(
-            "comma-separated tasks: validate,workspace,scan,hybrid,sb-impacts,bias,correlation,all; "
+            "comma-separated tasks: validate,workspace,scan,hybrid,sb-impacts,bias,correlation,fitdiag,all; "
             "default: validate"
         ),
     )
@@ -1307,6 +1389,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     delattr(args, "task")
 
     try:
+        if args.condor_worker or args.stage != "run" or args.backend == "condor":
+            import review_condor
+            return review_condor.main(sys.modules[__name__], args)
+        if args.mass is None or args.review_suite:
+            raise RuntimeError("Supply a mass for local execution; --review-suite requires --backend condor")
         if "CMSSW_BASE" not in os.environ:
             raise RuntimeError("CMSSW_BASE is not set. cd to the CMSSW src area and run cmsenv first.")
         if args.repair_sb_impacts and (args.tasks != ["sb-impacts"] or args.force):
@@ -1346,6 +1433,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "sb-impacts": lambda: task_sb_impacts(args, card),
             "bias": lambda: task_bias(args, card),
             "correlation": lambda: task_correlation(args, card),
+            "fitdiag": lambda: task_fitdiag(args, card),
         }
         for task in args.tasks:
             print("\n" + "=" * 88)
@@ -1355,7 +1443,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         print(f"\n[DONE] review outputs: {output}")
         return 0
-    except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+    except (RuntimeError, OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1
 

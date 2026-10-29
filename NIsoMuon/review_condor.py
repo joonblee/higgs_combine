@@ -1,0 +1,574 @@
+"""Shared-filesystem HTCondor DAG backend for combine_review.py.
+
+Physics commands are captured from the local helper, then partitioned without
+changing the dataset, nuisance model, grid or seeds. No observed data are used.
+"""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import copy
+import hashlib
+import io
+import json
+import math
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import subprocess
+from datetime import datetime
+from uuid import uuid4
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def dump(path, value):
+    path = Path(path)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+    temporary.replace(path)
+
+
+def option(command, flag, default=None):
+    return command[command.index(flag) + 1] if flag in command else default
+
+
+def replace(command, flag, value):
+    command = list(command)
+    if flag in command:
+        command[command.index(flag) + 1] = str(value)
+    else:
+        command.extend([flag, str(value)])
+    return command
+
+
+def root_name(command):
+    method = option(command, "-M")
+    name = option(command, "-n", "Test")
+    mass = option(command, "-m", "120")
+    seed = option(command, "-s")
+    if method == "GenerateOnly" and seed is None:
+        seed = "123456"
+    return f"higgsCombine{name}.{method}.mH{mass}" + (f".{seed}" if seed else "") + ".root"
+
+
+def capture(review, args, task, card):
+    """Capture the existing local command builders; no Combine jobs run here."""
+    cfg = copy.copy(args)
+    cfg.dry_run = True
+    cfg.force = False
+    cfg.scan_parallel = cfg.hybrid_parallel = cfg.impact_parallel = 1
+    commands = []
+    original = review.run_command
+    def record(cmd, cwd, **kwargs):
+        commands.append({"cmd": list(map(str, cmd)), "cwd": str(Path(cwd).resolve())})
+        return 0
+    try:
+        review.run_command = record
+        with contextlib.redirect_stdout(io.StringIO()):
+            getattr(review, "task_" + task.replace("-", "_"))(cfg, card)
+    finally:
+        review.run_command = original
+    return commands
+
+
+def suite_configs(args):
+    specs = [(m, "validate", {}) for m in (12, 20, 30, 70)]
+    for m in (12, 30, 70):
+        specs.extend([(m, "fitdiag", {"inject_r": 1., "r_min": 0.}),
+                      (m, "sb-impacts", {"inject_r": 1.})])
+    for m, points, low, high in ((20, 600, -50., 100.), (70, 240, -2., 5.)):
+        specs.append((m, "correlation", {"r_min": low, "r_max": high}))
+        specs.append((m, "scan", {"scan_points": points, "r_min": low, "r_max": high}))
+        specs.append((m, "bias", {"r_min": low, "r_max": 100., "bias_injections": None,
+                                   "bias_multipliers": [0., 1., 2.]}))
+    specs.append((70, "hybrid", {"r_max": 100.}))
+    return specs
+
+
+class Planner:
+    def __init__(self, review, batch, manifest):
+        self.review, self.batch, self.manifest = review, batch, manifest
+        self.jobs = manifest["jobs"]
+
+    def add(self, kind, args, dependencies=(), commands=(), files=(), **extra):
+        index = len(self.jobs)
+        directory = self.batch / "jobs" / f"job_{index}"
+        directory.mkdir(parents=True)
+        job = {"index": index, "kind": kind, "dependencies": list(dict.fromkeys(dependencies)),
+               "workdir": str(directory), "config": vars(copy.copy(args)),
+               "commands": list(commands), "files": list(map(str, files)), **extra}
+        self.jobs.append(job)
+        return index
+
+    def remote_command(self, kind, args, command, destination, dependencies=(), before=()):
+        index = self.add(kind, args, dependencies)
+        job = self.jobs[index]
+        work = Path(job["workdir"])
+        artifact = work / root_name(command)
+        job.update(commands=[{"cmd": command, "cwd": str(work)}], files=[str(artifact), str(destination)],
+                   copies_before=list(before), copies_after=[[str(artifact), str(destination)]])
+        return index
+
+    def final(self, task, args, dependencies, skip=(), merges=(), files=(), copies=()):
+        return self.add(task + "_collect", args, dependencies, files=files,
+                        helper=task, skip_commands=list(skip), merges=list(merges),
+                        copies_before=list(copies))
+
+    def task(self, args, task, card):
+        r = self.review
+        output = r.outdir(args)
+        label = r.mass_label(args.mass)
+        if task in ("validate", "correlation", "fitdiag", "workspace"):
+            required = {
+                "validate": [output / f"validation_M{label}.json"],
+                "correlation": [output / f"correlation_{args.target}_M{label}.pdf",
+                                output / f"fitdiag_summary_r0_M{label}.json"],
+                "fitdiag": [output / f"fitdiag_summary_M{label}.json"],
+                "workspace": [r.workspace_path(args)],
+            }[task]
+            self.add(task, args, helper=task, files=required)
+            return
+        commands = capture(r, args, task, card)
+        if task == "scan":
+            original = commands[0]
+            command = original["cmd"]
+            chunks, files = [], []
+            for start in range(0, args.scan_points, args.scan_chunk_size):
+                cmd = replace(command, "--firstPoint", start)
+                cmd = replace(cmd, "--lastPoint", min(start + args.scan_chunk_size, args.scan_points) - 1)
+                index = self.add("scan_chunk", args)
+                work = Path(self.jobs[index]["workdir"])
+                path = work / root_name(cmd)
+                self.jobs[index].update(commands=[{"cmd": cmd, "cwd": str(work)}], files=[str(path)])
+                chunks.append(index)
+                files.append(str(path))
+            merged = output / root_name(command)
+            self.final(task, args, chunks, skip=[original],
+                       merges=[{"destination": str(merged), "sources": files}],
+                       files=[merged, output / f"scan_{args.target}_M{label}_Bonly.pdf"])
+        elif task == "hybrid":
+            generation, *grid = commands
+            generated = Path(generation["cwd"]) / root_name(generation["cmd"])
+            parent = self.remote_command("hybrid_asimov", args, generation["cmd"], generated)
+            points = []
+            for point in grid:
+                dest = Path(point["cwd"]) / root_name(point["cmd"])
+                points.append(self.remote_command("hybrid_point", args, point["cmd"], dest, [parent]))
+            self.final(task, args, [parent, *points], skip=grid,
+                       files=[output / f"hybrid_comparison_M{label}.json"])
+        elif task == "sb-impacts":
+            initial, fits, _collection = commands
+            # Same complete floating-parameter list used by the nominal workflow.
+            import limit_workflow
+            parameters = sorted(limit_workflow.impact_workspace_parameters(r.workspace_path(args)))
+            if not parameters:
+                raise RuntimeError("No floating impact parameters in the submitted workspace")
+            tag = option(initial["cmd"], "-n")
+            mass = r.mass_for_combine(args.mass)
+            initial_name = f"higgsCombine_initialFit_{tag}.MultiDimFit.mH{mass}.root"
+            first = self.add("impact_initial", args)
+            first_work = Path(self.jobs[first]["workdir"])
+            first_file = first_work / initial_name
+            self.jobs[first].update(commands=[{"cmd": initial["cmd"], "cwd": str(first_work)}],
+                                    files=[str(first_file)])
+            children, copies = [], [[str(first_file), str(output / initial_name)]]
+            for nuisance in parameters:
+                cmd = [*fits["cmd"], "--named", nuisance]
+                index = self.add("impact_nuisance", args, [first])
+                work = Path(self.jobs[index]["workdir"])
+                path = work / f"higgsCombine_paramFit_{tag}_{nuisance}.MultiDimFit.mH{mass}.root"
+                self.jobs[index].update(commands=[{"cmd": cmd, "cwd": str(work)}],
+                    copies_before=[[str(first_file), str(work / initial_name)]], files=[str(path)])
+                children.append(index)
+                copies.append([str(path), str(output / path.name)])
+            self.final(task, args, [first, *children], skip=[initial, fits], copies=copies,
+                       files=[output / f"impacts_{args.target}_M{label}_SB.json",
+                              output / f"sb_impacts_metadata_M{label}.json"])
+        elif task == "bias":
+            all_fits, merges = [], []
+            for generation, fitting in zip(commands[::2], commands[1::2]):
+                generated = Path(generation["cwd"]) / root_name(generation["cmd"])
+                parent = self.remote_command("bias_generate", args, generation["cmd"], generated)
+                fragments, fit_logs = [], []
+                for start in range(1, args.bias_toys + 1, args.bias_chunk_size):
+                    index = self.add("bias_chunk", args, [parent])
+                    job = self.jobs[index]
+                    work = Path(job["workdir"])
+                    chunk = []
+                    for toy in range(start, min(start + args.bias_chunk_size, args.bias_toys + 1)):
+                        cmd = replace(fitting["cmd"], "--pickToy", toy)
+                        cmd = replace(cmd, "-n", option(cmd, "-n") + f"_toy{toy:04d}")
+                        chunk.append({"cmd": cmd, "cwd": str(work)})
+                        fragments.append(str(work / root_name(cmd)))
+                    job.update(commands=chunk, files=[str(work / root_name(c["cmd"])) for c in chunk])
+                    fit_logs.extend(str(work / f"command_{i}.log") for i in range(len(chunk)))
+                    all_fits.append(index)
+                dest = Path(fitting["cwd"]) / root_name(fitting["cmd"])
+                tag = re.search(r"_r([^.]*)\.MultiDimFit", dest.name).group(1)
+                merges.append({"destination": str(dest), "sources": fragments,
+                               "logs": fit_logs, "log_destination": str(dest.parent / f"bias_fit_r{tag}.log")})
+            final = self.final(task, args, all_fits, merges=merges,
+                        files=[output / "bias" / f"bias_summary_{args.target}_M{label}.json"])
+            if self.manifest["suite"]:
+                self.add("bias_audit", args, [final], audit=True,
+                         files=[output / "bias_checks" / "review_bias_validation.json"])
+        else:
+            raise RuntimeError(f"Unsupported Condor task: {task}")
+
+
+def prepare(review, args):
+    if args.repair_sb_impacts or args.force:
+        raise RuntimeError("New Condor batches do not accept --force/--repair-sb-impacts; use --stage resume for failed jobs")
+    if args.mass is None and not args.review_suite:
+        raise RuntimeError("Supply a mass, or --review-suite")
+    if args.mass is not None and args.review_suite:
+        raise RuntimeError("--review-suite chooses its representative masses; omit the positional mass")
+    for name in ("condor_memory", "scan_chunk_size", "bias_chunk_size", "bias_toys", "hybrid_toys", "hybrid_grid_points"):
+        if getattr(args, name) < 1:
+            raise RuntimeError(f"--{name.replace('_', '-')} must be positive")
+    if args.condor_max_jobs < 0 or args.scan_points < 5 or args.r_max <= 0:
+        raise RuntimeError("Invalid Condor cap, scan point count or rMax")
+    if args.inject_r is not None and (not math.isfinite(args.inject_r) or args.inject_r < 0 or args.inject_r >= args.r_max):
+        raise RuntimeError("Injection must be finite, nonnegative and below rMax")
+    cmssw = Path(args.condor_cmssw_base or os.environ.get("CMSSW_BASE", "")).resolve()
+    arch = args.condor_scram_arch or os.environ.get("SCRAM_ARCH")
+    if not arch or not (cmssw / "src").is_dir():
+        raise RuntimeError("Initialise the Combine CMSSW environment or supply --condor-cmssw-base/--condor-scram-arch")
+    token = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid4().hex[:8]
+    batch = Path(args.condor_dir or f"condor_jobs/review_{token}").resolve()
+    if re.search(r'[\s$"\\]', str(batch)):
+        raise RuntimeError("Condor batch paths must not contain whitespace, dollar signs, quotes or backslashes")
+    if batch.exists():
+        raise RuntimeError(f"Batch already exists: {batch}; use a new --condor-dir or --stage resume")
+    for value in (args.condor_requirements, args.condor_filesystem_domain):
+        if value and any(c in value for c in '\n\r'):
+            raise RuntimeError("Condor expressions must be single-line")
+    specs = suite_configs(args) if args.review_suite else [(args.mass, t, {}) for t in args.tasks]
+    # Preflight source cards/limits before creating the batch; this backend is for counting cards.
+    source_cards, source_limits = {}, {}
+    for mass, task, changes in specs:
+        cfg = copy.copy(args)
+        cfg.mass = mass
+        card = review.card_path(cfg)
+        for line in card.read_text().splitlines():
+            if line.strip().startswith("shapes "):
+                raise RuntimeError("Condor review currently supports self-contained counting cards only")
+        source_cards[mass] = card
+        if task in ("bias", "hybrid") or (task == "sb-impacts" and changes.get("inject_r", args.inject_r) is None):
+            source = review.expected_limit_json(cfg)
+            review.existing_expected_r95(cfg)
+            source_limits[str(source)] = source
+    if "bias" in [s[1] for s in specs] and args.review_suite and args.bias_toys < 2:
+        raise RuntimeError("Bias interval audits require at least two toys")
+    batch.mkdir(parents=True)
+    inputs = {}
+    script_dir = Path(review.__file__).resolve().parent
+    for name in ("combine_review.py", "review_condor.py", "limit_workflow.py", "audit_bias_intervals.py",
+                 "repair_bias_intervals.py", "validate_bias_repair.py"):
+        source = script_dir / name
+        if not source.is_file():
+            raise RuntimeError(f"Required review source missing: {source}")
+        dest = batch / name
+        shutil.copy2(source, dest)
+        inputs[str(dest)] = digest(dest)
+    for mass, source in source_cards.items():
+        dest = batch / "cards" / args.target / source.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+        inputs[str(dest)] = digest(dest)
+    limit_dest = None
+    for source in source_limits.values():
+        limit_dest = batch / "expected_limits.json"
+        shutil.copy2(source, limit_dest)
+        inputs[str(limit_dest)] = digest(limit_dest)
+    manifest = {"schema": "NIsoMuon_review_condor_v1", "batch_id": token, "batch": str(batch),
+                "output_base": str(Path(args.output_base).resolve()), "suite": args.review_suite,
+                "cmssw_base": str(cmssw), "scram_arch": arch, "inputs": inputs, "jobs": [],
+                "memory": args.condor_memory, "max_jobs": args.condor_max_jobs,
+                "requirements": args.condor_requirements, "filesystem_domain": args.condor_filesystem_domain}
+    planner = Planner(review, batch, manifest)
+    workspaces = set()
+    for mass, task, changes in specs:
+        cfg = copy.copy(args)
+        cfg.mass = mass
+        cfg.__dict__.update(changes)
+        cfg.card_base = str(batch / "cards")
+        cfg.output_base = str(batch / "results")
+        cfg.expected_json = str(limit_dest) if limit_dest else None
+        cfg.backend, cfg.stage, cfg.review_suite = "local", "run", False
+        cfg.dry_run = cfg.force = cfg.condor_dry_run = False
+        cfg.scan_parallel = cfg.hybrid_parallel = cfg.impact_parallel = 1
+        cfg.condor_worker = cfg.condor_index = None
+        cfg.tasks = [task]
+        card = review.card_path(cfg)
+        if task != "validate" and mass not in workspaces:
+            workspace = review.ensure_workspace(cfg, card)
+            inputs[str(workspace)] = digest(workspace)
+            workspaces.add(mass)
+        review.write_metadata(cfg, card)
+        planner.task(cfg, task, card)
+    dump(batch / "manifest.json", manifest)
+    write_submission(batch, manifest, list(range(len(manifest["jobs"]))), "workflow.dag")
+    print(f"[CONDOR] {len(manifest['jobs'])} single-CPU jobs; batch={batch}")
+    print(f"[CONDOR] collect: python3 combine_review.py --stage collect --condor-dir {shlex.quote(str(batch))}")
+    print(f"[CONDOR] resume:  python3 combine_review.py --stage resume --condor-dir {shlex.quote(str(batch))}")
+    if not (args.condor_dry_run or args.dry_run):
+        submit(batch, manifest, "workflow.dag")
+    else:
+        print("[CONDOR] Prepared only: workspaces and snapshots created; no jobs submitted")
+    return batch
+
+
+def write_submission(batch, manifest, indices, dag_name):
+    wrapper = batch / "run_job.sh"
+    wrapper.write_text("\n".join([
+        "#!/bin/bash", "set -eo pipefail", "export LC_ALL=C ROOT_HIST=0",
+        "source /cvmfs/cms.cern.ch/cmsset_default.sh",
+        "export SCRAM_ARCH=" + shlex.quote(manifest["scram_arch"]),
+        "cd " + shlex.quote(str(Path(manifest["cmssw_base"]) / "src")),
+        'eval "$(scramv1 runtime -sh)"',
+        "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1",
+        "cd " + shlex.quote(str(batch)),
+        "exec python3 -u " + shlex.quote(str(batch / "combine_review.py")) +
+        " --condor-worker " + shlex.quote(str(batch / "manifest.json")) + ' --condor-index "$1"', ""]))
+    wrapper.chmod(0o755)
+    lines = [f"executable = {wrapper}", f"initialdir = {batch}", "arguments = $(jobindex)",
+             "universe = vanilla", "getenv = True", "should_transfer_files = NO",
+             "request_cpus = 1", f"request_memory = {manifest['memory']}MB", "request_disk = 1GB",
+             "jobbatchname = NIsoMuon_review_" + manifest["batch_id"],
+             "output = jobs/job_$(jobindex)/condor.out", "error = jobs/job_$(jobindex)/condor.err",
+             "log = condor.log"]
+    if manifest.get("requirements"):
+        lines.append("requirements = " + manifest["requirements"])
+    if manifest.get("filesystem_domain"):
+        lines.append("+FileSystemDomain = " + json.dumps(manifest["filesystem_domain"]))
+    lines.append("queue 1\n")
+    (batch / "submit.jds").write_text("\n".join(lines))
+    selected = set(indices)
+    dag = []
+    for index in indices:
+        job = manifest["jobs"][index]
+        dag.extend([f"JOB J{index} submit.jds", f'VARS J{index} jobindex="{index}"'])
+        parents = [i for i in job["dependencies"] if i in selected]
+        if parents:
+            dag.append("PARENT " + " ".join(f"J{i}" for i in parents) + f" CHILD J{index}")
+    (batch / dag_name).write_text("\n".join(dag) + "\n")
+
+
+def submit(batch, manifest, dag):
+    command = ["condor_submit_dag"]
+    if manifest["max_jobs"]:
+        command += ["-maxjobs", str(manifest["max_jobs"])]
+    subprocess.run([*command, dag], cwd=batch, check=True)
+
+
+def load_batch(path):
+    path = Path(path).resolve()
+    manifest = json.loads((path / "manifest.json").read_text())
+    if manifest.get("schema") != "NIsoMuon_review_condor_v1" or manifest.get("batch") != str(path):
+        raise RuntimeError("Invalid or relocated review batch; keep the submitted shared-storage path")
+    for name, fingerprint in manifest["inputs"].items():
+        if not Path(name).is_file() or digest(name) != fingerprint:
+            raise RuntimeError(f"Submitted input/code/workspace changed: {name}")
+    return path, manifest
+
+
+def complete(manifest, index, cache=None):
+    cache = {} if cache is None else cache
+    if index in cache:
+        return cache[index]
+    job = manifest["jobs"][index]
+    path = Path(job["workdir"]) / "status.json"
+    if not path.is_file():
+        raise RuntimeError(f"job {index} {job['kind']}: pending")
+    status = json.loads(path.read_text())
+    fingerprint = hashlib.sha256(json.dumps(job, sort_keys=True).encode()).hexdigest()
+    if not status.get("success") or status.get("batch_id") != manifest["batch_id"] or status.get("job_sha256") != fingerprint:
+        raise RuntimeError(f"job {index} {job['kind']}: failed or stale status")
+    if not status.get("outputs"):
+        raise RuntimeError(f"job {index}: no output fingerprints")
+    for name, value in status["outputs"].items():
+        if not Path(name).is_file() or not Path(name).stat().st_size or digest(name) != value:
+            raise RuntimeError(f"job {index}: output missing or changed: {name}")
+    for parent in job["dependencies"]:
+        previous = complete(manifest, parent, cache)
+        if status.get("dependencies", {}).get(str(parent)) != previous["completion_id"]:
+            raise RuntimeError(f"job {index}: stale after dependency {parent} reran")
+    cache[index] = status
+    return status
+
+
+def copy_pairs(pairs):
+    for source, target in pairs:
+        target = Path(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+
+def execute(review, manifest, index):
+    job = manifest["jobs"][index]
+    work = Path(job["workdir"])
+    status = {"success": False, "batch_id": manifest["batch_id"], "completion_id": uuid4().hex,
+              "job_sha256": hashlib.sha256(json.dumps(job, sort_keys=True).encode()).hexdigest()}
+    cfg = argparse.Namespace(**job["config"])
+    try:
+        cache = {}
+        status["dependencies"] = {str(i): complete(manifest, i, cache)["completion_id"] for i in job["dependencies"]}
+        dump(work / "status.json", status)
+        # A retry must not accept files left by an interrupted command. Pinned
+        # input workspaces are immutable and are never removed here.
+        for name in job["files"]:
+            path = Path(name)
+            if name not in manifest.get("inputs", {}) and path.is_file():
+                path.unlink()
+        copy_pairs(job.get("copies_before", []))
+        for i, command in enumerate(job["commands"]):
+            if review.run_command(command["cmd"], Path(command["cwd"]), log=work / f"command_{i}.log"):
+                raise RuntimeError(f"Command {i} failed; see {work}")
+        for merge in job.get("merges", []):
+            destination = Path(merge["destination"])
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if review.run_command(["hadd", "-f", str(destination), *merge["sources"]], work, log=work / (destination.stem + ".log")):
+                raise RuntimeError("ROOT merge failed")
+            if merge.get("logs"):
+                with Path(merge["log_destination"]).open("w") as output:
+                    for log in merge["logs"]:
+                        output.write(Path(log).read_text())
+        copy_pairs(job.get("copies_after", []))
+        if job.get("helper"):
+            review._REVIEW_COMMAND_CACHE = {review.command_key(c["cmd"], c["cwd"]) for c in job.get("skip_commands", [])}
+            try:
+                helper = job["helper"]
+                if helper == "workspace":
+                    review.ensure_workspace(cfg, review.card_path(cfg))
+                else:
+                    getattr(review, "task_" + helper.replace("-", "_"))(cfg, review.card_path(cfg))
+            finally:
+                review._REVIEW_COMMAND_CACHE = set()
+        if job.get("audit"):
+            run_audit(review, manifest, cfg, work)
+        files = job["files"]
+        for name in files:
+            if not Path(name).is_file() or not Path(name).stat().st_size:
+                raise RuntimeError(f"Required output missing or empty: {name}")
+        status.update(success=True, outputs={name: digest(name) for name in files})
+    except Exception as exc:
+        status["error"] = f"{type(exc).__name__}: {exc}"
+        raise
+    finally:
+        dump(work / "status.json", status)
+
+
+def run_audit(review, manifest, args, work):
+    output = review.outdir(args)
+    checks = output / "bias_checks"
+    checks.mkdir(parents=True, exist_ok=True)
+    scripts = Path(manifest["batch"])
+    command = ["python3", str(scripts / "audit_bias_intervals.py"), "--source-dir", str(output),
+               "--target", args.target, "--mass", review.mass_label(args.mass), "--expected-toys", str(args.bias_toys)]
+    log = checks / "audit.log"
+    code = review.run_command(command, checks, log=log)
+    if code not in (0, 2):
+        raise RuntimeError(f"Bias audit input failure: {log}")
+    matches = re.findall(r"^\[SAVED\] (.+)$", log.read_text(), re.M)
+    if not matches:
+        raise RuntimeError(f"No audit report produced: {log}")
+    audit_path = Path(matches[-1])
+    audit = json.loads(audit_path.read_text())
+    result = {"passed": bool(audit["passed"]), "audit": str(audit_path), "repair": None}
+    if code == 2:
+        command = ["python3", str(scripts / "repair_bias_intervals.py"), "--audit", str(audit_path),
+                   "--source-dir", str(output), "--target", args.target, "--mass", review.mass_label(args.mass)]
+        repair_log = checks / "repair.log"
+        if review.run_command(command, checks, log=repair_log):
+            raise RuntimeError(f"Bias repair failed: {repair_log}")
+        paths = re.findall(r"^\[OUTPUT\] (.+)$", repair_log.read_text(), re.M)
+        if not paths:
+            raise RuntimeError("Missing bias repair output path")
+        validation = Path(paths[-1]) / "validation.json"
+        result.update(passed=bool(json.loads(validation.read_text())["passed"]), repair=str(validation))
+    dump(checks / "review_bias_validation.json", result)
+    if not result["passed"]:
+        raise RuntimeError("Bias intervals did not pass audit/repair")
+
+
+def active_batch(batch):
+    """Prevent concurrent workers or multiple DAG managers during recovery."""
+    constraint = "JobStatus != 4 && (Iwd == " + json.dumps(str(batch)) + ")"
+    result = subprocess.run(["condor_q", "-constraint", constraint, "-af", "ClusterId", "ProcId"],
+                            text=True, capture_output=True, check=True)
+    if result.stdout.strip():
+        raise RuntimeError("This batch still has queued/running/held jobs or a DAG manager; wait or remove that batch before resume")
+
+
+def collect(batch, manifest):
+    cache = {}
+    errors = []
+    for job in manifest["jobs"]:
+        try:
+            complete(manifest, job["index"], cache)
+        except (RuntimeError, OSError, ValueError) as exc:
+            errors.append(str(exc))
+    if errors:
+        raise RuntimeError("Review batch incomplete; nothing collected:\n  " + "\n  ".join(errors[:12]))
+    destination = Path(manifest["output_base"])
+    destination.mkdir(parents=True, exist_ok=True)
+    marker = destination / "review_collection.json"
+    results = batch / "results"
+    for target in sorted(results.iterdir()):
+        for source in sorted(target.iterdir()):
+            if not source.is_dir():
+                continue
+            dest = destination / target.name / source.name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            stage = dest.parent / ("." + dest.name + "." + uuid4().hex)
+            shutil.copytree(source, stage)
+            if dest.exists():
+                backup = batch / "previous_outputs" / target.name / (source.name + "." + uuid4().hex)
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(dest), str(backup))
+            stage.rename(dest)
+    dump(marker, {"batch_id": manifest["batch_id"], "manifest": str(batch / "manifest.json"),
+                  "n_jobs": len(manifest["jobs"]), "mode": "blind", "suite": manifest["suite"]})
+    print(f"[COLLECT] Review outputs saved: {destination}")
+
+
+def main(review, args):
+    if args.condor_worker:
+        if args.condor_index is None:
+            raise RuntimeError("Missing --condor-index")
+        batch, manifest = load_batch(Path(args.condor_worker).parent)
+        if not 0 <= args.condor_index < len(manifest["jobs"]):
+            raise RuntimeError("Invalid --condor-index")
+        execute(review, manifest, args.condor_index)
+        return 0
+    if args.stage == "run":
+        prepare(review, args)
+        return 0
+    if not args.condor_dir:
+        raise RuntimeError("--condor-dir is required for collect/resume")
+    batch, manifest = load_batch(args.condor_dir)
+    if args.stage == "collect":
+        collect(batch, manifest)
+    else:
+        active_batch(batch)
+        indices, cache = [], {}
+        for job in manifest["jobs"]:
+            try:
+                complete(manifest, job["index"], cache)
+            except (RuntimeError, OSError, ValueError):
+                indices.append(job["index"])
+        if not indices:
+            print("[RESUME] All jobs complete; use --stage collect")
+            return 0
+        dag = "resume_" + uuid4().hex[:8] + ".dag"
+        write_submission(batch, manifest, indices, dag)
+        print(f"[RESUME] {len(indices)} failed/pending/stale nodes")
+        if not args.condor_dry_run:
+            submit(batch, manifest, dag)
+    return 0
