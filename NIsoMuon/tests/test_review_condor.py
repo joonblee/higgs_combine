@@ -147,8 +147,10 @@ class ReviewCondorTests(unittest.TestCase):
         final = next(j for j in jobs if j['kind'] == 'bias_collect')
         self.assertEqual(len(final['merges']), 3)
         self.assertTrue(all(len(m['sources']) == 7 for m in final['merges']))
-        self.assertEqual(jobs[-1]['kind'], 'bias_audit')
-        self.assertEqual(jobs[-1]['dependencies'], [final['index']])
+        self.assertEqual(jobs[-2]['kind'], 'bias_audit_prepare')
+        self.assertEqual(jobs[-2]['dependencies'], [final['index']])
+        self.assertEqual(jobs[-1]['kind'], 'bias_repair_dag')
+        self.assertEqual(jobs[-1]['dependencies'], [jobs[-2]['index']])
 
     def test_suite_contains_r1_r0_validation_bias_and_hybrid(self):
         specs = condor.suite_configs(self.args)
@@ -303,7 +305,8 @@ class ReviewCondorTests(unittest.TestCase):
         submit.assert_not_called()
         _, manifest = condor.load_batch(batch)
         self.assertGreater(len(manifest['jobs']), 100)
-        self.assertEqual(len([j for j in manifest['jobs'] if j['kind'] == 'bias_audit']), 2)
+        self.assertEqual(len([j for j in manifest['jobs'] if j['kind'] == 'bias_audit_prepare']), 2)
+        self.assertEqual(len([j for j in manifest['jobs'] if j.get('subdag')]), 2)
         self.assertTrue(all(j['config']['scan_parallel'] == 1 for j in manifest['jobs']))
         self.assertTrue(all(j['config']['impact_parallel'] == 1 for j in manifest['jobs']))
         self.assertIn(str(batch / 'expected_limits.json'), manifest['inputs'])

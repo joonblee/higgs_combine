@@ -39,6 +39,48 @@ def validate_point(profile, value, target, tolerance):
         raise RuntimeError(f"Profile deltaNLL={profile['deltaNLL']} differs from target={target}")
 
 
+def repair_one_toy(workspace, toy_file, mass, count, toy, injection, bounds,
+                   tag, output, target_nll, history, failed_attempts):
+    """One independent saved-toy repair, with the original acceptance checks."""
+    job = f"{tag}/toy_{toy:04d}"
+    success = None
+    # Fixed order; selection is by numerical checks, never by bias value.
+    for strategy, tolerance in ((1, .01), (2, .01), (2, .001)):
+        directory = output / "repairs" / job / f"s{strategy}_t{tolerance}"
+        command = retry_command(workspace, toy_file, mass, count, toy,
+                                injection, bounds, strategy, tolerance)
+        try:
+            rows = verify.run(command, directory, history)
+            result = audit.audit_rows(rows, count, bounds)
+            if result["unexpected_toy_ids"] or result["unrecognised_rows"]:
+                raise RuntimeError("Unexpected entries in single-toy retry")
+            selected = result["toys"][str(toy)]
+            if not selected["passed"] or {r["toy"] for r in rows} != {toy}:
+                raise RuntimeError(f"Invalid retry interval/toy selection: {selected['issues']}")
+            interval = selected["interval"]
+            info = verify.fit_info(directory)
+            verify.check_fit(info, .001)
+            center = verify.profile_saved_reference(command, info, toy, interval[1],
+                                                   directory / "center", history, .001)
+            validate_point(center, interval[1], 0, .001)
+            endpoints = []
+            for side, value in (("low", interval[0]), ("high", interval[2])):
+                point = verify.profile_saved_reference(command, info, toy, value,
+                                                      directory / side, history, .01)
+                validate_point(point, value, target_nll, .01)
+                endpoints.append(point | {"side": side, "target_deltaNLL": target_nll})
+            success = {"job": job, "passed": True, "interval": interval,
+                       "status": info["status"], "covQual": info["covQual"],
+                       "EDM": info["EDM"], "center_profile": center,
+                       "endpoints": endpoints, "source_directory": str(directory)}
+            break
+        except Exception as exc:
+            failed_attempts.append({"job": job, "directory": str(directory),
+                                              "error": str(exc)})
+            print(f"[RETRY CHECK] {job}: {exc}", flush=True)
+    return success
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--audit", type=Path, required=True)
@@ -97,41 +139,8 @@ def main():
             manifest["input_sha256"][str(toy_file)] = audit.sha256(toy_file)
             for toy in fresh["flagged_toy_ids"]:
                 job = f"{tag}/toy_{toy:04d}"
-                success = None
-                # Fixed order; selection is by numerical checks, never by bias value.
-                for strategy, tolerance in ((1, .01), (2, .01), (2, .001)):
-                    directory = output / "repairs" / job / f"s{strategy}_t{tolerance}"
-                    command = retry_command(workspace, toy_file, args.mass, count, toy,
-                                            injection, bounds, strategy, tolerance)
-                    try:
-                        rows = verify.run(command, directory, history)
-                        result = audit.audit_rows(rows, count, bounds)
-                        if result["unexpected_toy_ids"] or result["unrecognised_rows"]:
-                            raise RuntimeError("Unexpected entries in single-toy retry")
-                        selected = result["toys"][str(toy)]
-                        if not selected["passed"] or {r["toy"] for r in rows} != {toy}:
-                            raise RuntimeError(f"Invalid retry interval/toy selection: {selected['issues']}")
-                        interval = selected["interval"]
-                        info = verify.fit_info(directory)
-                        verify.check_fit(info, .001)
-                        center = verify.profile_saved_reference(command, info, toy, interval[1],
-                                                               directory / "center", history, .001)
-                        validate_point(center, interval[1], 0, .001)
-                        endpoints = []
-                        for side, value in (("low", interval[0]), ("high", interval[2])):
-                            point = verify.profile_saved_reference(command, info, toy, value,
-                                                                  directory / side, history, .01)
-                            validate_point(point, value, target_nll, .01)
-                            endpoints.append(point | {"side": side, "target_deltaNLL": target_nll})
-                        success = {"job": job, "passed": True, "interval": interval,
-                                   "status": info["status"], "covQual": info["covQual"],
-                                   "EDM": info["EDM"], "center_profile": center,
-                                   "endpoints": endpoints, "source_directory": str(directory)}
-                        break
-                    except Exception as exc:
-                        report["failed_attempts"].append({"job": job, "directory": str(directory),
-                                                          "error": str(exc)})
-                        print(f"[RETRY CHECK] {job}: {exc}", flush=True)
+                success = repair_one_toy(workspace, toy_file, args.mass, count, toy,
+                    injection, bounds, tag, output, target_nll, history, report["failed_attempts"])
                 if success is None:
                     report["errors"].append(f"No independently verified repair: {job}")
                     continue

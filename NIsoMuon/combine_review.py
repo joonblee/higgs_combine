@@ -1288,6 +1288,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--condor-dry-run", action="store_true", help="prepare workspace, snapshots and DAG without submitting")
     parser.add_argument("--upgrade-backend", action="store_true",
         help="with --stage resume, migrate the known v1 bias output-name bug and preserve completed toy fits")
+    parser.add_argument("--parallel-bias-repair", action="store_true",
+        help="with --stage resume, replace legacy serial bias-audit jobs with per-toy Condor sub-DAGs")
     parser.add_argument("--condor-memory", type=int, default=4000, help="MiB per single-CPU worker")
     parser.add_argument("--condor-max-jobs", type=int, default=0, help="DAG active-job cap; 0 means no cap")
     parser.add_argument("--condor-requirements", default=None, help="additional site ClassAd requirements")

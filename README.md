@@ -2,7 +2,8 @@
 
 The NIsoMuon counting workflow is in `NIsoMuon/limit_workflow.py`; review tasks
 are in `NIsoMuon/combine_review.py`. The review Condor backend is in
-`NIsoMuon/review_condor.py`; keep it beside `combine_review.py`. No separate
+`NIsoMuon/review_condor.py` and `NIsoMuon/review_bias_parallel.py`; keep both
+beside `combine_review.py`. No separate
 `qcd_stat_uncertainty.py` module or execution is required.
 
 The DY consumer integrates the producer's signed `DYAux/LightJetSource` bins
@@ -102,12 +103,20 @@ single-CPU Condor job. Bias generation is once per injection; fits use the
 same saved toys with `--pickToy`, retaining their original toy IDs, in chunks
 of 25 sequential fits per worker by default. Collectors merge the results and
 use the existing local summaries, plots and nuisance-boundary repair logic.
-Expensive all-nuisance impact repairs and flagged-toy bias repairs currently
-run serially in their collector worker. They are not launched on the login host.
+The structural bias audit creates a lazy HTCondor Sub-DAG containing only
+flagged toys: each toy repair gets a separate single-CPU worker, followed by
+one strict merge. The refit and centre/lower/upper endpoint checks for one toy
+retain their existing order and numerical criteria. No new toys are generated.
+Already verified serial repairs can be reused only when their saved command
+matches the same workspace, toy dataset/ID, injection and fitted range, and
+all original numerical checks pass. All required toy results must pass before
+the final summaries are published. Additional impact-boundary repairs still
+run serially in their collector worker; they are not launched on the login host.
 Use `--scan-chunk-size` (default 20) or `--bias-chunk-size` (default 25) to
 change granularity. Local `--*-parallel` values do not control the Condor DAG;
 worker-local process counts are fixed at one. `--condor-max-jobs N` optionally
-caps active DAG jobs; zero, the default, leaves scheduling to the pool.
+caps active jobs per DAG, including each repair Sub-DAG independently; this is
+not a global cap across nested DAGs. Zero, the default, leaves scheduling to the pool.
 Each worker requests one CPU and 4000 MiB by default (`--condor-memory`).
 
 The worker wrapper activates the submitted `CMSSW_BASE` and `SCRAM_ARCH` using
@@ -177,6 +186,35 @@ resubmits failed, pending or stale nodes and their affected descendants. It
 refuses to submit a second DAG while jobs in the same batch remain queued.
 Completion UUIDs prevent descendants from being accepted after a dependency
 was rerun. Worker logs/status are in `<batch>/jobs/job_<index>/`.
+
+To convert incomplete serial bias-audit nodes from the `910d62a` backend
+in an existing batch, first wait for its DAG and workers to finish or remove
+that specific DAGMan job with `condor_rm`. The command below refuses to change
+a batch while it or any child workflow still has queued/running/held jobs.
+
+```bash
+python3 combine_review.py --stage resume --parallel-bias-repair \
+  --condor-dir "$REVIEW_BATCH"
+```
+
+The conversion archives the original snapshot/manifest, retains completed
+production fits and completed audits, and replaces only incomplete audits.
+Verified per-toy results already saved by a serial repair are considered for
+reuse; unverified attempts are retained but never accepted as passed results.
+The structural audit submits only remaining flagged repairs, rather than jobs
+for all toys. Subsequent recovery uses ordinary `--stage resume`; valid child
+jobs are retained and only failed/stale repairs and their merge are retried.
+The child manifests/logs are under `<batch>/bias_repairs/<TARGET>/M<MASS>/`;
+merged bias summaries are under the mass result's
+`bias_checks/parallel_verified/`. A running frozen batch does not automatically
+adopt code changes made in the production checkout.
+
+Sub-DAG descriptions are generated after their structural audit and submitted
+lazily by DAGMan on the access point, using `SUBDAG EXTERNAL` with an explicit
+child working directory. See the
+[HTCondor Sub-DAG documentation](https://htcondor.readthedocs.io/en/24.x/automated-workflows/dagman-using-other-dags.html).
+Workers do not submit jobs themselves. `--stage collect` validates child job
+completion, output fingerprints and dependency completions recursively.
 
 Individual tasks also support Condor, for example:
 

@@ -217,8 +217,7 @@ class Planner:
             final = self.final(task, args, all_fits, merges=merges,
                         files=[output / "bias" / f"bias_summary_{args.target}_M{label}.json"])
             if self.manifest["suite"]:
-                self.add("bias_audit", args, [final], audit=True,
-                         files=[output / "bias_checks" / "review_bias_validation.json"])
+                add_parallel_audit(self, args, [final])
         else:
             raise RuntimeError(f"Unsupported Condor task: {task}")
 
@@ -270,7 +269,7 @@ def prepare(review, args):
     batch.mkdir(parents=True)
     inputs = {}
     script_dir = Path(review.__file__).resolve().parent
-    for name in ("combine_review.py", "review_condor.py", "limit_workflow.py", "audit_bias_intervals.py",
+    for name in ("combine_review.py", "review_condor.py", "review_bias_parallel.py", "limit_workflow.py", "audit_bias_intervals.py",
                  "repair_bias_intervals.py", "validate_bias_repair.py"):
         source = script_dir / name
         if not source.is_file():
@@ -355,15 +354,30 @@ def write_submission(batch, manifest, indices, dag_name):
     dag = []
     for index in indices:
         job = manifest["jobs"][index]
-        dag.extend([f"JOB J{index} submit.jds", f'VARS J{index} jobindex="{index}"'])
+        if job.get("subdag"):
+            dag.append(f"SUBDAG EXTERNAL J{index} {job['subdag']} DIR {Path(job['subdag']).parent}")
+            # Lazy generation is required: the audit parent creates this DAG.
+        else:
+            dag.extend([f"JOB J{index} submit.jds", f'VARS J{index} jobindex="{index}"'])
         parents = [i for i in job["dependencies"] if i in selected]
         if parents:
             dag.append("PARENT " + " ".join(f"J{i}" for i in parents) + f" CHILD J{index}")
     (batch / dag_name).write_text("\n".join(dag) + "\n")
+    config = []
+    if any(j.get('subdag') for j in manifest['jobs']):
+        config.append('DAGMAN_GENERATE_SUBDAG_SUBMITS = True')
+    if manifest.get("parent_completions") is not None and manifest["max_jobs"]:
+        config.append(f"DAGMAN_MAX_JOBS_SUBMITTED = {manifest['max_jobs']}")
+    if config:
+        (batch / "dagman.config").write_text('\n'.join(config) + '\n')
+        with (batch / dag_name).open("a") as stream:
+            stream.write("CONFIG dagman.config\n")
 
 
 def submit(batch, manifest, dag):
     command = ["condor_submit_dag"]
+    if any(j.get('subdag') for j in manifest['jobs']):
+        command.append('-no_recurse')
     if manifest["max_jobs"]:
         command += ["-maxjobs", str(manifest["max_jobs"])]
     subprocess.run([*command, dag], cwd=batch, check=True)
@@ -385,6 +399,18 @@ def complete(manifest, index, cache=None):
     if index in cache:
         return cache[index]
     job = manifest["jobs"][index]
+    if job.get("subdag"):
+        parents = {str(i): complete(manifest, i, cache)["completion_id"] for i in job["dependencies"]}
+        child_path = Path(job["subdag"]).parent
+        if not (child_path / "manifest.json").is_file():
+            raise RuntimeError(f"job {index} {job['kind']}: repair DAG not prepared")
+        _, child = load_batch(child_path)
+        if child.get("parent_completions") != parents:
+            raise RuntimeError(f"job {index}: stale repair DAG after audit reran")
+        children = {str(j['index']): complete(child, j['index'])['completion_id'] for j in child['jobs']}
+        status = {"completion_id": hashlib.sha256(json.dumps([parents, children], sort_keys=True).encode()).hexdigest()}
+        cache[index] = status
+        return status
     path = Path(job["workdir"]) / "status.json"
     if not path.is_file():
         raise RuntimeError(f"job {index} {job['kind']}: pending")
@@ -456,6 +482,11 @@ def execute(review, manifest, index):
                 review._REVIEW_COMMAND_CACHE = set()
         if job.get("audit"):
             run_audit(review, manifest, cfg, work)
+        if job.get("audit_prepare"):
+            run_audit_prepare(review, manifest, job, cfg, work, status["completion_id"])
+        if job.get("bias_one") or job.get("bias_merge"):
+            import review_bias_parallel
+            review_bias_parallel.execute(manifest, job)
         files = job["files"]
         for name in files:
             if not Path(name).is_file() or not Path(name).stat().st_size:
@@ -503,7 +534,7 @@ def run_audit(review, manifest, args, work):
 
 def active_batch(batch):
     """Prevent concurrent workers or multiple DAG managers during recovery."""
-    constraint = "JobStatus != 4 && (Iwd == " + json.dumps(str(batch)) + ")"
+    constraint = "JobStatus != 4 && regexp(" + json.dumps("^" + re.escape(str(batch)) + "(/|$)") + ", Iwd)"
     result = subprocess.run(["condor_q", "-constraint", constraint, "-af", "ClusterId", "ProcId"],
                             text=True, capture_output=True, check=True)
     if result.stdout.strip():
@@ -641,6 +672,133 @@ def upgrade_backend(review, batch, manifest):
     return updated
 
 
+def add_parallel_audit(planner, args, dependencies, replace_index=None):
+    output = planner.review.outdir(args)
+    child = planner.batch / 'bias_repairs' / args.target / ('M' + planner.review.mass_label(args.mass))
+    audit = planner.add('bias_audit_prepare', args, dependencies, audit_prepare=True,
+        repair_dir=str(child), files=[output / 'bias_checks' / 'audit_reference.json', child / 'manifest.json'])
+    options = dict(kind='bias_repair_dag', dependencies=[audit], subdag=str(child / 'workflow.dag'),
+                   files=[str(output / 'bias_checks' / 'review_bias_validation.json')], commands=[], config=vars(copy.copy(args)))
+    if replace_index is None:
+        index = planner.add('bias_repair_dag', args, [audit], subdag=str(child / 'workflow.dag'), files=options['files'])
+    else:
+        index = replace_index
+        old = planner.jobs[index]
+        planner.jobs[index] = {'index': index, 'workdir': old['workdir'], **options}
+    return audit, index
+
+
+def run_audit_prepare(review, manifest, job, args, work, completion_id):
+    output = review.outdir(args)
+    checks = output / 'bias_checks'
+    checks.mkdir(parents=True, exist_ok=True)
+    command = ['python3', str(Path(manifest['batch']) / 'audit_bias_intervals.py'),
+               '--source-dir', str(output), '--target', args.target,
+               '--mass', review.mass_label(args.mass), '--expected-toys', str(args.bias_toys)]
+    log = checks / 'audit.log'
+    status = review.run_command(command, checks, log=log)
+    if status not in (0, 2):
+        raise RuntimeError(f'Bias audit input failure: {log}')
+    paths = re.findall(r'^\[SAVED\] (.+)$', log.read_text(), re.M)
+    if not paths:
+        raise RuntimeError('Missing structural bias audit report')
+    report = Path(paths[-1])
+    import review_bias_parallel
+    review_bias_parallel.prepare(review, manifest, job, args, report, completion_id)
+    dump(checks / 'audit_reference.json', {'audit': str(report), 'sha256': digest(report)})
+
+
+SERIAL_BACKEND_SHA256 = '06c23a7cdc2c63969ee61c3dd31cf33393987408080453b51d03b9dedbaab69e'
+SERIAL_HELPER_SHA256 = '7a0a82a736c18d2f165123889c5c9df476439dcc89ae122556f0e7cadb768956'
+SERIAL_REPAIR_SHA256 = 'd93809b8c8c1921f07995f3b40dccb472a7298190b1416b12403710acd79f9fe'
+
+
+def parallelize_bias(review, batch, manifest):
+    # The caller first checks that this batch and all its child DAGs are inactive.
+    original_module = batch / 'review_condor.py'
+    original_helper = batch / 'combine_review.py'
+    original_repair = batch / 'repair_bias_intervals.py'
+    fingerprints = (digest(original_module), digest(original_helper), digest(original_repair))
+    supported = {(SERIAL_BACKEND_SHA256, SERIAL_HELPER_SHA256, SERIAL_REPAIR_SHA256),
+                 (digest(Path(__file__)), digest(Path(review.__file__)), SERIAL_REPAIR_SHA256)}
+    if fingerprints not in supported:
+        if any(j.get('subdag') for j in manifest['jobs']):
+            print('[BIAS PARALLEL] Batch already uses repair sub-DAGs')
+            return manifest
+        raise RuntimeError('--parallel-bias-repair supports the known 910d62a snapshot; upgrade the v1 filename bug separately first')
+    updated = copy.deepcopy(manifest)
+    planner = Planner(review, batch, updated)
+    selected = []
+    for job in manifest['jobs']:
+        if job.get('audit'):
+            try:
+                complete(manifest, job['index'])
+                continue
+            except (RuntimeError, OSError, ValueError):
+                selected.append(job)
+    if not selected:
+        print('[BIAS PARALLEL] No incomplete serial audits; completed results retained')
+        return manifest
+    for job in selected:
+        add_parallel_audit(planner, argparse.Namespace(**job['config']), job['dependencies'], job['index'])
+    archive = batch / ('bias_parallel_upgrade_' + uuid4().hex[:8])
+    archive.mkdir()
+    names = ('combine_review.py', 'review_condor.py', 'review_bias_parallel.py', 'repair_bias_intervals.py')
+    original_sources = []
+    for name in names:
+        path = batch / name
+        if path.is_file():
+            shutil.copy2(path, archive / name)
+            original_sources.append(name)
+    shutil.copy2(batch / 'manifest.json', archive / 'manifest.json')
+    try:
+        for name in names:
+            source = Path(review.__file__).resolve().parent / name
+            shutil.copy2(source, batch / name)
+            updated['inputs'][str(batch / name)] = digest(batch / name)
+        updated['parallel_bias_upgrade'] = {'archive': str(archive), 'audit_indices': [j['index'] for j in selected]}
+        dump(batch / 'manifest.json', updated)
+    except Exception:
+        for name in names:
+            if name in original_sources:
+                shutil.copy2(archive / name, batch / name)
+            elif (batch / name).exists():
+                (batch / name).unlink()
+        shutil.copy2(archive / 'manifest.json', batch / 'manifest.json')
+        raise
+    print(f'[BIAS PARALLEL] Converted {len(selected)} incomplete audits; completed fit jobs retained; backup={archive}')
+    return updated
+
+
+def refresh_child_dags(batch, manifest, indices):
+    for index in indices:
+        job = manifest['jobs'][index]
+        if not job.get('subdag'):
+            continue
+        # If its audit has not completed, it will create the child DAG later.
+        try:
+            for parent in job['dependencies']:
+                complete(manifest, parent)
+        except (RuntimeError, OSError, ValueError):
+            continue
+        child_path, child = load_batch(Path(job['subdag']).parent)
+        pending, cache = [], {}
+        for node in child['jobs']:
+            try:
+                complete(child, node['index'], cache)
+            except (RuntimeError, OSError, ValueError):
+                pending.append(node['index'])
+        if pending:
+            # Resubmit lazily as a fresh child DAG, retaining its physics
+            # outputs/statuses while archiving old DAGMan scheduling files.
+            archive = child_path / ('scheduling_archive_' + uuid4().hex[:8])
+            archive.mkdir()
+            for old in child_path.glob('workflow.dag.*'):
+                if old.is_file():
+                    old.rename(archive / old.name)
+            write_submission(child_path, child, pending, 'workflow.dag')
+
+
 def main(review, args):
     if args.condor_worker:
         if args.condor_index is None:
@@ -652,6 +810,8 @@ def main(review, args):
         return 0
     if getattr(args, "upgrade_backend", False) and args.stage != "resume":
         raise RuntimeError("--upgrade-backend requires --stage resume")
+    if getattr(args, "parallel_bias_repair", False) and args.stage != "resume":
+        raise RuntimeError("--parallel-bias-repair requires --stage resume")
     if args.stage == "run":
         prepare(review, args)
         return 0
@@ -662,6 +822,12 @@ def main(review, args):
         collect(batch, manifest)
     else:
         active_batch(batch)
+        if getattr(args, "upgrade_backend", False) and getattr(args, "parallel_bias_repair", False):
+            raise RuntimeError("Run the filename migration and parallel migration separately")
+        if getattr(args, "parallel_bias_repair", False):
+            if args.condor_dry_run:
+                raise RuntimeError("--parallel-bias-repair cannot be combined with --condor-dry-run")
+            manifest = parallelize_bias(review, batch, manifest)
         if getattr(args, "upgrade_backend", False):
             if args.condor_dry_run:
                 raise RuntimeError("--upgrade-backend cannot be combined with --condor-dry-run")
@@ -675,6 +841,7 @@ def main(review, args):
         if not indices:
             print("[RESUME] All jobs complete; use --stage collect")
             return 0
+        refresh_child_dags(batch, manifest, indices)
         dag = "resume_" + uuid4().hex[:8] + ".dag"
         write_submission(batch, manifest, indices, dag)
         print(f"[RESUME] {len(indices)} failed/pending/stale nodes")
