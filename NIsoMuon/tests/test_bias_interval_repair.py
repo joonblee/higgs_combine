@@ -14,6 +14,55 @@ import repair_bias_intervals as repair
 
 
 class RepairTests(unittest.TestCase):
+    def test_high_edm_candidate_seeds_refinement_but_is_not_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            commands, failures, history = [], [], []
+            coarse = {'status': 0, 'covQual': 3, 'EDM': .00468,
+                      'parameters': {'r': -.3, 'theta': .2}}
+            refined = {**coarse, 'EDM': .00001}
+            def run(command, directory, history):
+                commands.append(command)
+                if directory.name.startswith('s2_'):
+                    return []
+                return [{'toy': 6, 'quantile': q, 'r': r}
+                        for (_, q), r in zip(repair.audit.QUANTILES, (-.8, -.3, .2))]
+            def profile(command, info, toy, value, directory, history, tolerance):
+                self.assertEqual(info['EDM'], .00001)
+                return {'r': value, 'deltaNLL': 0. if directory.name == 'center' else .49447}
+            with patch.object(repair.verify, 'run', side_effect=run), \
+                 patch.object(repair.verify, 'fit_info', side_effect=[coarse, refined]), \
+                 patch.object(repair.verify, 'profile_saved_reference', side_effect=profile):
+                result = repair.repair_one_toy(Path('/w.root'), Path('/toys.root'), 20,
+                    500, 6, 0., (-50., 100.), 'r0', Path(tmp), .49447, history, failures)
+            self.assertTrue(result['passed'])
+            self.assertEqual(len(commands), 4)
+            self.assertEqual(len(failures), 3)
+            last = commands[-1]
+            self.assertNotIn('--cminPoiOnlyFit', last)
+            self.assertNotIn('--skipInitialFit', last)
+            self.assertNotIn('--freezeParameters', last)
+            for flag, value in (('--pickToy', '6'), ('--toysFile', '/toys.root'),
+                                ('-t', '500'), ('--rMin', '-50.0'), ('--rMax', '100.0'),
+                                ('--setParameters', 'r=-0.29999999999999999,theta=0.20000000000000001')):
+                self.assertEqual(last[last.index(flag) + 1], value)
+            self.assertEqual(last[last.index('--cminFallbackAlgo') + 1], 'Minuit2,Migrad,1:0.001')
+
+    def test_refinement_with_high_edm_remains_a_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows = [{'toy': 6, 'quantile': q, 'r': r}
+                    for (_, q), r in zip(repair.audit.QUANTILES, (-.8, -.3, .2))]
+            info = {'status': 0, 'covQual': 3, 'EDM': .00468,
+                    'parameters': {'r': -.3}}
+            failures = []
+            with patch.object(repair.verify, 'run', return_value=rows), \
+                 patch.object(repair.verify, 'fit_info', return_value=info), \
+                 patch.object(repair.verify, 'profile_saved_reference') as profile:
+                result = repair.repair_one_toy(Path('/w.root'), Path('/toys.root'), 20,
+                    500, 6, 0., (-50., 100.), 'r0', Path(tmp), .49447, [], failures)
+            self.assertIsNone(result)
+            self.assertEqual(len(failures), 6)
+            profile.assert_not_called()
+
     def test_command_reuses_exact_toy_and_range(self):
         command = repair.retry_command(Path('/workspace.root'), Path('/toys.root'),
                                        70, 500, 96, .94921875, (-2, 100), 1, .01)

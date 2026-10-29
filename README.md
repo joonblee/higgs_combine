@@ -231,6 +231,19 @@ New Sub-DAG directories are created before outer-DAG parsing; audit preparation
 accepts an empty directory, while refusing to overwrite existing repair files.
 There is no need to delete or recreate the M20 directory manually.
 
+Ordinary resume also updates the published per-toy repair helper in incomplete
+repair Sub-DAGs, printing `[BIAS REFINE]` and archiving every replaced helper,
+manifest and audit-parent status under `bias_refinement_upgrade_*`. Accepted
+toy repairs keep their completion records and are not rerun. After the original
+three retries, failed toys receive tighter Strategy 1/2 fits. A finite saved
+candidate with valid status/covariance can initialise those fits, including
+all its nuisance values; a high-EDM candidate is never itself accepted. The
+seeded fits omit the preliminary POI-only search and the coarse fallback.
+They use the same saved toy, ID and POI range, with all nuisances floating.
+The final status, covariance, EDM <= 0.001, centre and endpoint checks remain
+mandatory. Live Combine convergence must still be verified in the original
+CMSSW runtime.
+
 Collapsed QCD-stat Gaussian impact intervals with tiny absolute prior widths
 are checked using conditional profiles at the centre and both prior-sigma
 points. A small width never implies zero impact: the measured POI values and

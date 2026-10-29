@@ -4,6 +4,8 @@ Physics commands are captured from the local helper, then partitioned without
 changing the dataset, nuisance model, grid or seeds. No observed data are used.
 Resume refreshes the exact known 8e52715 snapshot to repair Sub-DAG directory
 preparation and enable checked conditional profiles for tiny Gaussian impacts.
+Known incomplete repair DAGs also receive tighter seeded retries on resume;
+completed workers and their original acceptance criteria are retained.
 """
 from __future__ import annotations
 
@@ -842,6 +844,93 @@ def refresh_compatible_review_patch(review, batch, manifest):
     return updated
 
 
+# The published per-toy helper in 8e52715 and 7a6410d.
+PRE_REFINEMENT_HELPER = '21924587c679f7f5d930e24dc5929bb76e11e9bec023135aef57910463ab000c'
+
+
+def refresh_bias_refinement(review, batch, manifest):
+    """Upgrade only retry initialisation in inactive, incomplete repair DAGs.
+
+    Job configurations, completion UUIDs and accepted numerical criteria stay
+    identical. The audit parent's child-manifest fingerprint is refreshed only
+    for this verified code-only change. Every replaced file is backed up.
+    """
+    if not any(j.get('subdag') for j in manifest['jobs']):
+        return manifest
+    source = Path(review.__file__).resolve().parent / 'repair_bias_intervals.py'
+    replacement = source.read_bytes()
+    current = digest(source)
+    replacements = {}
+    def encoded(value):
+        return (json.dumps(value, indent=2, sort_keys=True) + '\n').encode()
+    def helper(path):
+        fingerprint = digest(path)
+        if fingerprint == current:
+            return False
+        if fingerprint != PRE_REFINEMENT_HELPER:
+            raise RuntimeError(f'Unknown bias-repair helper snapshot: {path}')
+        replacements[path] = replacement
+        return True
+    updated = copy.deepcopy(manifest)
+    if helper(batch / 'repair_bias_intervals.py'):
+        updated['inputs'][str(batch / 'repair_bias_intervals.py')] = current
+    children = []
+    for job in manifest['jobs']:
+        if not job.get('subdag'):
+            continue
+        child_path = Path(job['subdag']).parent
+        if not (child_path / 'manifest.json').exists():
+            continue
+        try:
+            complete(manifest, job['index'])
+            continue
+        except (RuntimeError, OSError, ValueError):
+            pass
+        # Stale audits require their own recovery, not a helper-only patch.
+        for index in job['dependencies']:
+            complete(manifest, index)
+        _, child = load_batch(child_path)
+        if not helper(child_path / 'repair_bias_intervals.py'):
+            continue
+        child = copy.deepcopy(child)
+        child['inputs'][str(child_path / 'repair_bias_intervals.py')] = current
+        content = encoded(child)
+        replacements[child_path / 'manifest.json'] = content
+        for index in job['dependencies']:
+            status_path = Path(manifest['jobs'][index]['workdir']) / 'status.json'
+            status = json.loads(status_path.read_text())
+            name = str(child_path / 'manifest.json')
+            if name not in status.get('outputs', {}):
+                raise RuntimeError(f'Audit has no child-manifest fingerprint: {status_path}')
+            status['outputs'][name] = hashlib.sha256(content).hexdigest()
+            replacements[status_path] = encoded(status)
+        children.append(str(child_path))
+    if not replacements:
+        return manifest
+    archive = batch / ('bias_refinement_upgrade_' + uuid4().hex[:8])
+    archive.mkdir()
+    updated['bias_refinement_patch'] = {'archive': str(archive), 'children': children,
+        'preserves_job_configs_and_acceptance_checks': True}
+    replacements[batch / 'manifest.json'] = encoded(updated)
+    backups = {}
+    for index, path in enumerate(replacements):
+        backups[path] = archive / str(index)
+        shutil.copy2(path, backups[path])
+    dump(archive / 'files.json', {str(p): str(b) for p, b in backups.items()})
+    try:
+        for path, content in replacements.items():
+            temporary = path.with_name(path.name + '.refine.tmp')
+            temporary.write_bytes(content)
+            temporary.replace(path)
+    except Exception:
+        for path, saved in backups.items():
+            shutil.copy2(saved, path)
+        raise
+    print(f'[BIAS REFINE] Updated retry helper in {len(children)} incomplete repair DAGs; '
+          f'completed jobs retained; backup={archive}')
+    return updated
+
+
 def main(review, args):
     if args.condor_worker:
         if args.condor_index is None:
@@ -867,6 +956,7 @@ def main(review, args):
         active_batch(batch)
         if not args.condor_dry_run:
             manifest = refresh_compatible_review_patch(review, batch, manifest)
+            manifest = refresh_bias_refinement(review, batch, manifest)
         if getattr(args, "upgrade_backend", False) and getattr(args, "parallel_bias_repair", False):
             raise RuntimeError("Run the filename migration and parallel migration separately")
         if getattr(args, "parallel_bias_repair", False):

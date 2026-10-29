@@ -245,6 +245,50 @@ class ParallelBiasTests(unittest.TestCase):
             self.prepare()
         self.assertEqual(result.read_text(), 'existing result')
 
+    def test_retry_helper_upgrade_preserves_good_workers_and_parent_completion(self):
+        self.parent['index'] = 0
+        child = self.prepare()
+        with patch.object(repair, 'repair_one_toy', return_value=self.record):
+            backend.execute(review, child, 0)
+        good_status = Path(child['jobs'][0]['workdir']) / 'status.json'
+        before = good_status.read_bytes()
+        legacy = 'legacy helper'
+        for directory, manifest in ((self.batch, self.main), (Path(child['batch']), child)):
+            path = directory / 'repair_bias_intervals.py'
+            path.write_text(legacy)
+            manifest.setdefault('inputs', {})[str(path)] = backend.digest(path)
+        backend.dump(Path(child['batch']) / 'manifest.json', child)
+        main = {**self.main, 'jobs': [], 'requirements': None, 'filesystem_domain': None}
+        planner = backend.Planner(review, self.batch, main)
+        index = planner.add('bias_audit_prepare', self.args,
+                            files=[Path(child['batch']) / 'manifest.json'])
+        node = planner.add('bias_repair_dag', self.args, [index],
+                           subdag=str(Path(child['batch']) / 'workflow.dag'))
+        job = main['jobs'][index]
+        status = {'success': True, 'batch_id': main['batch_id'],
+            'completion_id': 'audit-completion', 'dependencies': {},
+            'job_sha256': backend.hashlib.sha256(json.dumps(job, sort_keys=True).encode()).hexdigest(),
+            'outputs': {str(Path(child['batch']) / 'manifest.json'):
+                        backend.digest(Path(child['batch']) / 'manifest.json')}}
+        backend.dump(Path(job['workdir']) / 'status.json', status)
+        backend.dump(self.batch / 'manifest.json', main)
+        previous = backend.digest(self.batch / 'repair_bias_intervals.py')
+        with patch.object(backend, 'PRE_REFINEMENT_HELPER', previous):
+            updated = backend.refresh_bias_refinement(review, self.batch, main)
+        self.assertEqual(updated['jobs'], main['jobs'])
+        self.assertEqual(backend.complete(updated, index)['completion_id'], 'audit-completion')
+        self.assertEqual(good_status.read_bytes(), before)
+        _, refreshed = backend.load_batch(child['batch'])
+        backend.complete(refreshed, 0)
+        backend.refresh_child_dags(self.batch, updated, [node])
+        dag = (Path(child['batch']) / 'workflow.dag').read_text()
+        self.assertNotIn('JOB J0 ', dag)
+        self.assertIn('JOB J1 ', dag)
+        archive = Path(updated['bias_refinement_patch']['archive'])
+        self.assertTrue((archive / 'files.json').is_file())
+        backend.execute(review, refreshed, 1)
+        backend.complete(updated, node)
+
     def test_known_snapshot_patch_preserves_jobs_inputs_and_prior_snapshot(self):
         main = {**self.main, 'jobs': [], 'inputs': {}}
         planner = backend.Planner(review, self.batch, main)

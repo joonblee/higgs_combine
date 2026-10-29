@@ -4,6 +4,9 @@
 Uses the original workspace, saved datasets and fitted r ranges. Never generates
 toys or overwrites original results. Final summaries require all repairs to pass.
 The untouched original fits receive structural interval checks only.
+Failed standard retries are followed by tighter fits, seeded from a finite
+saved candidate when available. Seeds are never accepted without all original
+fit, centre and endpoint checks.
 """
 import argparse
 import json
@@ -44,11 +47,21 @@ def repair_one_toy(workspace, toy_file, mass, count, toy, injection, bounds,
     """One independent saved-toy repair, with the original acceptance checks."""
     job = f"{tag}/toy_{toy:04d}"
     success = None
+    seed = None
     # Fixed order; selection is by numerical checks, never by bias value.
-    for strategy, tolerance in ((1, .01), (2, .01), (2, .001)):
-        directory = output / "repairs" / job / f"s{strategy}_t{tolerance}"
+    plans = ((1, .01, False), (2, .01, False), (2, .001, False),
+             (1, .001, True), (1, .0001, True), (2, .001, True))
+    for strategy, tolerance, refine in plans:
+        label = ('refine_' if refine else '') + f"s{strategy}_t{tolerance}"
+        directory = output / "repairs" / job / label
         command = retry_command(workspace, toy_file, mass, count, toy,
                                 injection, bounds, strategy, tolerance)
+        if refine:
+            if seed is not None:
+                command = verify.seed_command(command, seed)
+            # A coarse fallback must not undo the requested refinement.
+            verify.remove(command, '--cminFallbackAlgo')
+            command.extend(['--cminFallbackAlgo', f'Minuit2,Migrad,1:{tolerance}'])
         try:
             rows = verify.run(command, directory, history)
             result = audit.audit_rows(rows, count, bounds)
@@ -59,6 +72,14 @@ def repair_one_toy(workspace, toy_file, mass, count, toy, injection, bounds,
                 raise RuntimeError(f"Invalid retry interval/toy selection: {selected['issues']}")
             interval = selected["interval"]
             info = verify.fit_info(directory)
+            parameters = info.get('parameters', {})
+            if (info['status'] == 0 and info['covQual'] >= 2
+                    and math.isfinite(info['EDM']) and info['EDM'] >= 0
+                    and 'r' in parameters and bounds[0] < parameters['r'] < bounds[1]
+                    and all(math.isfinite(v) for v in parameters.values())
+                    and (seed is None or info['EDM'] < seed['EDM'])):
+                # This is an initial state only, not an accepted repaired fit.
+                seed = info
             verify.check_fit(info, .001)
             center = verify.profile_saved_reference(command, info, toy, interval[1],
                                                    directory / "center", history, .001)
