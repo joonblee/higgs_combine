@@ -1,5 +1,49 @@
 # higgs_combine
 
+## Blind prefit/postfit signal-window yield plots
+
+After activating the existing Combine CMSSW environment, run from `NIsoMuon`:
+
+```bash
+python3 prefit_postfit_yields.py 30 --target Run2Run3 --dry-run
+python3 prefit_postfit_yields.py 30 --target Run2Run3
+python3 prefit_postfit_yields.py 12 --target Run2Run3
+python3 prefit_postfit_yields.py 70 --target Run2Run3
+```
+
+This new plotting wrapper calls the existing `combine_review.py --task fitdiag`
+with **background-only Asimov data (`--inject-r 0`)**, and the existing safeguarded
+signed-r diagnostic range. It does not regenerate production cards or limits.
+Each run produces three panels: prefit, postfit B-only (`r` fixed to zero), and
+postfit S+B (`r` floating), with one counting window/channel per era. These are
+not a simultaneously fitted dimuon mass spectrum. Points show the nominal
+background-only expectation, with illustrative expected Poisson errors `sqrt(N)`.
+No observed SR histogram is read. The background band uses Combine's saved
+correlated total-background uncertainty, never a quadrature sum of process errors.
+The S+B panel stacks **background only**, even if the fitted signal strength is
+nonzero; its fitted `r` is recorded in JSON. Bands are Combine covariance/prior
+resampling RMS uncertainties, not profile-likelihood confidence intervals.
+
+Outputs are `prefit_postfit_outputs/<TARGET>/M<MASS>/prefit_postfit_yields.{pdf,png,json,csv}`,
+alongside the workspace, FitDiagnostics ROOT file and fit summaries. ROOT is
+needed for extraction; matplotlib/numpy are needed for plotting. The tool
+requires successful fits (status 0, covariance quality 3), checks prefit rates
+including QCD/DY rate parameters, and checks process-to-total closure. A missing
+correlated total-background uncertainty is an error; older Combine versions can
+use the saved one-bin `total_background` shape as a fallback.
+
+Use a fresh `--output-base` to rerun fits; nonempty output directories are
+protected against accidental overwrites. To redraw the validated saved JSON
+without refitting or PyROOT, use:
+
+```bash
+python3 prefit_postfit_yields.py 30 --target Run2Run3 --plot-only
+```
+
+The wrapper runs locally (one selected mass at a time), so use a compute/interactive
+batch allocation for fits. It is not a new Condor task. Production FitDiagnostics
+already save shapes; the review fitdiag helper now also saves shapes for compatibility.
+
 The NIsoMuon counting workflow is in `NIsoMuon/limit_workflow.py`; review tasks
 are in `NIsoMuon/combine_review.py`. The review Condor backend is in
 `NIsoMuon/review_condor.py` and `NIsoMuon/review_bias_parallel.py`; keep both

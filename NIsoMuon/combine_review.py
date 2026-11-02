@@ -1219,7 +1219,7 @@ def task_fitdiag(args: argparse.Namespace, card: Path) -> None:
         "--setParameters", f"r={injection:.12g}",
         "--rMin", f"{safe_negative_rmin(card, args.r_min):.12g}",
         "--rMax", f"{args.r_max:.12g}", "--robustFit", "1",
-        "--saveWithUncertainties", "--saveNormalizations", "-n", f".{tag}"]
+        "--saveWithUncertainties", "--saveNormalizations", "--saveShapes", "-n", f".{tag}"]
     if run_command(command, output, dry_run=args.dry_run, log=output / "fitdiag.log"):
         raise RuntimeError("Signal-injected FitDiagnostics failed")
     if args.dry_run:
