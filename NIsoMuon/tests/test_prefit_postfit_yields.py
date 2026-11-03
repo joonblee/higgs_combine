@@ -117,8 +117,11 @@ class WorkspaceTests(unittest.TestCase):
         root = NS(TFile=NS(Open=lambda _: file), RooRandom=NS(randomGenerator=lambda: NS(SetSeed=lambda _: None)))
         with patch.dict(sys.modules, ROOT=root):
             stages, _ = tool.extract_counting_workspace(Source(fit_b=SampleFit(), fit_s=SampleFit()),
-                Path('workspace.root'), {'bin_2018': {'QCD': 10., 'tt': 20.}}, samples=2)
+                Path('workspace.root'), {'bin_2018': {'QCD': 10., 'tt': 20.}, 'bin_2017': {'QCD': 10., 'tt': 20.}}, samples=2)
         for stage in tool.STAGES:
+            self.assertEqual(stages[stage]['__combined__']['processes']['QCD']['error'], 4.)
+            self.assertEqual(stages[stage]['__combined__']['total_background']['error'], 0.)
+            self.assertEqual(stages[stage]['__combined__']['total_background']['yield'], 60.)
             self.assertEqual(stages[stage]['bin_2018']['total_background']['error'], 0.)
             self.assertEqual(stages[stage]['bin_2018']['processes']['QCD']['error'], 2.)
 
