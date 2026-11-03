@@ -3,7 +3,7 @@
 
 Run after cmsenv, from NIsoMuon. Never reads SR data histograms. Uses the
 existing review fit, nominal rateParam evaluation and signed-r safeguard.
-Uncertainty bands come from Combine's correlated total-background response,
+Uncertainty bands use correlated joint nuisance responses,
 not a quadrature sum of process errors. Requires PyROOT and matplotlib.
 """
 from __future__ import annotations
@@ -94,6 +94,85 @@ def extract(source, nominal):
     return result, fits
 
 
+def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
+    """Evaluate counting expectations directly; retain nonlinear nuisance responses.
+
+    Counting models use RooPoisson rather than RooAddPdf. FitDiagnostics v10.6
+    does not traverse these PDFs when saving norm_* or shapes_*.
+    """
+    import ROOT
+    handle = ROOT.TFile.Open(str(workspace_path))
+    if not handle or handle.IsZombie():
+        raise RuntimeError(f"Cannot read workspace {workspace_path}")
+    try:
+        w = handle.Get("w")
+        mc = w.obj("ModelConfig") if w else None
+        if not mc or not w.var("r"):
+            raise RuntimeError("Missing counting workspace ModelConfig/r")
+        w.saveSnapshot("yield_initial", w.allVars())
+        functions = {}
+        for channel, processes in nominal.items():
+            functions[channel] = {}
+            for process in processes:
+                name = f"n_exp_bin{channel}_proc_{process}"
+                func = w.function(name) or w.var(name)
+                if not func:
+                    raise RuntimeError(f"Missing counting expectation {name}")
+                functions[channel][process] = func
+        fits, result = {}, {}
+        ROOT.RooRandom.randomGenerator().SetSeed(123456)
+        for stage in STAGES:
+            w.loadSnapshot("yield_initial")
+            w.var("r").setVal(0.)
+            fit = None
+            draws = None
+            if stage == "prefit":
+                prior = w.pdf("nuisancePdf")
+                if not prior:
+                    raise RuntimeError("Missing nuisancePdf for correlated prefit sampling")
+                draws = prior.generate(mc.GetNuisanceParameters(), samples)
+                if not draws or draws.numEntries() != samples:
+                    raise RuntimeError("Prefit nuisance generation failed")
+                w.loadSnapshot("yield_initial")
+                w.var("r").setVal(0.)
+            else:
+                fit = source.Get(stage)
+                if not fit or fit.status() != 0 or fit.covQual() != 3:
+                    raise RuntimeError(f"{stage}: require status=0 and covQual=3")
+                w.allVars().assignValueOnly(fit.floatParsFinal())
+                fits[stage] = {"status": int(fit.status()), "covQual": int(fit.covQual()),
+                               "edm": checked(fit.edm(), "EDM")}
+                r = fit.floatParsFinal().find("r")
+                if r:
+                    fits[stage]["r"] = {"value": float(r.getVal()), "error": float(r.getError())}
+            central = {c: {p: checked(f.getVal(), f"{stage}/{c}/{p}", True)
+                           for p, f in fs.items()} for c, fs in functions.items()}
+            if stage == "prefit":
+                for c, ps in nominal.items():
+                    for p, value in ps.items():
+                        require_close(central[c][p], value, f"prefit {c}/{p}")
+            squares = {c: {p: 0. for p in (*ps, "total_background")} for c, ps in nominal.items()}
+            for i in range(samples):
+                draw = draws.get(i) if draws else fit.randomizePars()
+                w.allVars().assignValueOnly(draw)
+                for c, fs in functions.items():
+                    values = {p: checked(f.getVal(), f"sample {stage}/{c}/{p}", True)
+                              for p, f in fs.items()}
+                    for p, value in values.items():
+                        squares[c][p] += (value-central[c][p])**2
+                    # Sum on each joint draw BEFORE taking its RMS: includes correlations.
+                    squares[c]["total_background"] += (sum(values.values())-sum(central[c].values()))**2
+            result[stage] = {c: {
+                "processes": {p: {"yield": v, "error": math.sqrt(squares[c][p]/samples)}
+                              for p, v in ps.items()},
+                "total_background": {"yield": sum(ps.values()),
+                                     "error": math.sqrt(squares[c]["total_background"]/samples)}}
+                for c, ps in central.items()}
+        return result, fits
+    finally:
+        handle.Close()
+
+
 def write_tables(payload, directory):
     (directory / "prefit_postfit_yields.json").write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n")
     with (directory / "prefit_postfit_yields.csv").open("w", newline="") as handle:
@@ -162,6 +241,7 @@ def main():
     parser.add_argument("--card-base", default="datacards_NIsoMuon/alpha/blind/combined")
     parser.add_argument("--output-base", default="prefit_postfit_outputs")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--extract-only", action="store_true", help="extract completed background-only Asimov fits without rerunning Combine")
     parser.add_argument("--plot-only", action="store_true", help="redraw the saved, validated JSON without refitting")
     args = parser.parse_args()
     directory = review.outdir(args)
@@ -171,7 +251,7 @@ def main():
             return 0
         card = review.card_path(args)
         nominal = nominal_backgrounds(card)
-        if directory.exists() and any(directory.iterdir()):
+        if not args.extract_only and directory.exists() and any(directory.iterdir()):
             raise RuntimeError(f"Output is not empty: {directory}; use a fresh --output-base or --plot-only")
         command = [sys.executable, str(Path(review.__file__).resolve()), str(args.mass),
                    "--task", "fitdiag", "--inject-r", "0", "--r-min", "-50",
@@ -183,14 +263,30 @@ def main():
         import ROOT
         import matplotlib  # fail before starting fits if plotting dependencies are missing
         ROOT.gROOT.SetBatch(True)
-        subprocess.run(command, check=True)
+        if args.extract_only:
+            summary = json.loads((directory / f"fitdiag_summary_M{review.mass_label(args.mass)}.json").read_text())
+            metadata = json.loads((directory / "review_metadata.json").read_text())
+            if (summary.get("injected_r") != 0 or metadata.get("mass") != args.mass
+                    or metadata.get("target") != args.target or Path(metadata["card"]).resolve() != card):
+                raise RuntimeError("Existing fit is not the requested background-only Asimov review")
+        else:
+            subprocess.run(command, check=True)
         label = review.mass_label(args.mass)
         root_path = directory / f"fitDiagnostics.ReviewFitDiag_{args.target}_M{label}.root"
         source = ROOT.TFile.Open(str(root_path))
         if not source or source.IsZombie():
             raise RuntimeError(f"Cannot read {root_path}")
         try:
-            stages, fits = extract(source, nominal)
+            first_channel = next(iter(nominal))
+            norms = source.Get("norm_prefit")
+            first_process = next(iter(nominal[first_channel]))
+            if norms and norms.find(f"{first_channel}/{first_process}"):
+                stages, fits = extract(source, nominal)
+                uncertainty_method = "Combine saved correlated total-background RMS"
+            else:
+                stages, fits = extract_counting_workspace(
+                    source, directory / f"workspace_{args.target}_M{label}.root", nominal)
+                uncertainty_method = "Counting workspace joint RMS: 2000 prior draws / fitted-covariance draws; seed 123456"
         finally:
             source.Close()
         payload = {"schema": "NPS26009-counting-prefit-postfit-v1", "mass": args.mass,
@@ -198,7 +294,7 @@ def main():
                    "card_sha256": hashlib.sha256(card.read_bytes()).hexdigest(),
                    "root_file": str(root_path), "command": command, "injected_r": 0,
                    "asimov": {c: sum(p.values()) for c, p in nominal.items()},
-                   "uncertainty": "Combine saved correlated total-background RMS; not sum of process errors",
+                   "uncertainty": uncertainty_method,
                    "fits": fits, "stages": stages}
         write_tables(payload, directory)
         plot(payload, directory)
