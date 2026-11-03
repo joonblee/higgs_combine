@@ -31,6 +31,19 @@ def checked(value, label, nonnegative=False):
     return value
 
 
+# Absolute event-yield tolerance, only for central values used in the plots.
+# Signed nuisance draws and Poisson-mean checks retain their separate policies.
+CENTRAL_ZERO_TOL = 1e-12
+
+
+def central_yield(value, label, roundoff):
+    value = checked(value, label)
+    if -CENTRAL_ZERO_TOL <= value < 0:
+        roundoff.append({"label": label, "raw_yield": value, "display_yield": 0.})
+        return 0.
+    return checked(value, label, True)
+
+
 def require_close(value, reference, label):
     if not math.isclose(value, reference, rel_tol=1e-6, abs_tol=1e-6):
         raise RuntimeError(f"{label}: {value} != {reference}")
@@ -163,7 +176,8 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
                 r = fit.floatParsFinal().find("r")
                 if r:
                     fits[stage]["r"] = {"value": float(r.getVal()), "error": float(r.getError())}
-            central = {c: {p: checked(f.getVal(), f"{stage}/{c}/{p}", True)
+            roundoff = fits.setdefault("central_roundoff", [])
+            central = {c: {p: central_yield(f.getVal(), f"{stage}/{c}/{p}", roundoff)
                            for p, f in fs.items()} for c, fs in functions.items()}
             if stage == "prefit":
                 for c, ps in nominal.items():
