@@ -94,6 +94,20 @@ def extract(source, nominal):
     return result, fits
 
 
+def sampled_background(functions, total_expectation, label, diagnostics):
+    """Keep signed Gaussian process responses; validate the Poisson mean."""
+    values = {p: checked(f.getVal(), f"sample {label}/{p}") for p, f in functions.items()}
+    mean = checked(total_expectation.getVal(), f"Poisson mean {label}", True)
+    diagnostics["minimum_expected_count"] = min(diagnostics["minimum_expected_count"], mean)
+    for p, value in values.items():
+        if value < 0:
+            entry = diagnostics["negative_process_draws"].setdefault(
+                f"{label}/{p}", {"count": 0, "minimum": 0.})
+            entry["count"] += 1
+            entry["minimum"] = min(entry["minimum"], value)
+    return values
+
+
 def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
     """Evaluate counting expectations directly; retain nonlinear nuisance responses.
 
@@ -111,8 +125,12 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
             raise RuntimeError("Missing counting workspace ModelConfig/r")
         w.saveSnapshot("yield_initial", w.allVars())
         functions = {}
+        expected_counts = {}
         for channel, processes in nominal.items():
             functions[channel] = {}
+            expected_counts[channel] = w.function(f"n_exp_bin{channel}")
+            if not expected_counts[channel]:
+                raise RuntimeError(f"Missing total Poisson expectation n_exp_bin{channel}")
             for process in processes:
                 name = f"n_exp_bin{channel}_proc_{process}"
                 func = w.function(name) or w.var(name)
@@ -155,13 +173,14 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
             combined_central = {p: sum(ps.get(p, 0.) for ps in central.values())
                                 for p in {p for ps in central.values() for p in ps}}
             combined_squares = {p: 0. for p in (*combined_central, "total_background")}
+            diagnostics = {"samples": samples, "minimum_expected_count": float("inf"),
+                           "negative_process_draws": {}}
             for i in range(samples):
                 draw = draws.get(i) if draws else fit.randomizePars()
                 w.allVars().assignValueOnly(draw)
                 combined_draw = {p: 0. for p in combined_central}
                 for c, fs in functions.items():
-                    values = {p: checked(f.getVal(), f"sample {stage}/{c}/{p}", True)
-                              for p, f in fs.items()}
+                    values = sampled_background(fs, expected_counts[c], f"{stage}/{c}", diagnostics)
                     for p, value in values.items():
                         combined_draw[p] += value
                         squares[c][p] += (value-central[c][p])**2
@@ -170,6 +189,7 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
                 for p, value in combined_draw.items():
                     combined_squares[p] += (value-combined_central[p])**2
                 combined_squares["total_background"] += (sum(combined_draw.values())-sum(combined_central.values()))**2
+            fits.setdefault("sampling", {})[stage] = diagnostics
             result[stage] = {c: {
                 "processes": {p: {"yield": v, "error": math.sqrt(squares[c][p]/samples)}
                               for p, v in ps.items()},
