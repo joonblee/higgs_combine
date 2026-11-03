@@ -31,17 +31,22 @@ def checked(value, label, nonnegative=False):
     return value
 
 
-# Absolute event-yield tolerance, only for central values used in the plots.
-# Signed nuisance draws and Poisson-mean checks retain their separate policies.
-CENTRAL_ZERO_TOL = 1e-12
-
-
-def central_yield(value, label, roundoff):
+def central_yield(value, label, signed_values):
+    """Preserve the fitted model value exactly; do not impose per-process bounds."""
     value = checked(value, label)
-    if -CENTRAL_ZERO_TOL <= value < 0:
-        roundoff.append({"label": label, "raw_yield": value, "display_yield": 0.})
-        return 0.
-    return checked(value, label, True)
+    if value < 0:
+        signed_values.append({"label": label, "raw_yield": value})
+    return value
+
+
+def signed_stack_bottom(values, positive, negative):
+    """Place signed contributions above/below zero without changing yields."""
+    bottom = []
+    for i, value in enumerate(values):
+        base = positive if value >= 0 else negative
+        bottom.append(base[i])
+        base[i] += value
+    return bottom
 
 
 def require_close(value, reference, label):
@@ -176,9 +181,12 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
                 r = fit.floatParsFinal().find("r")
                 if r:
                     fits[stage]["r"] = {"value": float(r.getVal()), "error": float(r.getError())}
-            roundoff = fits.setdefault("central_roundoff", [])
-            central = {c: {p: central_yield(f.getVal(), f"{stage}/{c}/{p}", roundoff)
+            signed_values = fits.setdefault("central_signed_yields", [])
+            central = {c: {p: central_yield(f.getVal(), f"{stage}/{c}/{p}", signed_values)
                            for p, f in fs.items()} for c, fs in functions.items()}
+            for c in functions:
+                checked(expected_counts[c].getVal(), f"central Poisson mean {stage}/{c}", True)
+                checked(sum(central[c].values()), f"central total background {stage}/{c}", True)
             if stage == "prefit":
                 for c, ps in nominal.items():
                     for p, value in ps.items():
@@ -248,11 +256,10 @@ def plot_by_era(payload, directory):
     for col, (stage, label) in enumerate(zip(STAGES, LABELS)):
         ax, ratio = axes[:, col]
         slots = payload["stages"][stage]
-        bottom = np.zeros(len(channels))
+        positive, negative = np.zeros(len(channels)), np.zeros(len(channels))
         for process in processes:
             vals = np.array([slots[c]["processes"][process]["yield"] for c in channels])
-            ax.bar(x, vals, bottom=bottom, width=.8, label=process, color=colours.get(process))
-            bottom += vals
+            ax.bar(x, vals, bottom=signed_stack_bottom(vals, positive, negative), width=.8, label=process, color=colours.get(process))
         total = np.array([slots[c]["total_background"]["yield"] for c in channels])
         error = np.array([slots[c]["total_background"]["error"] for c in channels])
         data = np.array([payload["asimov"][c] for c in channels])
@@ -261,7 +268,7 @@ def plot_by_era(payload, directory):
                hatch="////", label="Background uncertainty")
         ax.errorbar(x, data, yerr=np.sqrt(data), fmt="ko", ms=3, label="B-only Asimov")
         ax.set_title(label)
-        ax.set_ylim(bottom=0)
+        ax.set_ylim(bottom=min(0., float(negative.min())*1.15))
         ax.set_ylabel("Events in counting window")
         valid = total > 0
         ratio.bar(x[valid], 2*error[valid]/total[valid], bottom=1-error[valid]/total[valid],
@@ -292,21 +299,20 @@ def plot(payload, directory):
     fig, (ax, ratio) = plt.subplots(2, 1, figsize=(10, 7), sharex=True,
                                    gridspec_kw={"height_ratios": [3, 1]})
     x = np.arange(3)
-    bottom = np.zeros(3)
+    positive, negative = np.zeros(3), np.zeros(3)
     colours = {"QCD": "#e6ab02", "tt": "#66a61e", "ST": "#1b9e77",
                "DY": "#7570b3", "Others": "#e7298a"}
     processes = list(payload["stages"]["prefit"][next(iter(payload["asimov"]))]["processes"])
     for p in processes:
         values = np.array([slots[s]["processes"].get(p, {"yield": 0.})["yield"] for s in STAGES])
-        ax.bar(x, values, bottom=bottom, width=.65, label=p, color=colours.get(p))
-        bottom += values
+        ax.bar(x, values, bottom=signed_stack_bottom(values, positive, negative), width=.65, label=p, color=colours.get(p))
     totals = np.array([slots[s]["total_background"]["yield"] for s in STAGES])
     errors = np.array([slots[s]["total_background"]["error"] for s in STAGES])
     asimov = sum(payload["asimov"].values())
     ax.bar(x, 2*errors, bottom=totals-errors, width=.65, color="none", edgecolor="0.3",
            hatch="////", label="Background uncertainty")
     ax.errorbar(x, [asimov]*3, yerr=[math.sqrt(asimov)]*3, fmt="ko", label="B-only Asimov")
-    ax.set_ylim(bottom=0)
+    ax.set_ylim(bottom=min(0., float(negative.min())*1.15))
     ax.set_ylabel("Events in counting windows (sum of eras)")
     ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=9)
     valid = totals > 0
