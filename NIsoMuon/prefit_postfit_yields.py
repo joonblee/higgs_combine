@@ -50,6 +50,19 @@ def background_legend(ax, **kwargs):
     ax.legend([entries[label] for label in present], present, **kwargs)
 
 
+def background_interval(totals):
+    import numpy as np
+
+    if all("q16" in item and "q84" in item for item in totals):
+        return (np.array([item["q16"] for item in totals]),
+                np.array([item["q84"] for item in totals]),
+                "Background central 68% interval")
+    # Legacy JSON contains RMS errors only.
+    central = np.array([item["yield"] for item in totals])
+    error = np.array([item["error"] for item in totals])
+    return central - error, central + error, "Background RMS uncertainty"
+
+
 def checked(value, label, nonnegative=False):
     value = float(value)
     if not math.isfinite(value) or (nonnegative and value < 0):
@@ -223,6 +236,7 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
             combined_squares = {p: 0. for p in (*combined_central, "total_background")}
             diagnostics = {"samples": samples, "minimum_expected_count": float("inf"),
                            "negative_process_draws": {}}
+            total_draws = {channel: [] for channel in (*central, "__combined__")}
             for i in range(samples):
                 draw = draws.get(i) if draws else fit.randomizePars()
                 w.allVars().assignValueOnly(draw)
@@ -233,10 +247,14 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
                         combined_draw[p] += value
                         squares[c][p] += (value-central[c][p])**2
                     # Sum on each joint draw BEFORE taking its RMS: includes correlations.
-                    squares[c]["total_background"] += (sum(values.values())-sum(central[c].values()))**2
+                    total = sum(values.values())
+                    total_draws[c].append(total)
+                    squares[c]["total_background"] += (total-sum(central[c].values()))**2
                 for p, value in combined_draw.items():
                     combined_squares[p] += (value-combined_central[p])**2
-                combined_squares["total_background"] += (sum(combined_draw.values())-sum(combined_central.values()))**2
+                total = sum(combined_draw.values())
+                total_draws["__combined__"].append(total)
+                combined_squares["total_background"] += (total-sum(combined_central.values()))**2
             fits.setdefault("sampling", {})[stage] = diagnostics
             result[stage] = {c: {
                 "processes": {p: {"yield": v, "error": math.sqrt(squares[c][p]/samples)}
@@ -249,6 +267,10 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
                               for p, v in combined_central.items()},
                 "total_background": {"yield": sum(combined_central.values()),
                                      "error": math.sqrt(combined_squares["total_background"]/samples)}}
+            import numpy as np
+            for channel, yields in total_draws.items():
+                q16, q84 = np.percentile(yields, [16, 84])
+                result[stage][channel]["total_background"].update(q16=float(q16), q84=float(q84))
         return result, fits
     finally:
         handle.Close()
@@ -292,16 +314,16 @@ def plot_by_era(payload, directory):
             vals = np.array([slots[c]["processes"][process]["yield"] for c in channels])
             ax.bar(x, vals, bottom=signed_stack_bottom(vals, positive, negative), width=.8, label=PROCESS_LABELS.get(process, process), color=PROCESS_COLOURS.get(process, "#bbbbbb"))
         total = np.array([slots[c]["total_background"]["yield"] for c in channels])
-        error = np.array([slots[c]["total_background"]["error"] for c in channels])
+        lower, upper, band_label = background_interval([slots[c]["total_background"] for c in channels])
         data = np.array([payload["asimov"][c] for c in channels])
         # Expected Poisson precision is illustrative, not an extra fit uncertainty.
-        ax.bar(x, 2*error, bottom=total-error, width=.8, **UNCERTAINTY_STYLE, label="Background uncertainty")
+        ax.bar(x, upper-lower, bottom=lower, width=.8, **UNCERTAINTY_STYLE, label=band_label)
         ax.errorbar(x, data, yerr=np.sqrt(data), fmt="ko", ms=3, label="Bkg Asimov")
         ax.set_title(label)
         ax.set_ylim(bottom=min(0., float(negative.min())*1.15))
         ax.set_ylabel("Events in counting window")
         valid = total > 0
-        ratio.bar(x[valid], 2*error[valid]/total[valid], bottom=1-error[valid]/total[valid],
+        ratio.bar(x[valid], (upper[valid]-lower[valid])/total[valid], bottom=lower[valid]/total[valid],
                   width=.8, **UNCERTAINTY_STYLE)
         ratio.errorbar(x[valid], data[valid]/total[valid], yerr=np.sqrt(data[valid])/total[valid],
                        fmt="ko", ms=3)
@@ -335,15 +357,15 @@ def plot(payload, directory):
         values = np.array([slots[s]["processes"].get(p, {"yield": 0.})["yield"] for s in STAGES])
         ax.bar(x, values, bottom=signed_stack_bottom(values, positive, negative), width=.65, label=PROCESS_LABELS.get(p, p), color=PROCESS_COLOURS.get(p, "#bbbbbb"))
     totals = np.array([slots[s]["total_background"]["yield"] for s in STAGES])
-    errors = np.array([slots[s]["total_background"]["error"] for s in STAGES])
+    lower, upper, band_label = background_interval([slots[s]["total_background"] for s in STAGES])
     asimov = sum(payload["asimov"].values())
-    ax.bar(x, 2*errors, bottom=totals-errors, width=.65, **UNCERTAINTY_STYLE, label="Background uncertainty")
+    ax.bar(x, upper-lower, bottom=lower, width=.65, **UNCERTAINTY_STYLE, label=band_label)
     ax.errorbar(x, [asimov]*3, yerr=[math.sqrt(asimov)]*3, fmt="ko", label="Bkg Asimov")
     ax.set_ylim(bottom=min(0., float(negative.min())*1.15))
     ax.set_ylabel("Events in counting windows (sum of eras)")
     background_legend(ax, loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=9)
     valid = totals > 0
-    ratio.bar(x[valid], 2*errors[valid]/totals[valid], bottom=1-errors[valid]/totals[valid],
+    ratio.bar(x[valid], (upper[valid]-lower[valid])/totals[valid], bottom=lower[valid]/totals[valid],
               width=.65, **UNCERTAINTY_STYLE)
     ratio.errorbar(x[valid], asimov/totals[valid], yerr=math.sqrt(asimov)/totals[valid], fmt="ko")
     ratio.axhline(1, color="0.3", lw=1)
@@ -412,7 +434,7 @@ def main():
             stages, fits = extract_counting_workspace(
                 source, directory / f"workspace_{args.target}_M{label}.root", nominal)
             combined_stages = {stage: slots.pop("__combined__") for stage, slots in stages.items()}
-            uncertainty_method = "Workspace joint RMS: 2000 prior/fitted-covariance draws; sum eras on each draw; seed 123456"
+            uncertainty_method = "Workspace joint central 68% interval and RMS: 2000 prior/fitted-covariance draws; sum eras on each draw; seed 123456"
         finally:
             source.Close()
         payload = {"schema": "NPS26009-counting-prefit-postfit-v1", "mass": args.mass,
