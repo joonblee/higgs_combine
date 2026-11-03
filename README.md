@@ -41,7 +41,16 @@ Outputs are `prefit_postfit_outputs/<TARGET>/M<MASS>/prefit_postfit_yields.{pdf,
 alongside the workspace, FitDiagnostics ROOT file and fit summaries. ROOT is
 needed for extraction; matplotlib/numpy are needed for plotting. The tool
 requires successful fits (status 0, covariance quality 3), checks prefit rates
-including QCD/DY rate parameters, and checks process-to-total closure. Missing counting expectation functions or invalid sampled values cause an error;
+including QCD/DY rate parameters, and checks process-to-total closure. Sampling retains finite signed process responses, including additive Gaussian
+DY fluctuations about zero; these draws are neither clipped nor discarded.
+The channel's full Poisson expectation (`n_exp_bin<channel>`, including signal
+for the floating-r fit) must remain finite and nonnegative. An invalid total
+aborts extraction instead of silently conditioning the covariance sample.
+JSON `fits.sampling` records negative-process draw counts/minima and the
+minimum total expected count per stage. Nominal and fitted central process
+yields still undergo the existing nonnegative checks before plotting.
+
+Missing counting expectation functions or nonfinite sampled values cause an error;
 uncertainties are not reconstructed from independent process errors.
 
 If a previous fit completed but extraction failed, reuse its ROOT files:
