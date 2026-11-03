@@ -408,7 +408,7 @@ def plot_mass_scan(payloads, directory):
         raise RuntimeError("Mass-scan ratios require positive finite Asimov counts")
     target = payloads[0]["target"]
     fig, (ax, ratio) = plt.subplots(
-        2, 1, figsize=(11, 7), sharex=True, gridspec_kw={"height_ratios": [3, 1]}
+        2, 1, figsize=(11, 7), sharex=True, gridspec_kw={"height_ratios": [7, 3]}
     )
     log_y = np.all(asimov - np.sqrt(asimov) > 0)
     for stage, label, color in zip(STAGES, LABELS, ("black", "#c62828", "#1565c0")):
@@ -429,13 +429,17 @@ def plot_mass_scan(payloads, directory):
     ratio.axhline(1, color="0.5", linewidth=.8, zorder=0)
     if log_y:
         ax.set_yscale("log")
-    ax.set_ylabel("Events")
-    ratio.set_ylabel("Yield / Asimov")
-    ratio.set_xlabel(r"Dimuon mass hypothesis [GeV]")
+    # SKPlotMaker plotter.py uses ROOT pad-relative text sizes. At 7 inches
+    # tall with a 70:30 split, these translate to roughly 14–18 points.
+    ax.set_ylabel("Events", fontsize=16)
+    ax.tick_params(axis="y", labelsize=16)
+    ratio.set_ylabel("Yield / Asimov", fontsize=18)
+    ratio.set_xlabel("Dimuon mass hypothesis [GeV]", fontsize=18)
+    ratio.tick_params(axis="both", labelsize=15)
     ratio.set_xticks(masses, labels=[f"{mass:g}" for mass in masses])
-    ax.legend(fontsize=9, ncol=2)
+    ax.legend(fontsize=14, ncol=2)
     ax.set_title(f"CMS Internal · {target} · Counting windows at each mass hypothesis\n"
-                 "Bands: central 68% background yield intervals")
+                 "Bands: central 68% background yield intervals", fontsize=16)
     fig.tight_layout()
     for suffix in ("pdf", "png"):
         fig.savefig(directory / f"prefit_postfit_yields_{target}_mass_scan.{suffix}", dpi=160)
