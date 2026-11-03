@@ -14,14 +14,17 @@ python3 prefit_postfit_yields.py 70 --target Run2Run3
 This new plotting wrapper calls the existing `combine_review.py --task fitdiag`
 with **background-only Asimov data (`--inject-r 0`)**, and the existing safeguarded
 signed-r diagnostic range. It does not regenerate production cards or limits.
-Each run produces three panels: prefit, postfit B-only (`r` fixed to zero), and
-postfit S+B (`r` floating), with one counting window/channel per era. These are
+Each run produces a combined-era summary: three stacked bars for prefit,
+postfit B-only (`r` fixed to zero), and postfit S+B (`r` floating), at one
+mass hypothesis. The original era-by-era diagnostic is also saved with
+`_by_era` appended to its name. All era yields are summed on EACH joint
+nuisance draw before taking the RMS, retaining cross-era correlations. These are
 not a simultaneously fitted dimuon mass spectrum. Points show the nominal
 background-only expectation, with illustrative expected Poisson errors `sqrt(N)`.
 No observed SR histogram is read. The background band uses correlated total-background responses, never a
 quadrature sum of process errors. For Poisson counting models (including
 Combine v10.6.0), norm/shape outputs can be empty even with all save flags.
-The tool then evaluates the workspace's n_exp_bin<channel>_proc_<process>
+Extraction evaluates the workspace's n_exp_bin<channel>_proc_<process>
 functions directly. It takes 2000 joint draws from nuisancePdf for prefit
 uncertainties and from each fitted covariance for postfit uncertainties, with
 seed 123456. Total-background RMS is evaluated after summing processes on
@@ -29,6 +32,10 @@ each draw; nonlinear rateParam responses are retained.
 The S+B panel stacks **background only**, even if the fitted signal strength is
 nonzero; its fitted `r` is recorded in JSON. Bands are covariance/prior resampling RMS uncertainties, not profile-likelihood
 confidence intervals. The chosen extraction method is recorded in JSON.
+
+Older JSON files lack the cross-era covariance. Run `--extract-only` once to
+re-extract the completed fits and create the combined summary; `--plot-only`
+cannot reconstruct it from the old era uncertainties. This does not rerun Combine.
 
 Outputs are `prefit_postfit_outputs/<TARGET>/M<MASS>/prefit_postfit_yields.{pdf,png,json,csv}`,
 alongside the workspace, FitDiagnostics ROOT file and fit summaries. ROOT is
