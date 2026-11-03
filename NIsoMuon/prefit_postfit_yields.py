@@ -9,16 +9,20 @@ not a quadrature sum of process errors. Requires PyROOT and matplotlib.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import csv
 import hashlib
 import json
 import math
+from copy import copy
 from pathlib import Path
 import subprocess
 import sys
 
 import combine_review as review
 
+
+SCAN_MASSES = (12, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70)
 
 STAGES = ("prefit", "fit_b", "fit_s")
 LABELS = ("Prefit", "Postfit B-only (r fixed to 0)", "Postfit S+B (r floating)")
@@ -382,9 +386,111 @@ def plot(payload, directory):
     plot_by_era(payload, directory)
 
 
+def load_plot_payload(args, products):
+    path = product_path({"target": args.target, "mass": args.mass}, products, "json")
+    if not path.exists():
+        path = review.outdir(args) / "prefit_postfit_yields.json"
+    payload = json.loads(path.read_text())
+    if payload["target"] != args.target or payload["mass"] != args.mass:
+        raise RuntimeError(f"Target or mass mismatch in {path}")
+    return payload
+
+
+def plot_mass_scan(payloads, directory):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    masses = np.array([p["mass"] for p in payloads])
+    asimov = np.array([sum(p["asimov"].values()) for p in payloads])
+    if not np.all(np.isfinite(asimov) & (asimov > 0)):
+        raise RuntimeError("Mass-scan ratios require positive finite Asimov counts")
+    target = payloads[0]["target"]
+    fig, (ax, ratio) = plt.subplots(
+        2, 1, figsize=(11, 7), sharex=True, gridspec_kw={"height_ratios": [3, 1]}
+    )
+    log_y = np.all(asimov - np.sqrt(asimov) > 0)
+    for stage, label, color in zip(STAGES, LABELS, ("black", "#c62828", "#1565c0")):
+        totals = [p["combined_stages"][stage]["total_background"] for p in payloads]
+        lower, upper, band_label = background_interval(totals)
+        if band_label != "Background central 68% interval":
+            raise RuntimeError("Mass-scan bands require q16/q84. Run the batch with --extract-only.")
+        central = np.array([item["yield"] for item in totals])
+        log_y = log_y and np.all(lower > 0) and np.all(central > 0)
+        style = UNCERTAINTY_STYLE if stage == "prefit" else {"color": color, "alpha": .17}
+        ax.fill_between(masses, lower, upper, **style, zorder=1)
+        ratio.fill_between(masses, lower/asimov, upper/asimov, **style, zorder=1)
+        ax.plot(masses, central, color=color, linewidth=1.5, label=label, zorder=2)
+        ratio.plot(masses, central/asimov, color=color, linewidth=1.5, zorder=2)
+
+    ax.errorbar(masses, asimov, yerr=np.sqrt(asimov), fmt="ko", ms=4, label="Bkg Asimov", zorder=4)
+    ratio.errorbar(masses, np.ones_like(asimov), yerr=1/np.sqrt(asimov), fmt="ko", ms=4, zorder=4)
+    ratio.axhline(1, color="0.5", linewidth=.8, zorder=0)
+    if log_y:
+        ax.set_yscale("log")
+    ax.set_ylabel("Events")
+    ratio.set_ylabel("Yield / Asimov")
+    ratio.set_xlabel(r"Dimuon mass hypothesis [GeV]")
+    ratio.set_xticks(masses, labels=[f"{mass:g}" for mass in masses])
+    ax.legend(fontsize=9, ncol=2)
+    ax.set_title(f"CMS Internal · {target} · Counting windows at each mass hypothesis\n"
+                 "Bands: central 68% background yield intervals")
+    fig.tight_layout()
+    for suffix in ("pdf", "png"):
+        fig.savefig(directory / f"prefit_postfit_yields_{target}_mass_scan.{suffix}", dpi=160)
+    plt.close(fig)
+
+
+def run_mass_batch(args, products):
+    from limit_workflow import parse_float_list
+
+    masses = sorted(SCAN_MASSES if args.masses == "all" else parse_float_list(args.masses))
+    if len(masses) < 2 or any(not math.isfinite(m) or m <= 0 for m in masses):
+        raise RuntimeError("--masses requires at least two positive, finite mass hypotheses")
+    if len({review.mass_label(m) for m in masses}) != len(masses):
+        raise RuntimeError("--masses contains duplicate output mass labels")
+    requests = []
+    for mass in masses:
+        request = copy(args)
+        request.mass = mass
+        requests.append(request)
+
+    def compute(request):
+        command = [sys.executable, str(Path(__file__).resolve()), str(request.mass),
+                   "--target", request.target, "--card-base", request.card_base,
+                   "--output-base", request.output_base, "--tables-only"]
+        directory = review.outdir(request)
+        label = review.mass_label(request.mass)
+        # Reuse completed fit products when a batch contains previously run masses.
+        required = ("review_metadata.json", f"fitdiag_summary_M{label}.json",
+                    f"fitDiagnostics.ReviewFitDiag_{request.target}_M{label}.root",
+                    f"workspace_{request.target}_M{label}.root")
+        if request.extract_only or all((directory / name).is_file() for name in required):
+            command.append("--extract-only")
+        if args.dry_run:
+            print(" ".join(command), flush=True)
+        else:
+            subprocess.run(command, check=True)
+
+    if not args.plot_only:
+        with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+            list(pool.map(compute, requests))
+    if args.dry_run:
+        return
+    payloads = [load_plot_payload(request, products) for request in requests]
+    plot_mass_scan(payloads, products)
+    for payload in payloads:
+        plot(payload, products)
+    print(f"Saved mass-scan and per-mass plots under {products}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mass", type=float)
+    parser.add_argument("mass", type=float, nargs="?")
+    parser.add_argument("--masses", help="Comma-separated mass hypotheses, or all for the 12–70 GeV grid")
+    parser.add_argument("--jobs", type=int, default=4, help="Parallel mass workers in batch mode")
+    parser.add_argument("--tables-only", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--target", choices=("Run2", "Run3", "Run2Run3"), default="Run2Run3")
     parser.add_argument("--card-base", default="datacards_NIsoMuon/alpha/blind/combined")
     parser.add_argument("--output-base", default="prefit_postfit_outputs")
@@ -392,14 +498,20 @@ def main():
     parser.add_argument("--extract-only", action="store_true", help="extract completed background-only Asimov fits without rerunning Combine")
     parser.add_argument("--plot-only", action="store_true", help="redraw the saved, validated JSON without refitting")
     args = parser.parse_args()
-    directory = review.outdir(args)  # existing FitDiagnostics work files
+    if (args.mass is None) == (args.masses is None):
+        parser.error("Specify one positional mass or --masses")
+    if args.jobs < 1:
+        parser.error("--jobs must be positive")
+    if args.plot_only and (args.extract_only or args.dry_run):
+        parser.error("--plot-only is incompatible with --extract-only and --dry-run")
     products = Path(args.output_base).resolve()
     try:
+        if args.masses is not None:
+            run_mass_batch(args, products)
+            return 0
+        directory = review.outdir(args)  # existing FitDiagnostics work files
         if args.plot_only:
-            json_path = product_path({"target": args.target, "mass": args.mass}, products, "json")
-            if not json_path.exists():
-                json_path = directory / "prefit_postfit_yields.json"  # pre-flat-layout results
-            payload = json.loads(json_path.read_text())
+            payload = load_plot_payload(args, products)
             write_tables(payload, products)
             plot(payload, products)
             return 0
@@ -445,10 +557,11 @@ def main():
                    "uncertainty": uncertainty_method,
                    "fits": fits, "stages": stages, "combined_stages": combined_stages}
         write_tables(payload, products)
-        plot(payload, products)
-        print(f"Saved PDF, PNG, JSON and CSV under {products} (target/mass in filenames)")
+        if not args.tables_only:
+            plot(payload, products)
+        print(f"Saved mass {args.mass:g} yield products under {products}")
         return 0
-    except (RuntimeError, OSError, ImportError, subprocess.CalledProcessError) as exc:
+    except (RuntimeError, OSError, ImportError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
