@@ -47,12 +47,14 @@ The channel's full Poisson expectation (`n_exp_bin<channel>`, including signal
 for the floating-r fit) must remain finite and nonnegative. An invalid total
 aborts extraction instead of silently conditioning the covariance sample.
 JSON `fits.sampling` records negative-process draw counts/minima and the
-minimum total expected count per stage. Nominal and fitted central process
-yields still undergo nonnegative checks before plotting, with an absolute
-numerical-zero tolerance of 1e-12 events for central yields only. Values in
-[-1e-12, 0) are displayed as zero; their raw values are retained under
-`fits.central_roundoff` in JSON. Larger negative central yields still abort.
-This tolerance does not clip signed uncertainty draws or change the likelihood.
+minimum total expected count per stage. Fitted central process yields are also preserved exactly, including signed
+DY values permitted by the current Gaussian model. There is no numerical-zero
+clipping threshold. Negative central values are recorded under
+`fits.central_signed_yields`; plots place negative contributions below zero.
+The central total-background yield and full Poisson expectation must remain
+finite and nonnegative. Prefit central values must match the nominal card
+expectations. These extraction/display checks do not change the likelihood.
+
 
 Missing counting expectation functions or nonfinite sampled values cause an error;
 uncertainties are not reconstructed from independent process errors.
