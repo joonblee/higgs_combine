@@ -85,6 +85,43 @@ class YieldTests(unittest.TestCase):
         self.assertNotEqual(nominal["bin_2018"]["QCD"], 1.)
         self.assertAlmostEqual(sum(nominal["bin_2018"].values()), 274.352327954, places=5)
 
+class WorkspaceTests(unittest.TestCase):
+    def test_joint_sampling_keeps_anticorrelation(self):
+        from types import SimpleNamespace as NS
+        from unittest.mock import patch
+        state = {'x': 0.}
+        class Vars:
+            def assignValueOnly(self, values):
+                state.update(values)
+        class Function:
+            def __init__(self, sign): self.sign = sign
+            def getVal(self): return (10. if self.sign == 1 else 20.) + self.sign*state['x']
+        class Draws:
+            def numEntries(self): return 2
+            def get(self, i): return {'x': (-2., 2.)[i]}
+        class Workspace:
+            def obj(self, key): return NS(GetNuisanceParameters=lambda: None)
+            def var(self, key): return NS(setVal=lambda v: None) if key == 'r' else None
+            def allVars(self): return Vars()
+            def saveSnapshot(self, *args): pass
+            def loadSnapshot(self, *args): state.update(x=0.)
+            def function(self, key): return Function(1 if key.endswith('QCD') else -1)
+            def pdf(self, key): return NS(generate=lambda *args: Draws())
+        class SampleFit(Fit):
+            i = 0
+            def floatParsFinal(self): return Norms(x=0.)
+            def randomizePars(self):
+                self.i += 1
+                return {'x': -2. if self.i % 2 else 2.}
+        file = NS(IsZombie=lambda: False, Get=lambda k: Workspace(), Close=lambda: None)
+        root = NS(TFile=NS(Open=lambda _: file), RooRandom=NS(randomGenerator=lambda: NS(SetSeed=lambda _: None)))
+        with patch.dict(sys.modules, ROOT=root):
+            stages, _ = tool.extract_counting_workspace(Source(fit_b=SampleFit(), fit_s=SampleFit()),
+                Path('workspace.root'), {'bin_2018': {'QCD': 10., 'tt': 20.}}, samples=2)
+        for stage in tool.STAGES:
+            self.assertEqual(stages[stage]['bin_2018']['total_background']['error'], 0.)
+            self.assertEqual(stages[stage]['bin_2018']['processes']['QCD']['error'], 2.)
+
 
 if __name__ == "__main__":
     unittest.main()
