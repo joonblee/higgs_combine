@@ -37,8 +37,13 @@ Older JSON files lack the cross-era covariance. Run `--extract-only` once to
 re-extract the completed fits and create the combined summary; `--plot-only`
 cannot reconstruct it from the old era uncertainties. This does not rerun Combine.
 
-Outputs are `prefit_postfit_outputs/<TARGET>/M<MASS>/prefit_postfit_yields.{pdf,png,json,csv}`,
-alongside the workspace, FitDiagnostics ROOT file and fit summaries. ROOT is
+Final outputs are saved directly under `prefit_postfit_outputs/`, for example
+`prefit_postfit_yields_Run2Run3_M70.{pdf,png,json,csv}` and
+`prefit_postfit_yields_by_era_Run2Run3_M70.{pdf,png}`. No mass subdirectory is
+used for these products. FitDiagnostics work files (ROOT, logs and fit summaries)
+retain their existing `<TARGET>/M<MASS>/` paths for compatibility and reuse.
+`--plot-only` first reads the flat JSON and falls back to an old per-mass JSON;
+it writes all final products in the new layout without rerunning fits. ROOT is
 needed for extraction; matplotlib/numpy are needed for plotting. The tool
 requires successful fits (status 0, covariance quality 3), checks prefit rates
 including QCD/DY rate parameters, and checks process-to-total closure. Sampling retains finite signed process responses, including additive Gaussian
