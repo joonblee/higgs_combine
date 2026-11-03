@@ -48,7 +48,11 @@ for the floating-r fit) must remain finite and nonnegative. An invalid total
 aborts extraction instead of silently conditioning the covariance sample.
 JSON `fits.sampling` records negative-process draw counts/minima and the
 minimum total expected count per stage. Nominal and fitted central process
-yields still undergo the existing nonnegative checks before plotting.
+yields still undergo nonnegative checks before plotting, with an absolute
+numerical-zero tolerance of 1e-12 events for central yields only. Values in
+[-1e-12, 0) are displayed as zero; their raw values are retained under
+`fits.central_roundoff` in JSON. Larger negative central yields still abort.
+This tolerance does not clip signed uncertainty draws or change the likelihood.
 
 Missing counting expectation functions or nonfinite sampled values cause an error;
 uncertainties are not reconstructed from independent process errors.
