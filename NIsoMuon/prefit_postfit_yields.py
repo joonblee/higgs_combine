@@ -152,22 +152,35 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
                     for p, value in ps.items():
                         require_close(central[c][p], value, f"prefit {c}/{p}")
             squares = {c: {p: 0. for p in (*ps, "total_background")} for c, ps in nominal.items()}
+            combined_central = {p: sum(ps.get(p, 0.) for ps in central.values())
+                                for p in {p for ps in central.values() for p in ps}}
+            combined_squares = {p: 0. for p in (*combined_central, "total_background")}
             for i in range(samples):
                 draw = draws.get(i) if draws else fit.randomizePars()
                 w.allVars().assignValueOnly(draw)
+                combined_draw = {p: 0. for p in combined_central}
                 for c, fs in functions.items():
                     values = {p: checked(f.getVal(), f"sample {stage}/{c}/{p}", True)
                               for p, f in fs.items()}
                     for p, value in values.items():
+                        combined_draw[p] += value
                         squares[c][p] += (value-central[c][p])**2
                     # Sum on each joint draw BEFORE taking its RMS: includes correlations.
                     squares[c]["total_background"] += (sum(values.values())-sum(central[c].values()))**2
+                for p, value in combined_draw.items():
+                    combined_squares[p] += (value-combined_central[p])**2
+                combined_squares["total_background"] += (sum(combined_draw.values())-sum(combined_central.values()))**2
             result[stage] = {c: {
                 "processes": {p: {"yield": v, "error": math.sqrt(squares[c][p]/samples)}
                               for p, v in ps.items()},
                 "total_background": {"yield": sum(ps.values()),
                                      "error": math.sqrt(squares[c]["total_background"]/samples)}}
                 for c, ps in central.items()}
+            result[stage]["__combined__"] = {
+                "processes": {p: {"yield": v, "error": math.sqrt(combined_squares[p]/samples)}
+                              for p, v in combined_central.items()},
+                "total_background": {"yield": sum(combined_central.values()),
+                                     "error": math.sqrt(combined_squares["total_background"]/samples)}}
         return result, fits
     finally:
         handle.Close()
@@ -179,13 +192,13 @@ def write_tables(payload, directory):
         writer = csv.writer(handle)
         writer.writerow(["mass_GeV", "target", "stage", "channel", "process", "yield", "error", "asimov"])
         for stage, channels in payload["stages"].items():
-            for channel, slot in channels.items():
+            for channel, slot in dict(channels, combined=payload["combined_stages"][stage]).items():
                 for process, values in dict(slot["processes"], total_background=slot["total_background"]).items():
                     writer.writerow([payload["mass"], payload["target"], stage, channel,
-                                     process, values["yield"], values["error"], payload["asimov"][channel]])
+                                     process, values["yield"], values["error"], (sum(payload["asimov"].values()) if channel == "combined" else payload["asimov"][channel])])
 
 
-def plot(payload, directory):
+def plot_by_era(payload, directory):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -230,8 +243,54 @@ def plot(payload, directory):
                  "Background-only Asimov; point errors = expected √N; no observed SR data")
     fig.tight_layout(rect=(0, 0, 1, .91))
     for suffix in ("pdf", "png"):
+        fig.savefig(directory / f"prefit_postfit_yields_by_era.{suffix}", dpi=160)
+    plt.close(fig)
+
+
+def plot(payload, directory):
+    if "combined_stages" not in payload:
+        raise RuntimeError("Combined covariance is absent in this older JSON. Run --extract-only once; era errors cannot be added in quadrature.")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+    slots = payload["combined_stages"]
+    fig, (ax, ratio) = plt.subplots(2, 1, figsize=(10, 7), sharex=True,
+                                   gridspec_kw={"height_ratios": [3, 1]})
+    x = np.arange(3)
+    bottom = np.zeros(3)
+    colours = {"QCD": "#e6ab02", "tt": "#66a61e", "ST": "#1b9e77",
+               "DY": "#7570b3", "Others": "#e7298a"}
+    processes = list(payload["stages"]["prefit"][next(iter(payload["asimov"]))]["processes"])
+    for p in processes:
+        values = np.array([slots[s]["processes"].get(p, {"yield": 0.})["yield"] for s in STAGES])
+        ax.bar(x, values, bottom=bottom, width=.65, label=p, color=colours.get(p))
+        bottom += values
+    totals = np.array([slots[s]["total_background"]["yield"] for s in STAGES])
+    errors = np.array([slots[s]["total_background"]["error"] for s in STAGES])
+    asimov = sum(payload["asimov"].values())
+    ax.bar(x, 2*errors, bottom=totals-errors, width=.65, color="none", edgecolor="0.3",
+           hatch="////", label="Background uncertainty")
+    ax.errorbar(x, [asimov]*3, yerr=[math.sqrt(asimov)]*3, fmt="ko", label="B-only Asimov")
+    ax.set_ylim(bottom=0)
+    ax.set_ylabel("Events in counting windows (sum of eras)")
+    ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=9)
+    valid = totals > 0
+    ratio.bar(x[valid], 2*errors[valid]/totals[valid], bottom=1-errors[valid]/totals[valid],
+              width=.65, color="0.85")
+    ratio.errorbar(x[valid], asimov/totals[valid], yerr=math.sqrt(asimov)/totals[valid], fmt="ko")
+    ratio.axhline(1, color="0.3", lw=1)
+    ratio.set_ylabel("Asimov / Bkg.")
+    ratio.set_xticks(x)
+    ratio.set_xticklabels(["Prefit", "Postfit B-only\n(r fixed to 0)", "Postfit S+B\n(r floating)"])
+    target = {"Run2Run3": "Run 2+3", "Run2": "Run 2", "Run3": "Run 3"}[payload["target"]]
+    fig.suptitle(f"CMS Internal · {target} · m(Z′) = {payload['mass']:g} GeV\n"
+                 "Background-only Asimov; no observed SR data", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, .93))
+    for suffix in ("pdf", "png"):
         fig.savefig(directory / f"prefit_postfit_yields.{suffix}", dpi=160)
     plt.close(fig)
+    plot_by_era(payload, directory)
 
 
 def main():
@@ -277,16 +336,10 @@ def main():
         if not source or source.IsZombie():
             raise RuntimeError(f"Cannot read {root_path}")
         try:
-            first_channel = next(iter(nominal))
-            norms = source.Get("norm_prefit")
-            first_process = next(iter(nominal[first_channel]))
-            if norms and norms.find(f"{first_channel}/{first_process}"):
-                stages, fits = extract(source, nominal)
-                uncertainty_method = "Combine saved correlated total-background RMS"
-            else:
-                stages, fits = extract_counting_workspace(
-                    source, directory / f"workspace_{args.target}_M{label}.root", nominal)
-                uncertainty_method = "Counting workspace joint RMS: 2000 prior draws / fitted-covariance draws; seed 123456"
+            stages, fits = extract_counting_workspace(
+                source, directory / f"workspace_{args.target}_M{label}.root", nominal)
+            combined_stages = {stage: slots.pop("__combined__") for stage, slots in stages.items()}
+            uncertainty_method = "Workspace joint RMS: 2000 prior/fitted-covariance draws; sum eras on each draw; seed 123456"
         finally:
             source.Close()
         payload = {"schema": "NPS26009-counting-prefit-postfit-v1", "mass": args.mass,
@@ -295,7 +348,7 @@ def main():
                    "root_file": str(root_path), "command": command, "injected_r": 0,
                    "asimov": {c: sum(p.values()) for c, p in nominal.items()},
                    "uncertainty": uncertainty_method,
-                   "fits": fits, "stages": stages}
+                   "fits": fits, "stages": stages, "combined_stages": combined_stages}
         write_tables(payload, directory)
         plot(payload, directory)
         print(f"Saved PDF, PNG, JSON and CSV under {directory}")
