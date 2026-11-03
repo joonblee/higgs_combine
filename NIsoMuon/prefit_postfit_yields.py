@@ -254,9 +254,16 @@ def extract_counting_workspace(source, workspace_path, nominal, samples=2000):
         handle.Close()
 
 
+def product_path(payload, directory, suffix, by_era=False):
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    stem = "prefit_postfit_yields_by_era" if by_era else "prefit_postfit_yields"
+    return directory / f"{stem}_{payload['target']}_M{review.mass_label(payload['mass'])}.{suffix}"
+
+
 def write_tables(payload, directory):
-    (directory / "prefit_postfit_yields.json").write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n")
-    with (directory / "prefit_postfit_yields.csv").open("w", newline="") as handle:
+    product_path(payload, directory, "json").write_text(json.dumps(payload, indent=2, allow_nan=False) + "\n")
+    with product_path(payload, directory, "csv").open("w", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["mass_GeV", "target", "stage", "channel", "process", "yield", "error", "asimov"])
         for stage, channels in payload["stages"].items():
@@ -307,7 +314,7 @@ def plot_by_era(payload, directory):
                  "Background-only Asimov; point errors = expected √N; no observed SR data")
     fig.tight_layout(rect=(0, 0, 1, .91))
     for suffix in ("pdf", "png"):
-        fig.savefig(directory / f"prefit_postfit_yields_by_era.{suffix}", dpi=160)
+        fig.savefig(product_path(payload, directory, suffix, by_era=True), dpi=160)
     plt.close(fig)
 
 
@@ -348,7 +355,7 @@ def plot(payload, directory):
                  "Background-only Asimov; no observed SR data", fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, .93))
     for suffix in ("pdf", "png"):
-        fig.savefig(directory / f"prefit_postfit_yields.{suffix}", dpi=160)
+        fig.savefig(product_path(payload, directory, suffix), dpi=160)
     plt.close(fig)
     plot_by_era(payload, directory)
 
@@ -363,10 +370,16 @@ def main():
     parser.add_argument("--extract-only", action="store_true", help="extract completed background-only Asimov fits without rerunning Combine")
     parser.add_argument("--plot-only", action="store_true", help="redraw the saved, validated JSON without refitting")
     args = parser.parse_args()
-    directory = review.outdir(args)
+    directory = review.outdir(args)  # existing FitDiagnostics work files
+    products = Path(args.output_base).resolve()
     try:
         if args.plot_only:
-            plot(json.loads((directory / "prefit_postfit_yields.json").read_text()), directory)
+            json_path = product_path({"target": args.target, "mass": args.mass}, products, "json")
+            if not json_path.exists():
+                json_path = directory / "prefit_postfit_yields.json"  # pre-flat-layout results
+            payload = json.loads(json_path.read_text())
+            write_tables(payload, products)
+            plot(payload, products)
             return 0
         card = review.card_path(args)
         nominal = nominal_backgrounds(card)
@@ -409,9 +422,9 @@ def main():
                    "asimov": {c: sum(p.values()) for c, p in nominal.items()},
                    "uncertainty": uncertainty_method,
                    "fits": fits, "stages": stages, "combined_stages": combined_stages}
-        write_tables(payload, directory)
-        plot(payload, directory)
-        print(f"Saved PDF, PNG, JSON and CSV under {directory}")
+        write_tables(payload, products)
+        plot(payload, products)
+        print(f"Saved PDF, PNG, JSON and CSV under {products} (target/mass in filenames)")
         return 0
     except (RuntimeError, OSError, ImportError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
