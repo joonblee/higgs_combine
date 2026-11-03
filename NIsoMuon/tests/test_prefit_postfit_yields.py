@@ -150,22 +150,29 @@ class SignedSamplingTests(unittest.TestCase):
                                     "prefit/bin_2023", {})
 
 
-class CentralRoundoffTests(unittest.TestCase):
-    def test_reported_negative_numerical_zero_is_recorded(self):
-        records = []
-        raw = -1.978004573318043e-17
-        self.assertEqual(tool.central_yield(raw, "fit_b/bin_2023/DY", records), 0.)
-        self.assertEqual(records[0]["raw_yield"], raw)
+class SignedCentralTests(unittest.TestCase):
+    def test_signed_central_values_are_preserved_at_every_scale(self):
+        for value in (-1.978004573318043e-17, -3.2374702803846365e-12, -5.534369815760131e-05, -1.):
+            records = []
+            self.assertEqual(tool.central_yield(value, "fit_s/bin_2023/DY", records), value)
+            self.assertEqual(records[0]["raw_yield"], value)
 
-    def test_material_negative_central_yields_remain_errors(self):
-        for value in (-5.534369815760131e-05, -1e-9):
-            with self.subTest(value=value), self.assertRaises(RuntimeError):
-                tool.central_yield(value, "fit_b/bin_2023/DY", [])
+    def test_nonfinite_central_values_are_rejected(self):
+        for value in (float("nan"), float("inf")):
+            with self.assertRaises(RuntimeError):
+                tool.central_yield(value, "fit_s/DY", [])
 
-    def test_small_positive_yield_is_not_rounded(self):
+    def test_positive_values_are_not_rounded(self):
         records = []
         self.assertEqual(tool.central_yield(1e-17, "prefit/DY", records), 1e-17)
         self.assertEqual(records, [])
+
+    def test_signed_stack_preserves_positive_and_negative_contributions(self):
+        positive, negative = [0., 0.], [0., 0.]
+        self.assertEqual(tool.signed_stack_bottom([10., 20.], positive, negative), [0., 0.])
+        self.assertEqual(tool.signed_stack_bottom([-2., 3.], positive, negative), [0., 20.])
+        self.assertEqual(positive, [10., 23.])
+        self.assertEqual(negative, [-2., 0.])
 
 
 if __name__ == "__main__":
