@@ -105,7 +105,8 @@ class WorkspaceTests(unittest.TestCase):
             def allVars(self): return Vars()
             def saveSnapshot(self, *args): pass
             def loadSnapshot(self, *args): state.update(x=0.)
-            def function(self, key): return Function(1 if key.endswith('QCD') else -1)
+            def function(self, key):
+                return Function(1 if key.endswith('QCD') else -1) if '_proc_' in key else NS(getVal=lambda: 30.)
             def pdf(self, key): return NS(generate=lambda *args: Draws())
         class SampleFit(Fit):
             i = 0
@@ -124,6 +125,29 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(stages[stage]['__combined__']['total_background']['yield'], 60.)
             self.assertEqual(stages[stage]['bin_2018']['total_background']['error'], 0.)
             self.assertEqual(stages[stage]['bin_2018']['processes']['QCD']['error'], 2.)
+
+
+class SignedSamplingTests(unittest.TestCase):
+    def test_negative_dy_is_kept_with_positive_poisson_mean(self):
+        from types import SimpleNamespace as NS
+        diagnostics = {"minimum_expected_count": float("inf"), "negative_process_draws": {}}
+        values = tool.sampled_background({"DY": NS(getVal=lambda: -5.534369815760131e-05),
+                                          "tt": NS(getVal=lambda: 10.)},
+                                         NS(getVal=lambda: 9.9999446563), "prefit/bin_2023", diagnostics)
+        self.assertEqual(values["DY"], -5.534369815760131e-05)
+        self.assertEqual(diagnostics["negative_process_draws"]["prefit/bin_2023/DY"]["count"], 1)
+
+    def test_negative_total_is_rejected_without_clipping_or_resampling(self):
+        from types import SimpleNamespace as NS
+        with self.assertRaisesRegex(RuntimeError, "Poisson mean"):
+            tool.sampled_background({"DY": NS(getVal=lambda: -1.)}, NS(getVal=lambda: -1.),
+                                    "fit_s/bin_2023", {"minimum_expected_count": float("inf"), "negative_process_draws": {}})
+
+    def test_nonfinite_signed_response_is_rejected(self):
+        from types import SimpleNamespace as NS
+        with self.assertRaisesRegex(RuntimeError, "Invalid sample"):
+            tool.sampled_background({"DY": NS(getVal=lambda: float("nan"))}, NS(getVal=lambda: 10.),
+                                    "prefit/bin_2023", {})
 
 
 if __name__ == "__main__":
