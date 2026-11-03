@@ -18,19 +18,35 @@ Each run produces three panels: prefit, postfit B-only (`r` fixed to zero), and
 postfit S+B (`r` floating), with one counting window/channel per era. These are
 not a simultaneously fitted dimuon mass spectrum. Points show the nominal
 background-only expectation, with illustrative expected Poisson errors `sqrt(N)`.
-No observed SR histogram is read. The background band uses Combine's saved
-correlated total-background uncertainty, never a quadrature sum of process errors.
+No observed SR histogram is read. The background band uses correlated total-background responses, never a
+quadrature sum of process errors. For Poisson counting models (including
+Combine v10.6.0), norm/shape outputs can be empty even with all save flags.
+The tool then evaluates the workspace's n_exp_bin<channel>_proc_<process>
+functions directly. It takes 2000 joint draws from nuisancePdf for prefit
+uncertainties and from each fitted covariance for postfit uncertainties, with
+seed 123456. Total-background RMS is evaluated after summing processes on
+each draw; nonlinear rateParam responses are retained.
 The S+B panel stacks **background only**, even if the fitted signal strength is
-nonzero; its fitted `r` is recorded in JSON. Bands are Combine covariance/prior
-resampling RMS uncertainties, not profile-likelihood confidence intervals.
+nonzero; its fitted `r` is recorded in JSON. Bands are covariance/prior resampling RMS uncertainties, not profile-likelihood
+confidence intervals. The chosen extraction method is recorded in JSON.
 
 Outputs are `prefit_postfit_outputs/<TARGET>/M<MASS>/prefit_postfit_yields.{pdf,png,json,csv}`,
 alongside the workspace, FitDiagnostics ROOT file and fit summaries. ROOT is
 needed for extraction; matplotlib/numpy are needed for plotting. The tool
 requires successful fits (status 0, covariance quality 3), checks prefit rates
-including QCD/DY rate parameters, and checks process-to-total closure. A missing
-correlated total-background uncertainty is an error; older Combine versions can
-use the saved one-bin `total_background` shape as a fallback.
+including QCD/DY rate parameters, and checks process-to-total closure. Missing counting expectation functions or invalid sampled values cause an error;
+uncertainties are not reconstructed from independent process errors.
+
+If a previous fit completed but extraction failed, reuse its ROOT files:
+
+```bash
+python3 prefit_postfit_yields.py 30 --target Run2Run3 --extract-only
+```
+
+This checks the saved injection/target/mass/card metadata and nominal effective
+rates against the workspace. Do not change the input cards between fitting and
+extraction; these checks do not prove byte-for-byte identity for historical
+workspaces without a saved input fingerprint. No Combine refit is run.
 
 Use a fresh `--output-base` to rerun fits; nonempty output directories are
 protected against accidental overwrites. To redraw the validated saved JSON
