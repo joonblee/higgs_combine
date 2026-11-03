@@ -24,6 +24,32 @@ STAGES = ("prefit", "fit_b", "fit_s")
 LABELS = ("Prefit", "Postfit B-only (r fixed to 0)", "Postfit S+B (r floating)")
 
 
+# SKPlotMaker plotter.py: default b-tag stack order and data-driven labels.
+# RGB equivalents of kSpring-9, kViolet-4, kOrange-2, kAzure-9, kGray+1.
+STACK_ORDER = ("Others", "ST", "tt", "QCD", "DY")
+PROCESS_COLOURS = {"Others": "#99ff33", "ST": "#cc66ff", "tt": "#ffcc33",
+                   "QCD": "#99ccff", "DY": "#999999"}
+PROCESS_LABELS = {"Others": "Others", "ST": "single top", "tt": r"$t\bar{t}$",
+                  "QCD": "QCD (SS data)", "DY": "DY (light-jet data)"}
+UNCERTAINTY_STYLE = {"facecolor": "none", "edgecolor": "0.35",
+                     "hatch": "////", "linewidth": .7}
+
+
+def ordered_processes(payload):
+    available = {p for slot in payload["stages"]["prefit"].values() for p in slot["processes"]}
+    return [p for p in STACK_ORDER if p in available] + sorted(available-set(STACK_ORDER))
+
+
+def background_legend(ax, **kwargs):
+    handles, labels = ax.get_legend_handles_labels()
+    entries = dict(zip(labels, handles))
+    order = ["Bkg Asimov"] + [PROCESS_LABELS[p] for p in reversed(STACK_ORDER)]
+    order += [label for label in labels if label not in order and label != "Background uncertainty"]
+    order += ["Background uncertainty"]
+    present = [label for label in order if label in entries]
+    ax.legend([entries[label] for label in present], present, **kwargs)
+
+
 def checked(value, label, nonnegative=False):
     value = float(value)
     if not math.isfinite(value) or (nonnegative and value < 0):
@@ -248,38 +274,35 @@ def plot_by_era(payload, directory):
 
     channels = list(payload["asimov"])
     x = np.arange(len(channels))
-    processes = list(payload["stages"]["prefit"][channels[0]]["processes"])
+    processes = ordered_processes(payload)
     fig, axes = plt.subplots(2, 3, figsize=(17, 7), sharex=True,
                              gridspec_kw={"height_ratios": [3, 1]})
-    colours = {"QCD": "#e6ab02", "tt": "#66a61e", "ST": "#1b9e77",
-               "DY": "#7570b3", "Others": "#e7298a"}
     for col, (stage, label) in enumerate(zip(STAGES, LABELS)):
         ax, ratio = axes[:, col]
         slots = payload["stages"][stage]
         positive, negative = np.zeros(len(channels)), np.zeros(len(channels))
         for process in processes:
             vals = np.array([slots[c]["processes"][process]["yield"] for c in channels])
-            ax.bar(x, vals, bottom=signed_stack_bottom(vals, positive, negative), width=.8, label=process, color=colours.get(process))
+            ax.bar(x, vals, bottom=signed_stack_bottom(vals, positive, negative), width=.8, label=PROCESS_LABELS.get(process, process), color=PROCESS_COLOURS.get(process, "#bbbbbb"))
         total = np.array([slots[c]["total_background"]["yield"] for c in channels])
         error = np.array([slots[c]["total_background"]["error"] for c in channels])
         data = np.array([payload["asimov"][c] for c in channels])
         # Expected Poisson precision is illustrative, not an extra fit uncertainty.
-        ax.bar(x, 2*error, bottom=total-error, width=.8, color="none", edgecolor="0.3",
-               hatch="////", label="Background uncertainty")
-        ax.errorbar(x, data, yerr=np.sqrt(data), fmt="ko", ms=3, label="B-only Asimov")
+        ax.bar(x, 2*error, bottom=total-error, width=.8, **UNCERTAINTY_STYLE, label="Background uncertainty")
+        ax.errorbar(x, data, yerr=np.sqrt(data), fmt="ko", ms=3, label="Bkg Asimov")
         ax.set_title(label)
         ax.set_ylim(bottom=min(0., float(negative.min())*1.15))
         ax.set_ylabel("Events in counting window")
         valid = total > 0
         ratio.bar(x[valid], 2*error[valid]/total[valid], bottom=1-error[valid]/total[valid],
-                  width=.8, color="0.85")
+                  width=.8, **UNCERTAINTY_STYLE)
         ratio.errorbar(x[valid], data[valid]/total[valid], yerr=np.sqrt(data[valid])/total[valid],
                        fmt="ko", ms=3)
         ratio.axhline(1, color="0.3", lw=1)
         ratio.set_ylabel("Asimov / Bkg.")
         ratio.set_xticks(x)
         ratio.set_xticklabels([c.removeprefix("bin_") for c in channels], rotation=55, ha="right")
-    axes[0, 0].legend(fontsize=8)
+    background_legend(axes[0, 0], fontsize=8)
     fig.suptitle(f"CMS Internal · {payload['target']} · m(Z′) = {payload['mass']:g} GeV\n"
                  "Background-only Asimov; point errors = expected √N; no observed SR data")
     fig.tight_layout(rect=(0, 0, 1, .91))
@@ -300,24 +323,21 @@ def plot(payload, directory):
                                    gridspec_kw={"height_ratios": [3, 1]})
     x = np.arange(3)
     positive, negative = np.zeros(3), np.zeros(3)
-    colours = {"QCD": "#e6ab02", "tt": "#66a61e", "ST": "#1b9e77",
-               "DY": "#7570b3", "Others": "#e7298a"}
-    processes = list(payload["stages"]["prefit"][next(iter(payload["asimov"]))]["processes"])
+    processes = ordered_processes(payload)
     for p in processes:
         values = np.array([slots[s]["processes"].get(p, {"yield": 0.})["yield"] for s in STAGES])
-        ax.bar(x, values, bottom=signed_stack_bottom(values, positive, negative), width=.65, label=p, color=colours.get(p))
+        ax.bar(x, values, bottom=signed_stack_bottom(values, positive, negative), width=.65, label=PROCESS_LABELS.get(p, p), color=PROCESS_COLOURS.get(p, "#bbbbbb"))
     totals = np.array([slots[s]["total_background"]["yield"] for s in STAGES])
     errors = np.array([slots[s]["total_background"]["error"] for s in STAGES])
     asimov = sum(payload["asimov"].values())
-    ax.bar(x, 2*errors, bottom=totals-errors, width=.65, color="none", edgecolor="0.3",
-           hatch="////", label="Background uncertainty")
-    ax.errorbar(x, [asimov]*3, yerr=[math.sqrt(asimov)]*3, fmt="ko", label="B-only Asimov")
+    ax.bar(x, 2*errors, bottom=totals-errors, width=.65, **UNCERTAINTY_STYLE, label="Background uncertainty")
+    ax.errorbar(x, [asimov]*3, yerr=[math.sqrt(asimov)]*3, fmt="ko", label="Bkg Asimov")
     ax.set_ylim(bottom=min(0., float(negative.min())*1.15))
     ax.set_ylabel("Events in counting windows (sum of eras)")
-    ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=9)
+    background_legend(ax, loc="upper left", bbox_to_anchor=(1.01, 1), fontsize=9)
     valid = totals > 0
     ratio.bar(x[valid], 2*errors[valid]/totals[valid], bottom=1-errors[valid]/totals[valid],
-              width=.65, color="0.85")
+              width=.65, **UNCERTAINTY_STYLE)
     ratio.errorbar(x[valid], asimov/totals[valid], yerr=math.sqrt(asimov)/totals[valid], fmt="ko")
     ratio.axhline(1, color="0.3", lw=1)
     ratio.set_ylabel("Asimov / Bkg.")
