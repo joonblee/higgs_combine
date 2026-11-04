@@ -2236,6 +2236,7 @@ def build_channels_for_mass(
     mass: float,
     files_by_year: Mapping[str, str],
     years: Sequence[str],
+    windows: Optional[Mapping[str, Tuple[float, float]]] = None,
 ) -> Tuple[Dict[str, ChannelResult], AuditLog]:
     label = mass_label(mass)
     audit = AuditLog()
@@ -2243,7 +2244,9 @@ def build_channels_for_mass(
 
     for year in years:
         warnings: List[str] = []
-        low, high = mass_window(args, year, mass)
+        low, high = windows[year] if windows is not None else mass_window(args, year, mass)
+        if not (math.isfinite(low) and math.isfinite(high) and low < high):
+            raise WorkflowError(f"{year}: invalid counting window [{low}, {high}]")
         signal_file = files_by_year.get(year, "")
         raw_nominal: Dict[str, YieldResult] = {}
         dy_lightjet_yield: Optional[float] = None
