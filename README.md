@@ -1,5 +1,25 @@
 # higgs_combine
 
+## Step-1 full-spectrum in-situ normalisation fit
+
+After activating the existing CMSSW/Combine environment, run from `NIsoMuon`:
+
+```bash
+python3 full_spectrum_fit.py --masses 30 --target full --dry-run
+python3 full_spectrum_fit.py --masses 30 --target full
+python3 full_spectrum_fit.py --masses 30 --target full --stage fit --inject-r 1
+```
+
+This opt-in workflow fits disjoint bins across 11--80 GeV simultaneously,
+retains the era channels, and gives QCD/DY/ttbar independent process/era `lnN 1.5`
+normalisation priors. It consumes existing SKPlotMaker templates and never reads
+OS SR data. Binning follows the local mass resolution. FitDiagnostics summaries
+report normalisation pulls, constraints and correlations. Existing counting and
+sideband study commands/results retain their behaviour.
+See [the full model, prerequisites and outputs](NIsoMuon/FULL_SPECTRUM_FIT.md).
+This is a blinded implementation/constraint study; the additional closure-based
+shape uncertainties and physics validation are subsequent steps.
+
 ## Blind prefit/postfit signal-window yield plots
 
 After activating the existing Combine CMSSW environment, run from `NIsoMuon`:

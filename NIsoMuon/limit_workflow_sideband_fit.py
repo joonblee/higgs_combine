@@ -30,10 +30,17 @@ def finite_positive(value):
     return value
 
 
+def single_target(value):
+    targets = base.selected_targets(base.canonical_target(value))
+    if len(targets) != 1:
+        raise argparse.ArgumentTypeError('Choose full, Run2, Run3, or one era.')
+    return targets[0]
+
+
 def make_parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 15., 20., 25., 30., 35., 40., 45., 50., 55., 60., 65., 70.])
-    p.add_argument('--target', type=base.canonical_target, default='Run2Run3')
+    p.add_argument('--target', type=single_target, default='Run2Run3')
     p.add_argument('--stage', choices=['cards', 'fit', 'limits', 'all'], default='all')
     p.add_argument('--base-dir', default=base.DEFAULT_BASE_DIR)
     p.add_argument('--sigfit-dir', default='./sigfit_inputs')
@@ -173,15 +180,21 @@ def separation_diagnostic(rows):
                 interpretation='Nominal shapes with other nuisances fixed; full fit can be less constraining.')
 
 
-def build_model(reader, args, opt, mass, files):
+def build_model(reader, args, opt, mass, files, windows_by_era=None):
+    """Build integrated Poisson bins, preserving producer covariance modes.
+
+    Explicit windows are used by the full-spectrum workflow. Omitting them
+    retains the hypothesis-specific SR/sideband study and its checks.
+    """
     base.prepare_resolution_coefficients(args)
     rows, era_info, audits = [], {}, []
     for era in base.target_years(opt.target):
         if era not in files:
             raise base.WorkflowError(f'Missing simulated signal for {era}, M={mass}.')
         sigma = mass*base.relative_resolution(args, era, mass)
-        windows = regions(common_edges(reader, args, era, files[era]), mass, sigma,
-                          opt.sr_nsigma, opt.exclude_nsigma, opt.bin_width, opt.outer_nsigma)
+        windows = (windows_by_era[era] if windows_by_era is not None else
+                   regions(common_edges(reader, args, era, files[era]), mass, sigma,
+                           opt.sr_nsigma, opt.exclude_nsigma, opt.bin_width, opt.outer_nsigma))
         qfile = base.file_for_process(args, era, 'QCD', '', 'nominal')
         inputs = base.read_qcd_stat_inputs(reader._file(qfile), era, base.hist_path(args.region))
         qother = base.file_for_process(args, era, 'QCD', '', 'qcd')
@@ -222,12 +235,14 @@ def build_model(reader, args, opt, mass, files):
             raise ValueError(f'{era}: DY NF is not constant across regions.')
         has_left = any(r['region'].startswith('L') for r in selected)
         has_right = any(r['region'].startswith('R') for r in selected)
-        signal_sr = next(r['rates']['sig'] for r in selected if r['region'] == 'SR')
+        signal_sr = sum(r['rates']['sig'] for r in selected if r['region'] == 'SR')
         signal_sb = sum(r['rates']['sig'] for r in selected if r['region'] != 'SR')
         era_info[era] = dict(sigma=sigma, sidebands='two-sided' if has_left and has_right else 'left-only' if has_left else 'right-only',
                             signal_sb_over_sr=signal_sb/signal_sr if signal_sr else None)
-        print(f'[REGIONS] {era} M{mass:g}: sigma={sigma:.5g}, {era_info[era]["sidebands"]}, {len(selected)-1} SB bins, S_SB/S_SR={era_info[era]["signal_sb_over_sr"]}')
-    raw_sr = sum(r['rates']['sig'] for r in rows if r['region'] == 'SR')
+        if windows_by_era is None:
+            print(f'[REGIONS] {era} M{mass:g}: sigma={sigma:.5g}, {era_info[era]["sidebands"]}, {len(selected)-1} SB bins, S_SB/S_SR={era_info[era]["signal_sb_over_sr"]}')
+    raw_sr = sum(r['rates']['sig'] for r in rows
+                 if windows_by_era is not None or r['region'] == 'SR')
     if raw_sr <= 0:
         raise ValueError('No signal in the combined signal window.')
     alpha_unit = args.alpha_card_yield/raw_sr
@@ -241,7 +256,7 @@ def build_model(reader, args, opt, mass, files):
         group = norm_name('QCD', row['era'], opt.norm_scope)
         groups.setdefault(group, []).append(row)
     diagnostics = {g: separation_diagnostic(rs) for g, rs in groups.items()}
-    if any(not d['identifiable'] for d in diagnostics.values()):
+    if windows_by_era is None and any(not d['identifiable'] for d in diagnostics.values()):
         raise ValueError(f'QCD/DY not separately identifiable: {diagnostics}. Widen sidebands or reconsider the model; no automatic regularisation.')
     return dict(schema_version=SCHEMA, blind=True, observation='nominal_background_Asimov',
                 target=opt.target, mass=mass, alpha_internal_unit=alpha_unit,
@@ -250,7 +265,8 @@ def build_model(reader, args, opt, mass, files):
                 uncertainty_model='QCD: shared SS-fit covariance modes + coherent absolute functional envelope; DY source stats independent in disjoint regions; pure QCD/DY normalisation priors replaced by free scales.')
 
 
-def card_text(model):
+def card_text(model, normalisation_kappa=None, prefix='SB'):
+    """Serialize bins; optionally use broad QCD/DY/tt lnN priors for step 1."""
     rows, opt = model['rows'], model['settings']
     columns = [(r, p) for r in rows for p in base.PROCESSES]
     f = lambda x: format(float(x), '.17g')
@@ -264,10 +280,11 @@ def card_text(model):
              'process ' + ' '.join('Zprime' if p == 'sig' else p for r, p in columns),
              'process ' + ' '.join(str(base.PROC_ID[p]) for r, p in columns),
              'rate ' + ' '.join(f(rate(r, p)) for r, p in columns), '------------',
-             '# BLINDED SIDEBAND STUDY: all observations are nominal background Asimov.',
+             '# BLINDED STUDY: all observations are nominal background Asimov.',
              '# Model-based closure is not a test of background modelling bias.',
              '# alpha_internal_unit = '+f(model['alpha_internal_unit']),
-             '# alpha_internal_signal_yield = '+f(sum(r['rates']['sig'] for r in rows if r['region'] == 'SR'))]
+             '# alpha_internal_signal_yield = '+f(sum(r['rates']['sig'] for r in rows
+                 if normalisation_kappa is not None or r['region'] == 'SR'))]
     lnn = {}
     for index, (row, process) in enumerate(columns):
         for local, values in row['nuisances'].items():
@@ -281,25 +298,35 @@ def card_text(model):
                 name += '_'+row['region']  # disjoint template-source bins
             lnn.setdefault(name, ['-']*len(columns))[index] = value
     lines.extend(name+' lnN '+' '.join(values) for name, values in sorted(lnn.items()))
+    if normalisation_kappa is not None:
+        if not math.isfinite(normalisation_kappa) or normalisation_kappa <= 1:
+            raise ValueError('Normalisation lnN kappa must exceed one.')
+        for era in sorted({r['era'] for r in rows}):
+            for process in ('QCD', 'DY', 'tt'):
+                name = f'CMS_NPS26009_inSituNorm_{process}_BJetOS_{era}'
+                lines.append(name+' lnN '+' '.join(
+                    f(normalisation_kappa) if r['era'] == era and p == process else '-'
+                    for r, p in columns))
     params = set()
     for row in rows:
         era, channel = row['era'], row['channel']
-        for process in ('QCD', 'DY'):
-            name = norm_name(process, era, opt['norm_scope'])
-            lines.append(f'{name} rateParam {channel} {process} 1 [0,{f(opt["norm_max"])}')
-        shape = f'SB_QCDShape_{era}'
-        names = [shape] + [f'SB_QCDFitMode{k}_{era}' for k in range(len(row['qcd_modes']))]
+        if normalisation_kappa is None:
+            for process in ('QCD', 'DY'):
+                name = norm_name(process, era, opt['norm_scope'])
+                lines.append(f'{name} rateParam {channel} {process} 1 [0,{f(opt["norm_max"])}]')
+        shape = f'{prefix}_QCDShape_{era}'
+        names = [shape] + [f'{prefix}_QCDFitMode{k}_{era}' for k in range(len(row['qcd_modes']))]
         for name in names:
             if name not in params:
                 lines.append(f'{name} param 0 1')
                 params.add(name)
         terms = [f(row['rates']['QCD']), f(row['qcd_shape'])+'*@0']
         terms += [f(v)+f'*@{k+1}' for k, v in enumerate(row['qcd_modes'])]
-        lines.append(f'SB_QCDYield_{channel} rateParam {channel} QCD max(0.,'+ '+'.join(terms)+') '+','.join(names))
+        lines.append(f'{prefix}_QCDYield_{channel} rateParam {channel} QCD max(0.,'+ '+'.join(terms)+') '+','.join(names))
         if row['rates']['DY'] == 0 and row['dy_stat'] > 0:
-            name = f'SB_DYStat_{channel}'
+            name = f'{prefix}_DYStat_{channel}'
             lines += [f'{name} param 0 1',
-                      f'SB_DYYield_{channel} rateParam {channel} DY max(0.,{f(row["dy_stat"])}*@0) {name}']
+                      f'{prefix}_DYYield_{channel} rateParam {channel} DY max(0.,{f(row["dy_stat"])}*@0) {name}']
     return '\n'.join(lines)+'\n'
 
 
