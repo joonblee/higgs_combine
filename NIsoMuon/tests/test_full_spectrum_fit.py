@@ -148,10 +148,41 @@ class GeometryTests(unittest.TestCase):
         bins=fs.window_bins(grid,30.1,39.9)
         sr=next(w for w in bins if w['region']=='SR')
         self.assertEqual((sr['low'],sr['high']),(30.1,39.9))
-        self.assertEqual(next(w for w in bins if w['high']==30.1)['low'],25.)
+        self.assertEqual(next(w for w in bins if w['high']==30.1)['low'],28.)
         self.assertEqual(next(w for w in bins if w['low']==39.9)['high'],50.)
         self.assertFalse(any(w['region'].startswith('L') for w in fs.window_bins(grid,11.,14.)))
         self.assertFalse(any(w['region'].startswith('R') for w in fs.window_bins(grid,76.,80.)))
+
+    def test_nested_sideband_presets_share_sr_and_have_exact_reference_ratios(self):
+        presets=fs.SIDEBAND_PRESETS
+        self.assertEqual({k:len(v)-1 for k,v in presets.items()},dict(central=20,fine=40,coarse=10))
+        self.assertTrue(set(presets['coarse']) < set(presets['central']) < set(presets['fine']))
+        self.assertTrue(all(b-a==1. for a,b in zip(presets['central'],presets['central'][1:]) if b<=20.))
+        grid=np.round(np.arange(11.,80.001,.02),8)
+        paths=set()
+        signatures=[]
+        for name in ('central','fine','coarse'):
+            opt=fs.make_parser().parse_args(['--fit-layout','window','--sideband-binning',name])
+            fs.configuration(opt)
+            paths.add(fs.model_directory(opt,30))
+            signatures.append(fs.signature(opt))
+            for low,high in ((11.,13.),(28.3,31.7),(76.,80.)):
+                bins=fs.window_bins(grid,low,high,fs.sideband_reference(opt))
+                self.assertEqual([(w['low'],w['high']) for w in bins if w['region']=='SR'],[(low,high)])
+                self.assertEqual(sum(w['high']-w['low'] for w in bins),69.)
+        self.assertEqual(len(paths),3)
+        self.assertEqual(len({json.dumps(s,sort_keys=True) for s in signatures}),3)
+        # A custom-edge saved model predating named presets stays compatible.
+        old=copy.copy(opt)
+        old.sideband_edges=[11.,15.,20.,25.,30.,40.,50.,60.,80.]
+        old.sideband_binning='central'
+        legacy=copy.copy(old)
+        del legacy.sideband_binning
+        self.assertEqual(fs.signature(old),fs.signature(legacy))
+        self.assertEqual(fs.model_directory(old,30),fs.model_directory(legacy,30))
+        with self.assertRaisesRegex(ValueError,'either'):
+            fs.configuration(fs.make_parser().parse_args(['--fit-layout','window',
+                '--sideband-binning','fine','--sideband-edges','11,20,80']))
 
     def test_window_cli_is_isolated_and_rejects_invalid_or_ignored_settings(self):
         parser=fs.make_parser()

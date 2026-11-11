@@ -19,17 +19,40 @@ a normalisation-only prefit. The default `--fit-layout spectrum` preserves the
 existing full-spectrum geometry and saved batches.
 
 ```bash
-python3 full_spectrum_fit.py --masses 30 --target full --fit-layout window
-
-# Independent, finer-binned stability comparison:
 python3 full_spectrum_fit.py --masses 30 --target full --fit-layout window \
-    --sideband-refine 2
+    --sideband-binning central
+
+# Independent stability comparisons (new batches):
+python3 full_spectrum_fit.py --masses 30 --target full --fit-layout window \
+    --sideband-binning fine
+python3 full_spectrum_fit.py --masses 30 --target full --fit-layout window \
+    --sideband-binning coarse
 ```
 
-The reference sideband edges are **11, 15, 20, 25, 30, 40, 50, 60, 80 GeV**.
-Override with `--sideband-edges 11,15,20,25,30,40,50,60,80`. Edges must be finite,
-strictly increasing and span 11--80. `--sideband-refine 2` subdivides each
-reference interval in two before snapping it to the common native grid.
+`--sideband-binning central` is the default for window layout. Motivated by
+the supplied Run2+3 background plot, it resolves the changing low-mass
+QCD/DY/tt mixture more finely. This is a starting proposal based on that plot,
+not an optimisation on the original per-era templates.
+
+| Preset | Reference bins over 11--80 before SR insertion | Definition |
+| --- | ---: | --- |
+| central | 20 | 1-GeV widths from 11--20, 2 GeV from 20--30, 5 GeV from 30--40, 10 GeV from 40--80 |
+| fine | 40 | Bisect every central reference bin |
+| coarse | 10 | Merge adjacent central reference bins in pairs |
+
+Central edges: **11,12,13,14,15,16,17,18,19,20,22,24,26,28,30,35,40,50,60,70,80 GeV**.
+Coarse edges: **11,13,15,17,19,22,26,30,40,60,80 GeV**. Coarse bins can cross a
+width-transition boundary such as 20 GeV to preserve the exact pair merging.
+The presets are nested. Their exact factor-of-two bin counts apply to the
+reference grids; after SR insertion, native-grid snapping and fragment merging,
+the actual sideband counts need not have an exact factor-of-two ratio. The SR
+boundaries are identical in all three cases.
+
+Override central with `--sideband-edges 11,15,20,25,30,40,50,60,80` to reproduce
+the earlier proposal. Custom edges cannot be combined with fine/coarse presets.
+Edges must be finite, strictly increasing and span 11--80.
+`--sideband-refine 2` remains available to subdivide each selected reference
+interval in two before snapping it to the common native grid.
 
 For every requested signal mass and era, the existing +/-5-sigma window
 (`--sr-nsigma 5`) is clipped to 11--80 and snapped outwards to whole native

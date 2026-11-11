@@ -20,7 +20,13 @@ import limit_workflow_sideband_fit as shared
 DOMAIN = (11., 80.)
 SCHEMA = 'NPS26009_full_spectrum_step1_v1'
 MAJOR = ('QCD', 'DY', 'tt')
-SIDEBAND_EDGES = (11., 15., 20., 25., 30., 40., 50., 60., 80.)
+SIDEBAND_EDGES = tuple(float(x) for x in range(11,21)) + (22.,24.,26.,28.,30.,35.,40.,50.,60.,70.,80.)
+SIDEBAND_PRESETS = {
+    'central': SIDEBAND_EDGES,
+    'fine': tuple(sorted((*SIDEBAND_EDGES,
+                         *((a+b)/2 for a,b in zip(SIDEBAND_EDGES,SIDEBAND_EDGES[1:]))))),
+    'coarse': SIDEBAND_EDGES[::2],
+}
 
 
 def make_parser():
@@ -38,8 +44,10 @@ def make_parser():
     p.add_argument('--fit-layout', choices=('spectrum', 'window'), default='spectrum',
                    help='spectrum: existing resolution bins; window: one SR count plus coarse sidebands.')
     p.add_argument('--sr-nsigma', type=shared.finite_positive, default=5.)
-    p.add_argument('--sideband-edges', type=base.parse_float_list, default=list(SIDEBAND_EDGES),
-                   help='Reference sideband edges in GeV; must span 11--80.')
+    p.add_argument('--sideband-binning', choices=('central','fine','coarse'), default='central',
+                   help='Window-layout sidebands: central has 20 reference bins, fine 40, coarse 10.')
+    p.add_argument('--sideband-edges', type=base.parse_float_list,
+                   help='Custom reference edges in GeV (overrides central); must span 11--80.')
     p.add_argument('--sideband-refine', type=int, default=1,
                    help='Subdivide each reference sideband interval (2 for binning stability checks).')
     p.add_argument('--sideband-fragment-fraction', type=float, default=.25,
@@ -139,7 +147,7 @@ def normalisation_name(process, era):
 
 
 def validate_sideband_options(opt):
-    edges = opt.sideband_edges
+    edges = sideband_reference(opt)
     if (len(edges) < 2 or any(not math.isfinite(x) for x in edges)
             or edges[0] != DOMAIN[0] or edges[-1] != DOMAIN[1]
             or any(a >= b for a,b in zip(edges, edges[1:]))):
@@ -148,6 +156,16 @@ def validate_sideband_options(opt):
         raise ValueError('--sideband-refine must be at least 1.')
     if not math.isfinite(opt.sideband_fragment_fraction) or not 0 <= opt.sideband_fragment_fraction <= .5:
         raise ValueError('Require 0 <= sideband-fragment-fraction <= 0.5.')
+
+
+def sideband_reference(opt):
+    explicit = getattr(opt,'sideband_edges',None)
+    preset = getattr(opt,'sideband_binning','central')
+    if explicit is not None:
+        if preset != 'central':
+            raise ValueError('Use either --sideband-edges or --sideband-binning fine/coarse.')
+        return list(explicit)
+    return list(SIDEBAND_PRESETS[preset])
 
 
 def window_bins(edges, low, high, reference=SIDEBAND_EDGES, refine=1, fragment_fraction=.25):
@@ -190,7 +208,7 @@ def effective_bin_sigma(opt):
 
 def model_directory(opt, mass):
     if getattr(opt,'fit_layout','spectrum') == 'window':
-        geometry = [opt.sideband_edges,opt.sideband_refine,opt.sideband_fragment_fraction]
+        geometry = [sideband_reference(opt),opt.sideband_refine,opt.sideband_fragment_fraction]
         code = hashlib.sha256(json.dumps(geometry).encode()).hexdigest()[:10]
         tag = f'{opt.target}_window{base.mass_label(opt.sr_nsigma)}sigma_sb{code}_lnN{base.mass_label(opt.norm_prior)}'
         return Path(opt.output_base).resolve()/tag/f'M{base.mass_label(mass)}'
@@ -203,7 +221,7 @@ def model_directory(opt, mass):
 def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
-               'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction'}
+               'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning'}
     result = {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
     # Preserve compatibility with existing full-resolution saved models.
     if getattr(opt, 'fast_mode', False):
@@ -211,6 +229,7 @@ def signature(opt):
     if getattr(opt,'fit_layout','spectrum') == 'window':
         for name in ('fit_layout','sr_nsigma','sideband_edges','sideband_refine','sideband_fragment_fraction'):
             result[name] = getattr(opt,name)
+        result['sideband_edges'] = sideband_reference(opt)
     return result
 
 
@@ -233,7 +252,8 @@ def decorate_model(model, opt, windows):
     if getattr(opt,'fit_layout','spectrum') == 'window':
         model['fit_kind'] = 'window_count_with_sidebands'
         model['effective_bin_sigma'] = None
-        model['sideband_binning'] = dict(reference_edges=list(opt.sideband_edges),
+        model['sideband_binning'] = dict(reference_edges=sideband_reference(opt),
+            preset=getattr(opt,'sideband_binning','central') if getattr(opt,'sideband_edges',None) is None else 'custom',
             refine=opt.sideband_refine, fragment_fraction=opt.sideband_fragment_fraction,
             sr_nsigma=opt.sr_nsigma, status='proposal_requires_binning_stability_check')
     for era in model['eras']:
@@ -422,7 +442,7 @@ def prepare_inputs(reader, args, opt):
         if is_window:
             for mass in opt.masses:
                 low,high = base.mass_window(args,era,mass)
-                bins = window_bins(edges,low,high,opt.sideband_edges,opt.sideband_refine,opt.sideband_fragment_fraction)
+                bins = window_bins(edges,low,high,sideband_reference(opt),opt.sideband_refine,opt.sideband_fragment_fraction)
                 windows[base.mass_label(mass)][era] = bins
                 print(f'[BINS] {era} M{mass:g}: 1 SR + {len(bins)-1} sideband bins over 11--80 GeV', flush=True)
         else:
@@ -533,7 +553,7 @@ def main(argv=None):
               'systematics and fit diagnostics retained.', flush=True)
     if getattr(opt,'fit_layout','spectrum') == 'window':
         print('[LAYOUT] One signal-window count plus coarse sidebands; all regions fitted jointly. '
-              f'SR=+/-{opt.sr_nsigma:g} sigma, reference edges={opt.sideband_edges}, '
+              f'SR=+/-{opt.sr_nsigma:g} sigma, reference edges={sideband_reference(opt)}, '
               f'refine={opt.sideband_refine}.', flush=True)
     if opt.dry_run:
         for mass in opt.masses:

@@ -75,7 +75,7 @@ class CondorTests(unittest.TestCase):
                 grid=[11.+i*.02 for i in range(3451)]
                 windows={base.mass_label(mass):{era:fs.window_bins(grid,
                     max(11.,mass-.05*mass),min(80.,mass+.05*mass),
-                    opt.sideband_edges,opt.sideband_refine,opt.sideband_fragment_fraction)
+                    fs.sideband_reference(opt),opt.sideband_refine,opt.sideband_fragment_fraction)
                     for era in self.eras} for mass in opt.masses}
             return signals,windows
         with patch.object(fs, 'prepare_inputs', side_effect=inputs):
