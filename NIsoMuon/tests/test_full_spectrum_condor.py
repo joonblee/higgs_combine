@@ -205,6 +205,7 @@ class CondorTests(unittest.TestCase):
         self.assertIn('[BINS] 2018: 0/2 complete',report.stdout)
         submit_text=(directory/'submit.jds').read_text()
         self.assertIn('should_transfer_files = YES',submit_text)
+        self.assertIn('ulimit -s unlimited',(directory/'run_job.sh').read_text())
         self.assertIn('when_to_transfer_output = ON_EXIT',submit_text)
         self.assertIn('transfer_output_files = ""',submit_text)
         self.assertNotIn('FileSystemDomain',submit_text)
@@ -241,6 +242,18 @@ class CondorTests(unittest.TestCase):
         with patch.object(fs,'run_fit',side_effect=self.fake_fit):
             self.workers(new,'fit')
         self.assertIsNotNone(batch.completed(new,new['jobs'][0]))
+
+    def test_fast_batch_preserves_mode_in_workers_and_saved_model(self):
+        opt,args,payload=self.make_batch(stage='cards',extra=('--fast-mode',))
+        worker,_=batch.worker_options(payload)
+        self.assertTrue(worker.fast_mode)
+        self.assertEqual(fs.effective_bin_sigma(worker),4.)
+        self.workers(payload,'prepare')
+        self.workers(payload,'assemble')
+        model=fs.load_model(fs.model_directory(worker,30),worker)
+        self.assertTrue(model['test_only'])
+        self.assertEqual(model['effective_bin_sigma'],4.)
+        self.assertIn('_fast',str(fs.model_directory(worker,30)))
 
     def test_bin_job_count_and_invalid_resources(self):
         opt,args,payload=self.make_batch()

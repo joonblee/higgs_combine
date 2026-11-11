@@ -49,7 +49,7 @@ class GeometryTests(unittest.TestCase):
         grid = np.round(np.arange(11., 80.001, .02),8)
         for era, ab in coeffs.items():
             resolution = lambda m: m*(ab['a']*m+ab['b'])
-            for factor in (.5,1.,2.):
+            for factor in (.5,1.,2.,4.):
                 rows = fs.resolution_bins(grid,resolution,factor)
                 self.assertEqual(rows[0]['low'],11.)
                 self.assertEqual(rows[-1]['high'],80.)
@@ -68,6 +68,33 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual(rows[-1]['high'],80.)
         self.assertNotEqual(rows[-1]['low'],79.9)
         self.assertEqual(rows[0]['high'],13.)
+
+    def test_fast_preparation_has_fewer_bins_and_separate_outputs(self):
+        normal=fs.make_parser().parse_args(['--target','2018','--masses','30'])
+        fast=fs.make_parser().parse_args(['--target','2018','--masses','30','--fast-mode'])
+        edges=np.round(np.arange(11.,80.001,.02),8)
+        windows=[]
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(base,'scan_signal_files',return_value={30.:{'2018':'signal.root'}}))
+            stack.enter_context(patch.object(base,'prepare_resolution_coefficients'))
+            stack.enter_context(patch.object(shared,'common_edges',return_value=edges))
+            stack.enter_context(patch.object(base,'relative_resolution',return_value=.01))
+            for opt in (normal,fast):
+                _,w=fs.prepare_inputs(None,SimpleNamespace(),opt)
+                windows.append(w['2018'])
+        self.assertLess(len(windows[1]),.3*len(windows[0]))
+        for bins in windows:
+            self.assertEqual(bins[0]['low'],11.)
+            self.assertEqual(bins[-1]['high'],80.)
+            self.assertTrue(all(a['high']==b['low'] for a,b in zip(bins,bins[1:])))
+        self.assertNotEqual(fs.model_directory(normal,30),fs.model_directory(fast,30))
+        self.assertIn('binsigma4_lnN1p5_fast',str(fs.model_directory(fast,30)))
+        self.assertNotEqual(fs.signature(normal),fs.signature(fast))
+        legacy=copy.copy(normal)
+        del legacy.fast_mode
+        self.assertEqual(fs.signature(normal),fs.signature(legacy))
+        self.assertEqual(fs.fit_commands(normal,30,Path('/tmp/test')),
+                         fs.fit_commands(fast,30,Path('/tmp/test')))
 
     def test_no_domain_truncation(self):
         for edges in ([11.1,20.,80.],[11.,20.,79.9]):

@@ -23,6 +23,32 @@ Start with one mass. Once that completes, build the other representative masses:
 python3 full_spectrum_fit.py --masses 12,70 --target full
 ```
 
+For repeated development tests, `--fast-mode` multiplies the target bin width
+by four (default: 4 sigma instead of 1 sigma). It covers the same 11--80 GeV
+domain and all selected eras, but reduces the number of spectrum bins and
+independent per-bin statistical nuisances. Each wider bin is integrated again
+from the original inputs, with the same uncertainty/correlation prescriptions;
+existing narrow-bin nuisance responses are not averaged together.
+
+```bash
+python3 full_spectrum_fit.py --masses 30 --target full --fast-mode
+```
+
+The broad normalisation priors, systematic uncertainties, B-only and S+B fits,
+robust intervals and postfit uncertainty calculations are retained. This flag
+changes binning only; it is distinct from the manual no-errors quick test.
+Combining it with `--bin-sigma 2` targets 8 sigma. Coarse bins can lose narrow
+signal sensitivity, so these are development results, not final limits or
+full-resolution validation. `model.json` and `fit_summary.json` mark them as
+`test_only: true`; model directories include the effective width and `_fast`.
+Do not use an old 1-sigma saved model for a fast fit-only run: the coarse model
+requires fresh preparation. Omit `--fast-mode` for the final 1-sigma run.
+No speedup factor is guaranteed until timed on the production inputs.
+
+Workers remove the stack-size limit with `ulimit -s unlimited` before loading
+CMSSW. This addresses the observed local 8-MB stack-limit crash; it does not
+increase the Condor memory allocation (`--condor-memory`, in MB).
+
 The default inputs are the existing per-era files under
 `/data6/Users/joonblee/SKOutput/Run2UL_v3_Run3_v13/NIsoMuon`, with the same
 nominal, `RunSyst` and `RunXSecSyst` layout used by `limit_workflow.py`.

@@ -376,6 +376,7 @@ def submit(opt, args, prepared_plan=None):
     wrapper = batch/'run_job.sh'
     wrapper.write_text('\n'.join([
         '#!/bin/bash', 'set -eo pipefail', 'export LC_ALL=C ROOT_HIST=0',
+        'ulimit -s unlimited',
         'export CMS_PATH=/cvmfs/cms.cern.ch', 'source "$CMS_PATH/cmsset_default.sh"',
         f'export SCRAM_ARCH={shlex.quote(arch)}', f'cd {shlex.quote(str(cmssw/"src"))}',
         'eval "$(scramv1 runtime -sh)"',

@@ -36,6 +36,8 @@ def make_parser():
     p.add_argument('--trigger', default='')
     p.add_argument('--bin-sigma', type=shared.finite_positive, default=1.,
                    help='Target bin width / local sigma_m(m); snapped to common native edges.')
+    p.add_argument('--fast-mode', action='store_true',
+                   help='Test only: multiply the target bin width by four; retain all fit diagnostics and systematics.')
     p.add_argument('--norm-prior', type=shared.finite_positive, default=1.5,
                    help='lnN kappa for each independent process/era QCD, DY and tt scale (>1).')
     p.add_argument('--inject-r', type=float, default=0., help='Asimov signal strength, e.g. 0 or 1.')
@@ -120,15 +122,25 @@ def normalisation_name(process, era):
     return f'CMS_NPS26009_inSituNorm_{process}_BJetOS_{era}'
 
 
+def effective_bin_sigma(opt):
+    return opt.bin_sigma * (4. if getattr(opt, 'fast_mode', False) else 1.)
+
+
 def model_directory(opt, mass):
-    tag = f'{opt.target}_binsigma{base.mass_label(opt.bin_sigma)}_lnN{base.mass_label(opt.norm_prior)}'
+    tag = f'{opt.target}_binsigma{base.mass_label(effective_bin_sigma(opt))}_lnN{base.mass_label(opt.norm_prior)}'
+    if getattr(opt, 'fast_mode', False):
+        tag += '_fast'
     return Path(opt.output_base).resolve()/tag/f'M{base.mass_label(mass)}'
 
 
 def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base',
-               'backend', 'bins_per_job'}
-    return {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
+               'backend', 'bins_per_job', 'fast_mode'}
+    result = {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
+    # Preserve compatibility with existing full-resolution saved models.
+    if getattr(opt, 'fast_mode', False):
+        result['fast_mode'] = True
+    return result
 
 
 def build_model(reader, args, opt, mass, files, windows):
@@ -141,6 +153,8 @@ def build_model(reader, args, opt, mass, files, windows):
 def decorate_model(model, opt, windows):
     """Apply full-spectrum metadata after all raw bins are assembled."""
     model.update(schema_version=SCHEMA, fit_kind='full_spectrum', settings=vars(opt),
+                 test_only=bool(getattr(opt, 'fast_mode', False)),
+                 effective_bin_sigma=effective_bin_sigma(opt),
                  signal_normalisation_domain=list(DOMAIN),
                  uncertainty_model=('Step 1: broad QCD/DY/tt normalisations; inherited template '
                     'responses, SS covariance and envelope, DY source and MC statistics. '
@@ -213,6 +227,7 @@ def extract_summary(model, directory, opt):
         if not workspace:
             raise ValueError('Missing workspace w.')
         result = dict(schema_version=SCHEMA, blind=True, target=model['target'], mass=model['mass'],
+                      test_only=model.get('test_only', False),
                       inject_r=opt.inject_r, alpha_internal_unit=model['alpha_internal_unit'],
                       card_sha256=model['card_sha256'],
                       fit_card_sha256=hashlib.sha256((fit_dir/'datacard.txt').read_bytes()).hexdigest(),
@@ -315,7 +330,7 @@ def prepare_inputs(reader, args, opt):
             raise ValueError(f'Missing reference signal in {era}.')
         edges = shared.common_edges(reader, args, era, reference[era])
         windows[era] = resolution_bins(edges,
-            lambda m, era=era: m*base.relative_resolution(args, era, m), opt.bin_sigma)
+            lambda m, era=era: m*base.relative_resolution(args, era, m), effective_bin_sigma(opt))
         print(f'[BINS] {era}: {len(windows[era])} bins over 11--80 GeV', flush=True)
     return signals, windows
 
@@ -364,6 +379,9 @@ def main(argv=None):
         import full_spectrum_condor as batch
         return batch.manage(opt)
     args = configuration(opt)
+    if getattr(opt, 'fast_mode', False):
+        print(f'[FAST] Test-only coarse spectrum: target bin width = {effective_bin_sigma(opt):g} sigma; '
+              'systematics and fit diagnostics retained.', flush=True)
     if opt.dry_run:
         for mass in opt.masses:
             print('[PLAN] blinded full spectrum, era channels, QCD/DY/tt lnN', opt.norm_prior)
