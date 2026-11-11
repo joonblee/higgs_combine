@@ -1,4 +1,4 @@
-"""Shared-filesystem DAG: raw era/bin jobs -> combined card -> joint fit.
+"""Shared-filesystem DAG: raw bins -> card/workspace -> parallel B/S+B fits.
 
 Invoked through full_spectrum_fit.py. Workers use a source snapshot and never
 fit bins separately. Changing job grouping cannot change the likelihood.
@@ -98,7 +98,9 @@ def make_jobs(opt, windows):
                                        windows=bins[start:start+opt.bins_per_job]))
             parents = [add('assemble', mass, parents)]
         if opt.stage in ('fit', 'all'):
-            add('fit', mass, parents)
+            workspace = add('workspace', mass, parents)
+            fits = [add(kind, mass, [workspace]) for kind in ('fit_b', 'fit_s')]
+            add('summarize', mass, fits)
     return jobs
 
 
@@ -247,14 +249,25 @@ def run_worker(manifest, index):
                     reader.close()
             elif job['kind'] == 'assemble':
                 products = assemble(payload, job, opt, args)
-            elif job['kind'] == 'fit':
+            elif job['kind'] in ('workspace', 'fit_b', 'fit_s', 'summarize', 'fit'):
                 model_dir = fs.model_directory(opt, job['mass'])
                 model = fs.load_model(model_dir, opt)
                 check_inputs(model.get('batch_inputs', {}))
-                fs.run_fit(model, model_dir, opt)
                 fit_dir = model_dir/f'fit_r{base.mass_label(opt.inject_r)}'
-                products = [fit_dir/name for name in
-                            ('fit_summary.json', 'fitDiagnostics.FullSpectrum.root', 'workspace.root')]
+                if job['kind'] == 'workspace':
+                    fs.prepare_workspace(model, model_dir, opt)
+                    products = [fit_dir/name for name in ('datacard.txt', 'workspace.root')]
+                elif job['kind'] in ('fit_b', 'fit_s'):
+                    fs.run_fit_component(model, model_dir, opt, job['kind'])
+                    products = [fit_dir/job['kind']/name for name in
+                                ('fit_summary.json', 'fitDiagnostics.FullSpectrum.root')]
+                elif job['kind'] == 'summarize':
+                    fs.combine_fit_summaries(model, model_dir, opt)
+                    products = [fit_dir/'fit_summary.json']
+                else:  # Legacy manifests keep their original sequential fit job.
+                    fs.run_fit(model, model_dir, opt)
+                    products = [fit_dir/name for name in
+                                ('fit_summary.json', 'fitDiagnostics.FullSpectrum.root', 'workspace.root')]
             else:
                 raise ValueError('Unknown batch job kind.')
             status.update(state='success', completion_id=uuid4().hex,

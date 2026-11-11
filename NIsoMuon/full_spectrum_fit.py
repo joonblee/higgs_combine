@@ -53,7 +53,7 @@ def make_parser():
     batch.add_argument('--condor-dry-run', action='store_true', help='Prepare the real DAG and manifest without submitting (reads nominal axes).')
     batch.add_argument('--condor-maxjobs', type=int, default=0,
                        help='DAG submission cap (default: 0, no cap added by this workflow).')
-    batch.add_argument('--condor-memory', type=int, default=4000, help='Memory request per job in MB.')
+    batch.add_argument('--condor-memory', type=int, default=16000, help='Memory request per job in MB (default: 16000).')
     batch.add_argument('--condor-retries', type=int, default=2)
     batch.add_argument('--condor-requirements', default='')
     batch.add_argument('--condor-filesystem-domain', default=None,
@@ -185,16 +185,21 @@ def decorate_model(model, opt, windows):
     return model
 
 
-def fit_commands(opt, mass, directory):
+def fit_commands(opt, mass, directory, fit_kind=None):
+    if fit_kind not in (None, 'fit_b', 'fit_s'):
+        raise ValueError('Unknown fit kind.')
     directory = Path(directory).resolve()
     fit_dir = directory/f'fit_r{base.mass_label(opt.inject_r)}'
-    return [
+    commands = [
         ['text2workspace.py', str(fit_dir/'datacard.txt'), '-m', str(mass), '-o', str(fit_dir/'workspace.root')],
         ['combine', '-M', 'FitDiagnostics', str(fit_dir/'workspace.root'), '-m', str(mass),
          '-t', '-1', '--expectSignal', str(opt.inject_r), '--rMin', '0', '--rMax', str(opt.r_max),
          '--robustFit', '1', '--cminDefaultMinimizerStrategy', '1',
          '--saveShapes', '--saveWithUncertainties', '--saveNormalizations', '-n', '.FullSpectrum'],
     ]
+    if fit_kind:
+        commands[1].append('--skipSBFit' if fit_kind == 'fit_b' else '--skipBOnlyFit')
+    return commands
 
 
 def fit_card_text(text):
@@ -214,12 +219,13 @@ def fit_card_text(text):
     return 'shapes * * FAKE\n'+text
 
 
-def extract_summary(model, directory, opt):
+def extract_summary(model, directory, opt, fit_kind=None):
     """Report both fits, all norm pulls/constraints and their correlations."""
     import ROOT
-    fit_dir = directory/f'fit_r{base.mass_label(opt.inject_r)}'
+    root_dir = directory/f'fit_r{base.mass_label(opt.inject_r)}'
+    fit_dir = root_dir/fit_kind if fit_kind else root_dir
     handle = ROOT.TFile.Open(str(fit_dir/'fitDiagnostics.FullSpectrum.root'))
-    wf = ROOT.TFile.Open(str(fit_dir/'workspace.root'))
+    wf = ROOT.TFile.Open(str(root_dir/'workspace.root'))
     if not handle or handle.IsZombie() or not wf or wf.IsZombie():
         raise ValueError('Missing FitDiagnostics/workspace output.')
     try:
@@ -230,9 +236,9 @@ def extract_summary(model, directory, opt):
                       test_only=model.get('test_only', False),
                       inject_r=opt.inject_r, alpha_internal_unit=model['alpha_internal_unit'],
                       card_sha256=model['card_sha256'],
-                      fit_card_sha256=hashlib.sha256((fit_dir/'datacard.txt').read_bytes()).hexdigest(),
+                      fit_card_sha256=hashlib.sha256((root_dir/'datacard.txt').read_bytes()).hexdigest(),
                       fits={})
-        for key in ('fit_b', 'fit_s'):
+        for key in ((fit_kind,) if fit_kind else ('fit_b', 'fit_s')):
             fit = handle.Get(key)
             if not fit:
                 raise ValueError('Missing '+key)
@@ -313,7 +319,7 @@ def load_model(directory, opt):
 
 def invalidate_fits(directory):
     """An old successful fit must not survive as a result of a rebuilt card."""
-    for path in directory.glob('fit_r*/*'):
+    for path in directory.glob('fit_r*/**/*'):
         if path.name in ('workspace.root', 'fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json'):
             path.unlink()
 
@@ -350,7 +356,8 @@ def save_model(model, opt, mass, directory):
     (directory/'model.json').write_text(json.dumps(model, indent=2, allow_nan=False)+'\n')
 
 
-def run_fit(model, directory, opt):
+def prepare_workspace(model, directory, opt):
+    """Compile once, before either independent hypothesis fit starts."""
     directory = Path(directory)
     fit_dir = directory/f'fit_r{base.mass_label(opt.inject_r)}'
     fit_dir.mkdir(exist_ok=True)
@@ -361,11 +368,62 @@ def run_fit(model, directory, opt):
     # reusing a completed batch for a new fit-only submission.
     (fit_dir/'datacard.txt').write_text(fit_card_text(source_card.decode()))
     commands = fit_commands(opt, model['mass'], directory)
-    (fit_dir/'commands.json').write_text(json.dumps(commands, indent=2)+'\n')
+    (fit_dir/'commands.json').write_text(json.dumps(commands[:1], indent=2)+'\n')
     for name in ('workspace.root', 'fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json'):
         (fit_dir/name).unlink(missing_ok=True)
-    for i, command in enumerate(commands):
-        base.run_command(command, fit_dir, stdout_path=fit_dir/f'step{i}.log')
+    base.run_command(commands[0], fit_dir, stdout_path=fit_dir/'step0.log')
+
+
+def run_fit_component(model, directory, opt, fit_kind):
+    if fit_kind not in ('fit_b', 'fit_s'):
+        raise ValueError('Unknown fit kind.')
+    root_dir = Path(directory)/f'fit_r{base.mass_label(opt.inject_r)}'
+    expected_card = fit_card_text((Path(directory)/'datacard.txt').read_text())
+    if (root_dir/'datacard.txt').read_text() != expected_card:
+        raise ValueError('Compiled fit card differs from the assembled card.')
+    fit_dir = root_dir/fit_kind
+    fit_dir.mkdir(exist_ok=True)
+    command = fit_commands(opt, model['mass'], directory, fit_kind)[1]
+    (fit_dir/'commands.json').write_text(json.dumps([command], indent=2)+'\n')
+    for name in ('fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json'):
+        (fit_dir/name).unlink(missing_ok=True)
+    base.run_command(command, fit_dir, stdout_path=fit_dir/'step1.log')
+    extract_summary(model, Path(directory), opt, fit_kind)
+
+
+def combine_fit_summaries(model, directory, opt):
+    """Collect independently validated results; never refit or average them."""
+    root_dir = Path(directory)/f'fit_r{base.mass_label(opt.inject_r)}'
+    (root_dir/'fit_summary.json').unlink(missing_ok=True)
+    result = None
+    fit_card_hash = hashlib.sha256((root_dir/'datacard.txt').read_bytes()).hexdigest()
+    expected = dict(schema_version=SCHEMA, blind=True, target=model['target'], mass=model['mass'],
+                    test_only=model.get('test_only', False), inject_r=opt.inject_r,
+                    alpha_internal_unit=model['alpha_internal_unit'], card_sha256=model['card_sha256'],
+                    fit_card_sha256=fit_card_hash)
+    for kind in ('fit_b', 'fit_s'):
+        part = json.loads((root_dir/kind/'fit_summary.json').read_text())
+        if any(part.get(k) != v for k,v in expected.items()) or set(part.get('fits', {})) != {kind}:
+            raise ValueError('Incompatible fit summary: '+kind)
+        info = part['fits'][kind]
+        if info['status'] != 0 or info['covQual'] != 3:
+            raise ValueError('Failed fit quality in '+kind)
+        if result is None:
+            result = dict(expected, fits={}, fit_outputs={})
+        result['fits'][kind] = info
+        result['fit_outputs'][kind] = str(root_dir/kind/'fitDiagnostics.FullSpectrum.root')
+    (root_dir/'fit_summary.json').write_text(json.dumps(result, indent=2, allow_nan=False)+'\n')
+    return result
+
+
+def run_fit(model, directory, opt):
+    """Foreground backend retains sequential diagnostics for compatibility."""
+    directory = Path(directory)
+    prepare_workspace(model, directory, opt)
+    fit_dir = Path(directory)/f'fit_r{base.mass_label(opt.inject_r)}'
+    command = fit_commands(opt, model['mass'], directory)[1]
+    (fit_dir/'commands.json').write_text(json.dumps(fit_commands(opt, model['mass'], directory), indent=2)+'\n')
+    base.run_command(command, fit_dir, stdout_path=fit_dir/'step1.log')
     extract_summary(model, directory, opt)
 
 

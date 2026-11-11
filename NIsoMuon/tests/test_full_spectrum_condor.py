@@ -79,20 +79,42 @@ class CondorTests(unittest.TestCase):
             if job['kind'] == kind:
                 batch.run_worker(Path(payload['batch'])/'manifest.json', job['index'])
 
-    def fake_fit(self, model, directory, opt):
-        self.assertAlmostEqual(sum(r['rates']['sig'] for r in model['rows']),25.)
-        self.assertEqual(len(model['rows']),8)
-        directory = directory/f'fit_r{base.mass_label(opt.inject_r)}'
-        directory.mkdir()
-        for name in ('workspace.root','fitDiagnostics.FullSpectrum.root','fit_summary.json'):
-            (directory/name).write_text('synthetic fit output')
+    def run_fits(self, payload):
+        def command(cmd, cwd, **kwargs):
+            cwd=Path(cwd)
+            if cmd[0]=='text2workspace.py':
+                Path(cmd[cmd.index('-o')+1]).write_text('synthetic workspace')
+            else:
+                self.assertEqual(cmd[0],'combine')
+                self.assertEqual('--skipSBFit' in cmd,cwd.name=='fit_b')
+                self.assertEqual('--skipBOnlyFit' in cmd,cwd.name=='fit_s')
+                (cwd/'fitDiagnostics.FullSpectrum.root').write_text('synthetic fit output')
+        def summary(model, directory, opt, fit_kind):
+            self.assertAlmostEqual(sum(r['rates']['sig'] for r in model['rows']),25.)
+            self.assertEqual(len(model['rows']),8)
+            root=directory/f'fit_r{base.mass_label(opt.inject_r)}'
+            result=dict(schema_version=fs.SCHEMA, blind=True, target=model['target'], mass=model['mass'],
+                test_only=model.get('test_only',False), inject_r=opt.inject_r,
+                alpha_internal_unit=model['alpha_internal_unit'], card_sha256=model['card_sha256'],
+                fit_card_sha256=batch.file_hash(root/'datacard.txt'),
+                fits={fit_kind:dict(status=0,covQual=3)})
+            batch.write_json(root/fit_kind/'fit_summary.json',result)
+        with patch.object(base,'run_command',side_effect=command), patch.object(fs,'extract_summary',side_effect=summary):
+            self.workers(payload,'workspace')
+            # S+B need not wait for B-only; deliberately complete it first.
+            self.workers(payload,'fit_s')
+            self.workers(payload,'fit_b')
+            self.workers(payload,'summarize')
 
     def test_raw_shards_assemble_to_identical_local_card_and_one_joint_fit(self):
         opt,args,payload = self.make_batch()
         jobs = payload['jobs']
         self.assertEqual([j['kind'] for j in jobs].count('prepare'),8)
-        self.assertEqual(jobs[-2]['dependencies'],list(range(8)))
-        self.assertEqual(jobs[-1]['dependencies'],[8])
+        self.assertEqual(jobs[8]['dependencies'],list(range(8)))
+        self.assertEqual(jobs[9]['kind'],'workspace')
+        self.assertEqual(jobs[10]['dependencies'],[9])
+        self.assertEqual(jobs[11]['dependencies'],[9])
+        self.assertEqual(jobs[12]['dependencies'],[10,11])
         with self.assertRaisesRegex(ValueError,'Dependency job'):
             batch.run_worker(Path(payload['batch']),8)
         self.workers(payload,'prepare')
@@ -107,9 +129,7 @@ class CondorTests(unittest.TestCase):
                                   {e:'signal.root' for e in self.eras},self.windows)
         self.assertEqual((path/'datacard.txt').read_text(),
                          shared.card_text(local,normalisation_kappa=1.5,prefix='FS'))
-        with patch.object(fs,'run_fit',side_effect=self.fake_fit) as fit:
-            self.workers(payload,'fit')
-            fit.assert_called_once()
+        self.run_fits(payload)
         for job in jobs:
             self.assertIsNotNone(batch.completed(payload,job))
         opt.stage='collect'
@@ -126,6 +146,36 @@ class CondorTests(unittest.TestCase):
         self.assertEqual(cards[0],cards[1])
         local=fs.make_parser().parse_args(['--target','Run2','--masses','30'])
         self.assertEqual(fs.signature(local),fs.signature(opt))
+
+    def test_resume_one_failed_hypothesis_keeps_the_other_fit(self):
+        opt,args,payload=self.make_batch()
+        self.workers(payload,'prepare')
+        self.workers(payload,'assemble')
+        self.run_fits(payload)
+        by_kind={j['kind']:j for j in payload['jobs']}
+        worker,_=batch.worker_options(payload)
+        root=fs.model_directory(worker,30)/'fit_r0'
+        path=root/'fit_b/fitDiagnostics.FullSpectrum.root'
+        path.write_text('invalidated B-only output')
+        self.assertIsNone(batch.completed(payload,by_kind['fit_b']))
+        self.assertIsNotNone(batch.completed(payload,by_kind['fit_s']))
+        self.assertIsNone(batch.completed(payload,by_kind['summarize']))
+        opt.stage='resume'
+        batch.manage(opt)
+        dag=next(Path(payload['batch']).glob('resume_*.dag')).read_text()
+        for kind in ('fit_b','summarize'):
+            self.assertIn(f'JOB J{by_kind[kind]["index"]} submit.jds',dag)
+        for kind in ('workspace','fit_s','assemble'):
+            self.assertNotIn(f'JOB J{by_kind[kind]["index"]} submit.jds',dag)
+        # A result from a different dataset must never be merged/published.
+        path=root/'fit_b/fit_summary.json'
+        value=json.loads(path.read_text())
+        value['inject_r']=1.
+        batch.write_json(path,value)
+        model=fs.load_model(fs.model_directory(worker,30),worker)
+        with self.assertRaisesRegex(ValueError,'Incompatible fit summary'):
+            fs.combine_fit_summaries(model,fs.model_directory(worker,30),worker)
+        self.assertFalse((root/'fit_summary.json').exists())
 
     def test_failed_worker_is_recorded_and_can_be_retried(self):
         opt,args,payload=self.make_batch()
@@ -146,7 +196,7 @@ class CondorTests(unittest.TestCase):
         self.workers(payload,'assemble')
         path=batch.workdir(payload,payload['jobs'][0])/'part.json'
         path.write_text(path.read_text()+'\n')
-        self.assertIsNone(batch.completed(payload,payload['jobs'][-2]))
+        self.assertIsNone(batch.completed(payload,next(j for j in payload['jobs'] if j['kind']=='assemble')))
         opt.stage='resume'
         batch.manage(opt)
         dag=next(Path(payload['batch']).glob('resume_*.dag')).read_text()
@@ -154,7 +204,7 @@ class CondorTests(unittest.TestCase):
         self.assertNotIn('JOB J1 submit.jds',dag)
         self.assertIn('PARENT J0 CHILD J8',dag)
         self.assertIn('PARENT J8 CHILD J9',dag)
-        self.assertNotIn('PARENT J1',dag)
+        self.assertNotRegex(dag,r'(?m)^PARENT J1(?: |$)')
         with patch.object(batch.subprocess,'run',return_value=SimpleNamespace(stdout='12345\n')):
             opt.condor_dry_run=False
             with patch.object(base,'require_command'):
@@ -166,13 +216,13 @@ class CondorTests(unittest.TestCase):
         self.workers(payload,'prepare')
         self.workers(payload,'assemble')
         batch.run_worker(Path(payload['batch']),0)
-        self.assertIsNone(batch.completed(payload,payload['jobs'][-2]))
+        self.assertIsNone(batch.completed(payload,next(j for j in payload['jobs'] if j['kind']=='assemble')))
 
     def test_missing_or_duplicate_bins_and_changed_inputs_rejected(self):
         opt,args,payload=self.make_batch()
         self.workers(payload,'prepare')
         saved_opt,saved_args=batch.worker_options(payload)
-        job=payload['jobs'][-2]
+        job=next(j for j in payload['jobs'] if j['kind']=='assemble')
         changed=copy.deepcopy(job)
         changed['dependencies']=changed['dependencies'][1:]
         with self.assertRaisesRegex(ValueError,'bin coverage'):
@@ -238,9 +288,8 @@ class CondorTests(unittest.TestCase):
         with patch.object(fs,'prepare_inputs',side_effect=AssertionError('templates read')):
             opt,args,new=self.make_batch('injection',stage='fit',extra=(
                 '--output-base',results,'--inject-r','1'))
-        self.assertEqual([j['kind'] for j in new['jobs']],['fit'])
-        with patch.object(fs,'run_fit',side_effect=self.fake_fit):
-            self.workers(new,'fit')
+        self.assertEqual([j['kind'] for j in new['jobs']],['workspace','fit_b','fit_s','summarize'])
+        self.run_fits(new)
         self.assertIsNotNone(batch.completed(new,new['jobs'][0]))
 
     def test_fast_batch_preserves_mode_in_workers_and_saved_model(self):
@@ -368,8 +417,7 @@ class CondorTests(unittest.TestCase):
             if job['kind']=='prepare' and not batch.completed(new,job):
                 batch.run_worker(Path(new['batch']),job['index'])
         self.workers(new,'assemble')
-        with patch.object(fs,'run_fit',side_effect=self.fake_fit):
-            self.workers(new,'fit')
+        self.run_fits(new)
         check=self.recovery_options(old)
         check.stage='collect'
         check.condor_dir=new['batch']

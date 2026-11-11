@@ -5,7 +5,8 @@ CMSSW/Combine environment. SKPlotMaker supplies the current ROOT estimates;
 there is no new SKPlotMaker production command for this step.
 
 Execution defaults to **Condor**, with **no submission cap added by the
-workflow** (`--condor-maxjobs 0`). The default preparation grouping is one
+workflow** (`--condor-maxjobs 0`). Every job requests **16000 MB** by default
+(`--condor-memory 16000`). The default preparation grouping is one
 spectrum bin per job (`--bins-per-job 1`). Use `--backend local` for foreground
 execution. Condor results are isolated under each batch's `results/` directory.
 
@@ -92,6 +93,19 @@ provide the initial yields. DY NFStat/NFModel and pure QCD transfer uncertaintie
 are replaced by the broad normalisation prescription; they are not added twice.
 The consumer verifies those replaced transfer/NF factors are mass independent.
 
+The Asimov observations use the central predictions, not their uncertainty
+bands. The data term is Poisson, exactly as for observed counts; sqrt(n) is
+only a familiar representation of its counting standard deviation. No AN
+prediction uncertainty is added to an Asimov data error bar. Independently,
+the prediction retains its SS-fit covariance, QCD functional envelope, DY
+source and MC statistics and remaining detector/theory nuisance constraints.
+Pure QCD NF/transport statistical responses and QCD_norm, DY_NFStat and
+DY_NFModel are replaced by the broad normalisation treatment. Thus this is
+not a fixed-shape, statistics-only fit, and the lnN 1.5 normalisation priors
+mean the normalisations are not determined from data alone. More data bins
+by themselves do not introduce nuisance parameters; the independent
+template-statistical treatment of their source/MC inputs does.
+
 The likelihood is serialized as one Poisson counting channel per disjoint mass
 bin, all in a **single datacard**. This is a binned spectrum likelihood, not a
 sequence of independent one-window limits. A nuisance's bin-dependent lnN
@@ -177,6 +191,14 @@ Example local output directory:
   r, QCD/DY/tt scale factors, standard-Gaussian nuisance pulls and constraints,
   their mutual correlations and postfit process yields per bin.
 
+For new Condor batches, `fit_r*/workspace.root` is compiled once. Independent
+`fit_b/` and `fit_s/` subdirectories each contain a FitDiagnostics ROOT file,
+`commands.json`, `step1.log` and a validated partial `fit_summary.json`.
+The final collector writes the combined `fit_r*/fit_summary.json`, with
+`fit_outputs` pointing to the two ROOT files. It combines named fit results,
+not their parameter values, covariance matrices or ROOT histograms. Local
+foreground runs and original batch snapshots retain the sequential layout.
+
 A fit must have status 0 and covariance quality 3 before a summary is written;
 failed quality checks write `fit_failure.json`. The scale intervals are
 transformed symmetric Hessian errors, not profile intervals. A constraint value
@@ -199,8 +221,9 @@ python3 full_spectrum_fit.py --stage collect \
     --condor-dir full_spectrum_outputs/condor/M30_pdf_fix
 ```
 
-Replace `OLD_BATCH` with the original batch name. This submits one fit job,
-reuses its verified model/card and leaves the original batch untouched.
+Replace `OLD_BATCH` with the original batch name. This submits workspace
+compilation, two independent fit jobs and final summary collection. It
+reuses the verified model/card and leaves the original batch untouched.
 `--stage resume` on the original batch uses its old source snapshot and thus
 does not apply this fix. Additional nondefault model options must match the
 original configuration when loading its saved model.
@@ -224,12 +247,21 @@ This creates a new batch directory and submits a DAG automatically:
    bin coverage, input consistency and mass independence of the replaced
    normalisations across the entire era. Signal rescaling to 25 events is
    applied once over the full selected spectrum, including all eras.
-3. One joint `FitDiagnostics` job per mass, after assembly. It includes every
-   selected era/bin and retains the correlations of the local model. Both
-   B-only and floating-signal fits use the requested Asimov dataset.
+3. One workspace job per mass, after assembly. It compiles the verified card
+   once for both fits.
+4. Two independent joint `FitDiagnostics` jobs per mass, both after the
+   workspace job: B-only (`--skipSBFit`) and S+B (`--skipBOnlyFit`). Each uses
+   every selected era/bin, the same deterministic Asimov dataset and all
+   nuisance correlations. Each performs its own uncertainty/postfit diagnostics.
+   They write separate directories and may run concurrently.
+5. A lightweight summary job, after both fits pass their quality checks.
 
 For one mass with N total era/bin entries, the default creates **N preparation
-jobs + 1 assembly job + 1 fit job**. `--stage cards` omits the last job.
+jobs + 1 assembly + 1 workspace + 2 fits + 1 summary**. `--stage cards` stops
+after assembly. `--stage fit` reuses a verified saved model and submits only
+the workspace, two fits and summary. A failed B-only fit does not invalidate
+an independently successful S+B fit, or vice versa; resume reruns the failed
+fit and its collector, keeping valid products.
 `--masses 12,30,70` creates independent chains for all three hypotheses.
 Submission reads nominal axes and audits the resolution inputs once; it does
 not run the spectrum-bin preparation loop on the submitting machine.
@@ -243,7 +275,7 @@ the spectrum binning, number of CPUs per job or statistical model.
 `--condor-maxjobs 0` is the default: the workflow does not pass a `-maxjobs` cap
 to DAGMan. Available resources and cluster scheduling still determine how many
 jobs run. A positive value explicitly opts into a submission cap. Jobs request
-one CPU and `--condor-memory 4000` MB each.
+one CPU and `--condor-memory 16000` MB each.
 `--condor-retries 2` retries failed nodes twice before their dependants stop.
 Optional `--condor-requirements` is passed to the submit file.
 

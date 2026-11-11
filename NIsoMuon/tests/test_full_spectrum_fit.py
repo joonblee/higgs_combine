@@ -242,6 +242,19 @@ class CardTests(unittest.TestCase):
             self.assertIn('--saveShapes',fit)
             self.assertIn(f'fit_r{injection}',text)
 
+    def test_independent_fits_keep_full_diagnostics_and_share_workspace(self):
+        opt=fs.make_parser().parse_args(['--masses','30'])
+        self.assertEqual(opt.condor_memory,16000)
+        commands={k:fs.fit_commands(opt,30,Path('/tmp/model'),k) for k in ('fit_b','fit_s')}
+        self.assertEqual(commands['fit_b'][0],commands['fit_s'][0])
+        for kind,skip in (('fit_b','--skipSBFit'),('fit_s','--skipBOnlyFit')):
+            command=commands[kind][1]
+            self.assertIn(skip,command)
+            self.assertIn('--saveWithUncertainties',command)
+            self.assertEqual(command[command.index('--robustFit')+1],'1')
+            self.assertEqual(command[command.index('-t')+1],'-1')
+            self.assertNotIn('--noErrors',command)
+
     def test_fit_card_keeps_legacy_model_and_uses_simultaneous_builder(self):
         model=example_model()
         opt=fs.make_parser().parse_args(['--masses','30'])
@@ -317,6 +330,33 @@ class CardTests(unittest.TestCase):
 @unittest.skipUnless(shutil.which('combine') and shutil.which('text2workspace.py') and importlib.util.find_spec('ROOT'),
                      'Requires CMSSW/Combine/PyROOT')
 class CombineSmokeTest(unittest.TestCase):
+    def test_split_fits_match_sequential_model(self):
+        model=example_model()
+        opt=fs.make_parser().parse_args(['--masses','30','--inject-r','1'])
+        text=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
+        model['card_sha256']=hashlib.sha256(text.encode()).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            outputs=[]
+            for mode in ('sequential','split'):
+                path=Path(directory)/mode
+                path.mkdir()
+                (path/'datacard.txt').write_text(text)
+                if mode=='sequential':
+                    fs.run_fit(model,path,opt)
+                    result=json.loads((path/'fit_r1/fit_summary.json').read_text())
+                else:
+                    fs.prepare_workspace(model,path,opt)
+                    fs.run_fit_component(model,path,opt,'fit_s')
+                    fs.run_fit_component(model,path,opt,'fit_b')
+                    result=fs.combine_fit_summaries(model,path,opt)
+                outputs.append(result)
+            for kind in ('fit_b','fit_s'):
+                left,right=[r['fits'][kind] for r in outputs]
+                self.assertAlmostEqual(left['r'],right['r'],delta=.05)
+                for name in model['normalisations']:
+                    self.assertAlmostEqual(left['normalisations'][name]['scale'],
+                                           right['normalisations'][name]['scale'],delta=.05)
+
     def test_full_spectrum_asimov(self):
         model=example_model()
         opt=fs.make_parser().parse_args(['--masses','30'])
