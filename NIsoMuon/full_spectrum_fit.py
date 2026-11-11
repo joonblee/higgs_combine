@@ -26,7 +26,7 @@ def make_parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
     p.add_argument('--target', type=shared.single_target, default='Run2Run3')
-    p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'collect'), default='all')
+    p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'recover', 'collect'), default='all')
     p.add_argument('--backend', choices=('local', 'condor'), default='condor',
                    help='Execution backend (default: condor); use local for foreground execution.')
     p.add_argument('--base-dir', default=base.DEFAULT_BASE_DIR)
@@ -46,7 +46,8 @@ def make_parser():
     batch = p.add_argument_group('Condor: independent era/mass-bin preparation, then joint fit')
     batch.add_argument('--bins-per-job', type=int, default=1,
                        help='Consecutive spectrum bins from one era per preparation job (default: 1).')
-    batch.add_argument('--condor-dir', help='New batch directory; also identifies a batch for status/resume/collect.')
+    batch.add_argument('--condor-dir', help='New batch directory; also identifies a batch for status/resume/recover/collect.')
+    batch.add_argument('--condor-recovery-dir', help='New batch directory for --stage recover; the original batch is preserved.')
     batch.add_argument('--condor-dry-run', action='store_true', help='Prepare the real DAG and manifest without submitting (reads nominal axes).')
     batch.add_argument('--condor-maxjobs', type=int, default=0,
                        help='DAG submission cap (default: 0, no cap added by this workflow).')
@@ -332,7 +333,7 @@ def main(argv=None):
         import full_spectrum_condor as batch
         batch.run_worker(Path(opt.condor_worker), opt.condor_index)
         return 0
-    if opt.stage in ('status', 'resume', 'collect'):
+    if opt.stage in ('status', 'resume', 'recover', 'collect'):
         import full_spectrum_condor as batch
         return batch.manage(opt)
     args = configuration(opt)

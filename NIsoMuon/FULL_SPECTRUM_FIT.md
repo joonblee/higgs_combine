@@ -40,6 +40,14 @@ muR and muF nuisance responses are retained. Missing scale members, a central
 scale/nominal mismatch, and other required-input failures still stop execution.
 The original counting and sideband audit policies are unchanged.
 
+Common-transfer reconstruction keeps the input ID, windows, estimator and
+compatibility decisions exact. Derived floating-point entries in `rows` use
+the same tolerance as the top-level common-fit numbers (`rel_tol=1e-10`,
+`abs_tol=1e-14`). This permits last-bit differences between producer/worker
+math libraries; it does not change the stored transfer factor, fit result or
+uncertainty. A larger numerical discrepancy still stops with its field path
+and saved/rebuilt values.
+
 ## Likelihood
 
 The fit includes every bin in **11--80 GeV** and retains all eight eras as
@@ -226,6 +234,42 @@ stop the dependent jobs. Updating the checkout does not change an existing
 batch. `--overwrite` does not replace a batch directory; choose a new directory
 for a fresh run. Batch results are isolated from any ongoing local run.
 
+### Recovering an old batch after the common-transfer validation fix
+
+An existing batch continues to run its original source snapshot after a Git
+update. Therefore, ordinary `--stage resume` does not apply a new validator.
+For the exact-equality QCD metadata failure, use:
+
+```bash
+git pull --ff-only
+python3 full_spectrum_fit.py --stage recover \
+    --condor-dir full_spectrum_condor/M30_r0 \
+    --condor-recovery-dir full_spectrum_condor/M30_r0_fixed
+```
+
+This creates a new source snapshot and batch, copies verified successful **raw
+preparation results**, and submits only unfinished preparation jobs plus the
+assembly and joint fit. For 607 successful and 448 failed preparation jobs,
+this means reusing 607 results and scheduling 448 preparation jobs, followed
+by assembly and fit. All original files are preserved. The new part/status records retain
+their parent batch, completion ID and original part checksum.
+
+Recovery checks that all yield, nuisance, geometry and assembly calculations
+are unchanged; it permits the common-transfer validator and CLI/management
+changes. A changed calculation or input file requires a fresh batch. The
+original bin grouping and physics options are retained. The new batch uses
+the current `--condor-maxjobs` setting (default 0, no workflow cap), rather than
+inheriting an older batch's cap. The old DAG must have exited before recovery.
+
+The recovery directory must be new. If omitted, a unique sibling directory
+is chosen automatically. Add `--condor-dry-run` to prepare without submitting.
+Monitor the new batch using its new directory:
+
+```bash
+python3 full_spectrum_fit.py --stage status \
+    --condor-dir full_spectrum_condor/M30_r0_fixed
+```
+
 For the example above, results are written under:
 
     full_spectrum_condor/M30_r0/results/Run2Run3_binsigma1_lnN1p5/M30/
@@ -265,6 +309,7 @@ Tests:
 python3 -m unittest discover -s tests -p 'test_full_spectrum_fit.py' -v
 python3 -m unittest discover -s tests -p 'test_sideband_fit.py' -v
 python3 -m unittest discover -s tests -p 'test_full_spectrum_condor.py' -v
+python3 -m unittest discover -s tests -p 'test_qcd_common_transfer.py' -v
 ```
 
 These check full-domain native-bin coverage, prior/bin correlations, nominal
@@ -278,4 +323,11 @@ local/batch datacard equivalence, zero-signal shards, grouping independence,
 dependency failures/retries, stale-product rejection, resume and snapshot
 integrity. They do not require an HTCondor pool. Actual queue submission and
 real-input worker/fit performance require the analysis cluster.
+
+The Run-3 common-transfer regression fixture contains the MC records and
+stored diagnostics reported on 2026-11-11. It checks last-bit tolerance,
+unchanged saved values, and rejection of changed input identities, windows,
+discrete decisions and meaningful numerical differences. Recovery tests check
+reuse under the corrected validator, preservation of the original batch and
+rejection of changed calculation code or inputs.
 

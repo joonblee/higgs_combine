@@ -247,6 +247,89 @@ class CondorTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 batch.validate_options(other)
 
+    def rewrite_manifest(self,payload):
+        payload.pop('manifest_sha256',None)
+        payload['manifest_sha256']=batch.digest(payload)
+        batch.write_json(Path(payload['batch'])/'manifest.json',payload)
+
+    def recovery_options(self,payload):
+        return fs.make_parser().parse_args(['--stage','recover','--condor-dry-run',
+            '--condor-dir',payload['batch'],'--condor-recovery-dir',str(self.root/'recovered')])
+
+    def test_recovery_uses_new_validator_reuses_successes_and_preserves_old_batch(self):
+        opt,args,old=self.make_batch(extra=('--condor-maxjobs','100'))
+        old_dir=Path(old['batch'])
+        for index in range(3):
+            batch.run_worker(old_dir,index)
+        with patch.object(shared,'build_bin_rows',side_effect=ValueError('old validator')):
+            with self.assertRaisesRegex(ValueError,'old validator'):
+                batch.run_worker(old_dir,3)
+        # Model the old exact-equality validator inside the source snapshot.
+        path=old_dir/'source/limit_workflow.py'
+        text=path.read_text().replace(
+            '    _validate_common_transfer_rows(common["rows"], rebuilt["rows"])',
+            '    if common["rows"] != rebuilt["rows"]:\n        raise ValueError("old exact check")')
+        path.write_text(text)
+        old['source_hashes']['limit_workflow.py']=batch.file_hash(path)
+        self.rewrite_manifest(old)
+        files=[old_dir/'manifest.json',path,
+               batch.workdir(old,old['jobs'][0])/'part.json',
+               batch.workdir(old,old['jobs'][0])/'status.json']
+        before={str(p):batch.file_hash(p) for p in files}
+        with patch.object(fs,'prepare_inputs',side_effect=AssertionError('ROOT preparation repeated')):
+            self.assertEqual(batch.manage(self.recovery_options(old)),0)
+        new=batch.load_manifest(self.root/'recovered')
+        self.assertNotEqual(old['batch_id'],new['batch_id'])
+        self.assertNotEqual(old['source_hashes']['limit_workflow.py'],new['source_hashes']['limit_workflow.py'])
+        self.assertEqual(new['options']['condor_maxjobs'],0)
+        self.assertEqual(new['recovered_from']['batch_id'],old['batch_id'])
+        self.assertEqual(before,{str(p):batch.file_hash(p) for p in files})
+        dag=(self.root/'recovered/workflow.dag').read_text()
+        for index in range(3):
+            self.assertNotIn(f'JOB J{index} submit.jds',dag)
+            status=batch.completed(new,new['jobs'][index])
+            self.assertIsNotNone(status)
+            self.assertEqual(status['reused_from']['batch_id'],old['batch_id'])
+            old_part=json.loads((batch.workdir(old,old['jobs'][index])/'part.json').read_text())
+            new_part=json.loads((batch.workdir(new,new['jobs'][index])/'part.json').read_text())
+            self.assertEqual(old_part['part'],new_part['part'])
+        self.assertIn('JOB J3 submit.jds',dag)
+        self.assertNotIn('PARENT J0',dag)
+        for job in new['jobs']:
+            if job['kind']=='prepare' and not batch.completed(new,job):
+                batch.run_worker(Path(new['batch']),job['index'])
+        self.workers(new,'assemble')
+        with patch.object(fs,'run_fit',side_effect=self.fake_fit):
+            self.workers(new,'fit')
+        check=self.recovery_options(old)
+        check.stage='collect'
+        check.condor_dir=new['batch']
+        self.assertEqual(batch.manage(check),0)
+
+    def test_recovery_refuses_changed_calculation_code(self):
+        opt,args,old=self.make_batch()
+        path=Path(old['batch'])/'source/limit_workflow_sideband_fit.py'
+        text=path.read_text().replace('alpha_unit = args.alpha_card_yield/raw_sr',
+                                      'alpha_unit = 2*args.alpha_card_yield/raw_sr')
+        self.assertNotEqual(text,path.read_text())
+        path.write_text(text)
+        old['source_hashes'][path.name]=batch.file_hash(path)
+        self.rewrite_manifest(old)
+        with self.assertRaisesRegex(ValueError,'Calculation code changed'):
+            batch.manage(self.recovery_options(old))
+        self.assertFalse((self.root/'recovered').exists())
+
+    def test_recovery_refuses_changed_preflight_inputs(self):
+        opt,args,old=self.make_batch()
+        path=self.root/'source.root'
+        path.write_text('original')
+        old['preflight_inputs']={str(path):batch.stamp(path)}
+        self.rewrite_manifest(old)
+        path.write_text('changed content')
+        with self.assertRaisesRegex(ValueError,'Input changed'):
+            batch.manage(self.recovery_options(old))
+        self.assertFalse((self.root/'recovered').exists())
+
 
 class ReaderTests(unittest.TestCase):
     def test_qcd_validation_cached_across_bins_but_integrals_recomputed(self):

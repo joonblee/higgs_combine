@@ -484,6 +484,30 @@ def fit_common_double_ratio(records, group, windows, log_covariance=None, pmin=0
                              "Compatibility does not establish equality, especially with sparse MC."])
 
 
+def _validate_common_transfer_rows(saved, rebuilt, path="rows"):
+    """Compare derived floats tolerantly; keep keys and discrete fields exact.
+
+    libm/CPU differences can move a recomputed diagnostic by a few ULPs.
+    Use the same tolerance as the common-fit scalar checks, without changing
+    any saved transfer value or relaxing the input identity/window checks.
+    """
+    if isinstance(rebuilt, dict):
+        if not isinstance(saved, dict) or saved.keys() != rebuilt.keys():
+            raise ValueError(f"Common QCD {path} keys disagree with its inputs")
+        for key, expected in rebuilt.items():
+            _validate_common_transfer_rows(saved[key], expected, f"{path}.{key}")
+        return
+    if isinstance(rebuilt, float):
+        if (isinstance(saved, (float, int)) and not isinstance(saved, bool)
+                and math.isfinite(saved) and math.isfinite(rebuilt)
+                and math.isclose(saved, rebuilt, rel_tol=1e-10, abs_tol=1e-14)):
+            return
+    elif type(saved) is type(rebuilt) and saved == rebuilt:
+        return
+    raise ValueError(f"Common QCD {path} disagrees with its inputs: "
+                     f"saved={saved!r}, rebuilt={rebuilt!r}")
+
+
 def validate_common_transfer(transfer, era=None):
     common = transfer["common_transfer"]
     if common.get("schema") != "NPS26009_QCDCommonTransfer_v1":
@@ -499,9 +523,10 @@ def validate_common_transfer(transfer, era=None):
         if not math.isclose(common[key], rebuilt[key], rel_tol=1e-10, abs_tol=1e-14):
             raise ValueError(f"Common QCD transfer {key} disagrees with its inputs")
     if (common["compatible"] != rebuilt["compatible"] or common["ndf"] != rebuilt["ndf"]
-            or common["windows"] != transfer["windows"] or common["rows"] != rebuilt["rows"]
+            or common["windows"] != transfer["windows"]
             or common["estimator"] != rebuilt["estimator"]):
         raise ValueError("Common QCD compatibility result/windows disagree with its inputs")
+    _validate_common_transfer_rows(common["rows"], rebuilt["rows"])
     if era is not None:
         for key in MC_KEYS:
             if common["records"][era]["primitive"][key] != transfer["primitive"][key]:

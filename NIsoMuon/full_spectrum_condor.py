@@ -4,6 +4,7 @@ Invoked through full_spectrum_fit.py. Workers use a source snapshot and never
 fit bins separately. Changing job grouping cannot change the likelihood.
 """
 import argparse
+import ast
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -294,7 +295,7 @@ def validate_options(opt):
         raise ValueError('Condor requirements must be one line.')
 
 
-def submit(opt, args):
+def submit(opt, args, prepared_plan=None):
     validate_options(opt)
     cmssw, arch = base.condor_environment(opt)
     if not opt.condor_dry_run:
@@ -308,7 +309,13 @@ def submit(opt, args):
     if batch.exists():
         raise ValueError(f'Batch already exists: {batch}; use --stage resume or a new --condor-dir.')
     signals, windows, preflight = {}, {}, {}
-    if opt.stage in ('cards', 'all'):
+    if prepared_plan is not None:
+        windows = prepared_plan['windows']
+        preflight = prepared_plan['preflight_inputs']
+        check_inputs(preflight)
+        signals = {mass:prepared_plan['signal_files'][base.mass_label(mass)] for mass in opt.masses}
+        args.resolution_coefficients = prepared_plan['resolution_coefficients']
+    elif opt.stage in ('cards', 'all'):
         reader = InputReader()
         try:
             signals, windows = fs.prepare_inputs(reader, args, opt)
@@ -327,6 +334,8 @@ def submit(opt, args):
         else:
             fs.load_model(fs.model_directory(opt, mass), opt)
     jobs = make_jobs(opt, windows)
+    if prepared_plan is not None and jobs != prepared_plan['jobs']:
+        raise ValueError('Recovery job geometry differs from the original plan.')
     batch.mkdir(parents=True)
     (batch/'source').mkdir()
     for name in SOURCES:
@@ -337,6 +346,9 @@ def submit(opt, args):
         resolution_coefficients=getattr(args, 'resolution_coefficients', {}),
         cmssw_base=str(cmssw), scram_arch=arch,
         source_hashes={name:file_hash(batch/'source'/name) for name in SOURCES})
+    if prepared_plan is not None:
+        payload['recovered_from'] = dict(batch=prepared_plan['batch'],
+            batch_id=prepared_plan['batch_id'], manifest_sha256=prepared_plan['manifest_sha256'])
     for job in jobs:
         workdir(payload, job).mkdir(parents=True)
     if opt.stage == 'fit':
@@ -369,8 +381,12 @@ def submit(opt, args):
         submit_lines.append('requirements = '+opt.condor_requirements)
     (batch/'submit.jds').write_text('\n'.join(submit_lines+['queue 1', '']))
     dag = batch/'workflow.dag'
-    write_dag(payload, range(len(jobs)), dag)
-    counts = Counter(job['kind'] for job in jobs)
+    reused = reuse_prepared_parts(prepared_plan, payload) if prepared_plan is not None else set()
+    pending = [job['index'] for job in jobs if job['index'] not in reused]
+    write_dag(payload, pending, dag)
+    counts = Counter(jobs[index]['kind'] for index in pending)
+    if reused:
+        print(f'[RECOVERY] reused {len(reused)} verified preparation jobs; original batch preserved.', flush=True)
     print('[CONDOR] '+', '.join(f'{kind}={count}' for kind,count in counts.items()), flush=True)
     print(f'[CONDOR] batch={batch}\n[CONDOR] results={batch/"results"}', flush=True)
     if opt.condor_dry_run:
@@ -381,10 +397,111 @@ def submit(opt, args):
     return batch
 
 
+def _source_ast(path, excluded=(), selected=None):
+    tree = ast.parse(Path(path).read_text())
+    tree.body = [node for node in tree.body if getattr(node, 'name', None) not in excluded
+                 and (selected is None or getattr(node, 'name', None) in selected)]
+    return ast.dump(tree, include_attributes=False)
+
+
+def check_recovery_sources(previous):
+    """Reuse raw results only when calculation code is unchanged.
+
+    This recovery permits the common-transfer validator fix and CLI/management
+    changes. It rejects changes to any yield, nuisance, geometry or assembly
+    calculation; those require a fresh batch without reused parts.
+    """
+    old = Path(previous['batch'])/'source'
+    current = Path(__file__).parent
+    checks = {
+        'limit_workflow.py': dict(excluded=('validate_common_transfer', '_validate_common_transfer_rows')),
+        'limit_workflow_sideband_fit.py': {},
+        'full_spectrum_fit.py': dict(excluded=('make_parser', 'main')),
+        'full_spectrum_condor.py': dict(selected=('digest', 'file_hash', 'stamp', 'InputReader',
+            'check_inputs', 'make_jobs', 'workdir', 'worker_options', 'assemble', 'run_worker')),
+    }
+    if set(previous['source_hashes']) != set(SOURCES):
+        raise ValueError('Recovery requires the same source modules; submit a fresh batch.')
+    for name, options in checks.items():
+        if _source_ast(old/name, **options) != _source_ast(current/name, **options):
+            raise ValueError(f'Calculation code changed in {name}; submit a fresh batch without reused results.')
+
+
+def reuse_prepared_parts(previous, payload):
+    reused, cache, fingerprints, candidates = set(), {}, {}, []
+    for job in previous['jobs']:
+        if job['kind'] != 'prepare':
+            continue
+        status = completed(previous, job, cache)
+        if not status:
+            continue
+        original = workdir(previous, job)/'part.json'
+        data = json.loads(original.read_text())
+        if data.get('batch_id') != previous['batch_id'] or data.get('job_sha256') != digest(job):
+            raise ValueError(f'Foreign preparation result in old job {job["index"]}.')
+        for filename, value in data['inputs'].items():
+            if filename in fingerprints and fingerprints[filename] != value:
+                raise ValueError(f'Conflicting old input versions: {filename}')
+            fingerprints[filename] = value
+        candidates.append((job, status, data, original))
+    check_inputs(fingerprints)
+    for job, status, data, original in candidates:
+        provenance = dict(batch_id=previous['batch_id'], job_index=job['index'],
+                          completion_id=status['completion_id'], part_sha256=file_hash(original))
+        data.update(batch_id=payload['batch_id'], reused_from=provenance)
+        directory = workdir(payload, job)
+        part = directory/'part.json'
+        write_json(part, data)
+        now = time.time()
+        write_json(directory/'status.json', dict(batch_id=payload['batch_id'],
+            job_sha256=digest(job), state='success', kind='prepare', index=job['index'],
+            completion_id=uuid4().hex, dependency_completions={}, products={str(part):file_hash(part)},
+            started=now, finished=now, elapsed_seconds=0., reused_from=provenance,
+            original_elapsed_seconds=status['elapsed_seconds']))
+        reused.add(job['index'])
+    return reused
+
+
+def ensure_inactive(payload, dry_run=False):
+    if dry_run:
+        return
+    base.require_command('condor_q')
+    constraint = 'JobBatchName == "NPSFullSpectrum_'+payload['batch_id']+'"'
+    active = subprocess.run(['condor_q', '-constraint', constraint, '-af', 'ClusterId'],
+                            check=True, text=True, capture_output=True)
+    if active.stdout.strip():
+        raise ValueError('This batch still has queued jobs. Wait for completion or remove the old DAG before resuming.')
+
+
+def recover(opt, previous):
+    if previous['options']['stage'] not in ('cards', 'all'):
+        raise ValueError('Recovery reuses preparation results; a fit-only batch has no parts to recover.')
+    ensure_inactive(previous, opt.condor_dry_run)
+    check_recovery_sources(previous)
+    check_inputs(previous['preflight_inputs'])
+    defaults = vars(fs.make_parser().parse_args([]))
+    defaults.update(previous['options'])
+    new = argparse.Namespace(**defaults)
+    suffix = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')+'_'+uuid4().hex[:8]
+    new.condor_dir = opt.condor_recovery_dir or previous['batch']+'_recovered_'+suffix
+    new.condor_recovery_dir = None
+    new.condor_dry_run = opt.condor_dry_run
+    new.condor_maxjobs = opt.condor_maxjobs
+    new.condor_cmssw_base = previous['cmssw_base']
+    new.condor_scram_arch = previous['scram_arch']
+    new.backend, new.overwrite = 'condor', False
+    args = fs.configuration(new)
+    args.base_dir = previous['input_base_dir']
+    submit(new, args, prepared_plan=previous)
+    return 0
+
+
 def manage(opt):
     if not opt.condor_dir:
-        raise ValueError('--stage status/resume/collect requires --condor-dir.')
+        raise ValueError('--stage status/resume/recover/collect requires --condor-dir.')
     payload = load_manifest(opt.condor_dir)
+    if opt.stage == 'recover':
+        return recover(opt, payload)
     cache, states, pending = {}, Counter(), []
     bin_totals, bin_done, failures = Counter(), Counter(), []
     for job in payload['jobs']:
@@ -427,13 +544,7 @@ def manage(opt):
     if not pending:
         print('[COMPLETE] No jobs need resubmission.')
         return 0
-    if not opt.condor_dry_run:
-        base.require_command('condor_q')
-        constraint = 'JobBatchName == "NPSFullSpectrum_'+payload['batch_id']+'"'
-        active = subprocess.run(['condor_q', '-constraint', constraint, '-af', 'ClusterId'],
-                                check=True, text=True, capture_output=True)
-        if active.stdout.strip():
-            raise ValueError('This batch still has queued jobs. Wait for completion or remove the old DAG before resuming.')
+    ensure_inactive(payload, opt.condor_dry_run)
     dag = Path(payload['batch'])/('resume_'+uuid4().hex[:8]+'.dag')
     write_dag(payload, pending, dag)
     if opt.condor_dry_run:
