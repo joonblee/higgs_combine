@@ -197,46 +197,41 @@ Optional `--condor-requirements` is passed to the submit file.
 
 The worker wrapper activates the submitting user's `CMSSW_BASE` and
 `SCRAM_ARCH`. Override them with `--condor-cmssw-base` and
-`--condor-scram-arch` if needed. As with the existing analysis Condor backend,
-the checkout's ROOT inputs, the batch directory, CMSSW and CVMFS must be
-accessible on the worker nodes; files are not transferred by Condor.
+`--condor-scram-arch` if needed. The ROOT inputs, batch directory, CMSSW and
+CVMFS must remain accessible at their absolute paths on worker nodes.
 
-If the submit host and shared-storage worker nodes advertise different
-`FileSystemDomain` labels, select the worker domain explicitly:
+Submission follows the existing SKFlatAnalyzer/SKNanoAnalyzer convention:
 
-```bash
-python3 full_spectrum_fit.py --masses 30 --target full \
-    --condor-filesystem-domain tamsa2-ib0
+```text
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+transfer_output_files = ""
 ```
 
-This adds an explicit `TARGET.FileSystemDomain` requirement while retaining
-`should_transfer_files = NO` and the normal CPU/memory/architecture checks.
-It requires the batch directory, inputs and CMSSW to be shared with that domain.
-For this cluster, the option can also be set for subsequent commands in the
-same shell with `export NPS26009_CONDOR_FILESYSTEM_DOMAIN=tamsa2-ib0`.
+Condor transfers the small executable wrapper. The wrapper changes to the
+shared batch directory and uses the shared absolute paths for source, ROOT
+inputs and results. Explicitly empty `transfer_output_files` prevents automatic
+transfer of result files from the execute sandbox; normal stdout/stderr logs
+are still handled by Condor. The result files are already written to shared
+storage. This enables normal pool scheduling without imposing an equality
+between the submit host's and worker's `FileSystemDomain` labels.
 
-For an existing active batch, run the following **on its original submit host**
-(tamsa1 for this example), from `NIsoMuon`:
+No `--condor-filesystem-domain` argument or environment variable is required.
+The earlier `NPS26009_CONDOR_FILESYSTEM_DOMAIN` workaround is no longer read,
+so an old export does not silently restrict new submissions. The explicit
+option remains available only as an optional additional worker filter.
+
+The `--stage set-domain` operation is retained for legacy no-transfer batches;
+it is not part of the normal workflow. For a fresh submission after cancelling
+old jobs, simply run the normal command from either submit host:
 
 ```bash
-python3 full_spectrum_fit.py --stage set-domain \
-    --condor-dir full_spectrum_condor/M30_r0_fixed \
-    --condor-filesystem-domain tamsa2-ib0
+python3 full_spectrum_fit.py --masses 30 --target full
 ```
 
-The command backs up and patches `submit.jds` for subsequent DAG nodes, then
-reads each selected job's raw `Requirements` from the local schedd and replaces
-only its filesystem-domain comparison, preserving CPU, memory, disk and custom
-predicates. It uses `condor_qedit Requirements` only on the current user's Idle
-vanilla jobs with this batch ID; the `FileSystemDomain` attribute is not edited.
-Original expressions are saved in `queue_requirements_before_*.json`.
-An empty selection stops before changing files and identifies a possible wrong
-submit host or batch directory. Snapshots, manifests,
-running jobs and completed parts are preserved. The queue edit's output shows
-how many jobs matched; zero may indicate the wrong submit host or batch.
-The change is recorded in `domain_override.json` and inherited by recovery
-unless explicitly overridden. `--condor-dry-run` prints the planned changes.
-No new submission, deletion or manual editing of the source snapshot is needed.
+The reference submission settings were checked in
+[SKFlatAnalyzer](https://github.com/joonblee/SKFlatAnalyzer/blob/master/python/SKFlat.py)
+and [SKNanoAnalyzer](https://github.com/joonblee/SKNanoAnalyzer/blob/main/templates/job_dict.py).
 
 To prepare a real DAG without submitting, add `--condor-dry-run`. This reads
 nominal inputs and requires PyROOT/CMSSW. The separate `--dry-run` still prints

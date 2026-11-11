@@ -23,7 +23,6 @@ MAJOR = ('QCD', 'DY', 'tt')
 
 
 def make_parser():
-    import os
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
     p.add_argument('--target', type=shared.single_target, default='Run2Run3')
@@ -55,8 +54,8 @@ def make_parser():
     batch.add_argument('--condor-memory', type=int, default=4000, help='Memory request per job in MB.')
     batch.add_argument('--condor-retries', type=int, default=2)
     batch.add_argument('--condor-requirements', default='')
-    batch.add_argument('--condor-filesystem-domain', default=os.environ.get('NPS26009_CONDOR_FILESYSTEM_DOMAIN'),
-                       help='Shared filesystem domain advertised by eligible workers; requires shared inputs/CMSSW.')
+    batch.add_argument('--condor-filesystem-domain', default=None,
+                       help='Optional extra worker-domain filter; normally unnecessary with the standard transfer setup.')
     batch.add_argument('--condor-cmssw-base')
     batch.add_argument('--condor-scram-arch')
     batch.add_argument('--condor-worker', help=argparse.SUPPRESS)

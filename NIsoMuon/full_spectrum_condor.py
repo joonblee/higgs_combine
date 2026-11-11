@@ -386,7 +386,8 @@ def submit(opt, args, prepared_plan=None):
     wrapper.chmod(0o755)
     submit_lines = [f'executable = {wrapper}', f'initialdir = {batch}', 'universe = vanilla',
         'arguments = $(jobindex)', 'log = condor.log', 'getenv = True',
-        'should_transfer_files = NO', 'output = jobs/job_$(jobindex).out',
+        'should_transfer_files = YES', 'when_to_transfer_output = ON_EXIT',
+        'transfer_output_files = ""', 'output = jobs/job_$(jobindex).out',
         'error = jobs/job_$(jobindex).err', 'request_cpus = 1',
         f'request_memory = {opt.condor_memory}MB', f'jobbatchname = NPSFullSpectrum_{batch_id}']
     requirements=domain_requirements(opt.condor_requirements,opt.condor_filesystem_domain)

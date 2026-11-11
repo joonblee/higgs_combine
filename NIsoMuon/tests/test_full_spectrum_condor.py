@@ -203,7 +203,11 @@ class CondorTests(unittest.TestCase):
             '--stage','status','--condor-dir',str(directory)],check=True,
             text=True,capture_output=True)
         self.assertIn('[BINS] 2018: 0/2 complete',report.stdout)
-        self.assertIn('should_transfer_files = NO',(directory/'submit.jds').read_text())
+        submit_text=(directory/'submit.jds').read_text()
+        self.assertIn('should_transfer_files = YES',submit_text)
+        self.assertIn('when_to_transfer_output = ON_EXIT',submit_text)
+        self.assertIn('transfer_output_files = ""',submit_text)
+        self.assertNotIn('FileSystemDomain',submit_text)
         self.assertIn('RETRY J0 2',(directory/'workflow.dag').read_text())
         self.assertNotIn('-maxjobs',batch.submission(payload,directory/'workflow.dag'))
         capped=copy.deepcopy(payload)
