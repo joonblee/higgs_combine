@@ -512,6 +512,17 @@ def recover(opt, previous):
     return 0
 
 
+def replace_domain_requirement(expression, domain):
+    """Replace one filesystem comparison, preserving every other predicate."""
+    operand=r'(?:MY\.FileSystemDomain|"(?:[^"\\]|\\.)*")'
+    pattern=re.compile(r'\bTARGET\.FileSystemDomain\s*==\s*'+operand+
+                       r'|'+operand+r'\s*==\s*TARGET\.FileSystemDomain\b',re.IGNORECASE)
+    result,count=pattern.subn(lambda m:'TARGET.FileSystemDomain == '+json.dumps(domain),expression)
+    if count != 1:
+        raise ValueError(f'Expected one filesystem-domain comparison, found {count}: {expression}')
+    return result
+
+
 def set_domain(opt, payload):
     """Patch the submission file and queued Idle nodes, preserving snapshots.
 
@@ -530,13 +541,35 @@ def set_domain(opt, payload):
     updated=pattern.sub(lambda m:line,text) if pattern.search(text) else text.replace('queue 1',line+'\nqueue 1')
     constraint='Owner == '+json.dumps(getpass.getuser())+' && JobStatus == 1 && JobUniverse == 5'
     constraint+=' && JobBatchName == '+json.dumps('NPSFullSpectrum_'+payload['batch_id'])
-    command=['condor_qedit','-constraint',constraint,'FileSystemDomain',json.dumps(opt.condor_filesystem_domain)]
+    base.require_command('condor_q')
+    query=subprocess.run(['condor_q','-constraint',constraint,'-af:r','ClusterId','ProcId','Requirements'],
+                         check=True,text=True,capture_output=True)
+    groups,records={},[]
+    for row in query.stdout.splitlines():
+        if not row.strip():
+            continue
+        columns=row.split(None,2)
+        if len(columns)!=3 or not all(x.isdigit() for x in columns[:2]):
+            raise ValueError('Unexpected condor_q output while reading raw Requirements: '+row)
+        cluster,proc=map(int,columns[:2])
+        expression=replace_domain_requirement(columns[2],opt.condor_filesystem_domain)
+        records.append(dict(cluster=cluster,proc=proc,requirements=columns[2],updated_requirements=expression))
+        if expression!=columns[2]:
+            groups.setdefault(expression,[]).append((cluster,proc))
+    if not records:
+        raise ValueError('No matching Idle jobs in the local schedd. Check the original submit host and batch directory; no files were changed.')
+    commands=[]
+    for expression,identifiers in groups.items():
+        selected=' || '.join(f'(ClusterId == {c} && ProcId == {p})' for c,p in identifiers)
+        commands.append(['condor_qedit','-constraint',constraint+' && ('+selected+')','Requirements',expression])
     print('[DOMAIN] '+opt.condor_filesystem_domain+'; execute on the original submit host.',flush=True)
     if opt.condor_dry_run:
         print('[DOMAIN] planned requirements: '+requirements)
-        print('[DOMAIN] planned queue edit: '+shlex.join(command))
+        for command in commands:
+            print('[DOMAIN] planned queue edit: '+shlex.join(command))
         return 0
     base.require_command('condor_qedit')
+    write_json(Path(payload['batch'])/('queue_requirements_before_'+uuid4().hex[:8]+'.json'),records)
     backup=path.with_name('submit.before_domain_'+uuid4().hex[:8]+'.jds')
     shutil.copy2(path,backup)
     temporary=path.with_suffix('.domain.tmp')
@@ -544,7 +577,8 @@ def set_domain(opt, payload):
     temporary.replace(path)
     write_json(Path(payload['batch'])/'domain_override.json',dict(
         domain=opt.condor_filesystem_domain,changed=time.time(),backup=str(backup),constraint=constraint))
-    base.run_command(command,Path(payload['batch']))
+    for command in commands:
+        base.run_command(command,Path(payload['batch']))
     print('[DOMAIN] future DAG nodes use the patched submit file; see condor_qedit above for the number of queued jobs edited.')
     return 0
 

@@ -225,8 +225,13 @@ python3 full_spectrum_fit.py --stage set-domain \
 ```
 
 The command backs up and patches `submit.jds` for subsequent DAG nodes, then
-uses the local schedd's `condor_qedit` to change `FileSystemDomain` only on the
-current user's Idle vanilla jobs with this batch ID. Snapshots, manifests,
+reads each selected job's raw `Requirements` from the local schedd and replaces
+only its filesystem-domain comparison, preserving CPU, memory, disk and custom
+predicates. It uses `condor_qedit Requirements` only on the current user's Idle
+vanilla jobs with this batch ID; the `FileSystemDomain` attribute is not edited.
+Original expressions are saved in `queue_requirements_before_*.json`.
+An empty selection stops before changing files and identifies a possible wrong
+submit host or batch directory. Snapshots, manifests,
 running jobs and completed parts are preserved. The queue edit's output shows
 how many jobs matched; zero may indicate the wrong submit host or batch.
 The change is recorded in `domain_override.json` and inherited by recovery

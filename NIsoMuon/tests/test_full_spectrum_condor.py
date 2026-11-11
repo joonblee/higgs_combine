@@ -256,13 +256,17 @@ class CondorTests(unittest.TestCase):
         opt.stage='set-domain'
         opt.condor_filesystem_domain='other-shared-domain'
         opt.condor_dry_run=False
-        with patch.object(base,'require_command'), patch.object(base,'run_command') as run:
+        old_requirements='(TARGET.Memory >= RequestMemory) && (TARGET.FileSystemDomain == MY.FileSystemDomain) && (TARGET.Cpus >= 1)'
+        with patch.object(base,'require_command'), patch.object(base,'run_command') as run, \
+             patch.object(batch.subprocess,'run',return_value=SimpleNamespace(stdout='123 0 '+old_requirements+'\n')):
             self.assertEqual(batch.manage(opt),0)
         command=run.call_args.args[0]
         self.assertEqual(command[0],'condor_qedit')
         self.assertIn('JobStatus == 1 && JobUniverse == 5',command[2])
         self.assertIn(payload['batch_id'],command[2])
-        self.assertEqual(command[-2:],['FileSystemDomain','"other-shared-domain"'])
+        self.assertEqual(command[-2],'Requirements')
+        self.assertEqual(command[-1],'(TARGET.Memory >= RequestMemory) && (TARGET.FileSystemDomain == "other-shared-domain") && (TARGET.Cpus >= 1)')
+        self.assertIn('ClusterId == 123 && ProcId == 0',command[2])
         self.assertIn('other-shared-domain',path.read_text())
         self.assertTrue(list(path.parent.glob('submit.before_domain_*.jds')))
         self.assertEqual(before_manifest,batch.file_hash(Path(payload['batch'])/'manifest.json'))
@@ -273,6 +277,27 @@ class CondorTests(unittest.TestCase):
         opt.condor_filesystem_domain='bad"\nqueue 999'
         with self.assertRaisesRegex(ValueError,'domain label'):
             batch.validate_options(opt)
+
+    def test_domain_queue_edit_refuses_no_jobs_and_preserves_custom_predicates(self):
+        opt,args,payload=self.make_batch()
+        opt.stage='set-domain'
+        opt.condor_filesystem_domain='tamsa2-ib0'
+        opt.condor_dry_run=False
+        path=Path(payload['batch'])/'submit.jds'
+        before=path.read_text()
+        with patch.object(base,'require_command'), \
+             patch.object(batch.subprocess,'run',return_value=SimpleNamespace(stdout='')):
+            with self.assertRaisesRegex(ValueError,'No matching Idle jobs'):
+                batch.manage(opt)
+        self.assertEqual(path.read_text(),before)
+        expression='(TARGET.Disk >= RequestDisk) && (MY.FileSystemDomain == TARGET.FileSystemDomain) && (TARGET.HasAVX2 == True)'
+        result=batch.replace_domain_requirement(expression,'tamsa2-ib0')
+        self.assertIn('TARGET.Disk >= RequestDisk',result)
+        self.assertIn('TARGET.HasAVX2 == True',result)
+        self.assertIn('TARGET.FileSystemDomain == "tamsa2-ib0"',result)
+        self.assertEqual(batch.replace_domain_requirement(result,'tamsa2-ib0'),result)
+        with self.assertRaises(ValueError):
+            batch.replace_domain_requirement('TARGET.Memory >= RequestMemory','tamsa2-ib0')
 
     def rewrite_manifest(self,payload):
         payload.pop('manifest_sha256',None)
