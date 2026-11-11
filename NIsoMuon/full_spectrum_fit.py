@@ -175,12 +175,29 @@ def fit_commands(opt, mass, directory):
     directory = Path(directory).resolve()
     fit_dir = directory/f'fit_r{base.mass_label(opt.inject_r)}'
     return [
-        ['text2workspace.py', str(directory/'datacard.txt'), '-m', str(mass), '-o', str(fit_dir/'workspace.root')],
+        ['text2workspace.py', str(fit_dir/'datacard.txt'), '-m', str(mass), '-o', str(fit_dir/'workspace.root')],
         ['combine', '-M', 'FitDiagnostics', str(fit_dir/'workspace.root'), '-m', str(mass),
          '-t', '-1', '--expectSignal', str(opt.inject_r), '--rMin', '0', '--rMax', str(opt.r_max),
          '--robustFit', '1', '--cminDefaultMinimizerStrategy', '1',
          '--saveShapes', '--saveWithUncertainties', '--saveNormalizations', '-n', '.FullSpectrum'],
     ]
+
+
+def fit_card_text(text):
+    """Use one-bin shapes so Combine evaluates the joint likelihood stably.
+
+    CountingModelBuilder multiplies all Poisson probabilities in ordinary
+    space. With a large spectrum this product can underflow even at nominal
+    parameters. FAKE selects ShapeBuilder without requiring ROOT templates
+    or changing the yields, observations or nuisance definitions.
+    """
+    shapes = [line.strip() for line in text.splitlines()
+              if line.split()[:1] == ['shapes']]
+    if shapes:
+        if shapes != ['shapes * * FAKE']:
+            raise ValueError('Unexpected shapes directive in full-spectrum card.')
+        return text
+    return 'shapes * * FAKE\n'+text
 
 
 def extract_summary(model, directory, opt):
@@ -197,7 +214,9 @@ def extract_summary(model, directory, opt):
             raise ValueError('Missing workspace w.')
         result = dict(schema_version=SCHEMA, blind=True, target=model['target'], mass=model['mass'],
                       inject_r=opt.inject_r, alpha_internal_unit=model['alpha_internal_unit'],
-                      card_sha256=model['card_sha256'], fits={})
+                      card_sha256=model['card_sha256'],
+                      fit_card_sha256=hashlib.sha256((fit_dir/'datacard.txt').read_bytes()).hexdigest(),
+                      fits={})
         for key in ('fit_b', 'fit_s'):
             fit = handle.Get(key)
             if not fit:
@@ -320,6 +339,12 @@ def run_fit(model, directory, opt):
     directory = Path(directory)
     fit_dir = directory/f'fit_r{base.mass_label(opt.inject_r)}'
     fit_dir.mkdir(exist_ok=True)
+    source_card = (directory/'datacard.txt').read_bytes()
+    if hashlib.sha256(source_card).hexdigest() != model['card_sha256']:
+        raise ValueError('Datacard changed since generation; rebuild cards.')
+    # Keep the assembled card and its provenance immutable, including when
+    # reusing a completed batch for a new fit-only submission.
+    (fit_dir/'datacard.txt').write_text(fit_card_text(source_card.decode()))
     commands = fit_commands(opt, model['mass'], directory)
     (fit_dir/'commands.json').write_text(json.dumps(commands, indent=2)+'\n')
     for name in ('workspace.root', 'fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json'):

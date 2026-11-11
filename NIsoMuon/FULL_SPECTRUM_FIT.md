@@ -77,6 +77,14 @@ is reported per era; template smoothing or rebinning is not performed silently.
 MC finite-template statistics remain the existing independent process/bin terms.
 No `autoMCStats` line is added on top of those terms or the correlated QCD modes.
 
+For workspace construction, each fit writes a copy of the protected card to
+`fit_r*/datacard.txt` with `shapes * * FAKE`. This selects Combine's simultaneous
+one-bin-shape representation, avoiding underflow from multiplying hundreds of
+Poisson probabilities in the counting-model builder (Combine issue #1075).
+It requires no new ROOT templates and preserves all observations, rates and
+nuisance definitions. The assembled card is unchanged; the summary records
+both its hash and the hash of the card actually passed to `text2workspace.py`.
+
 Nominal widths target `--bin-sigma 1` times the local mass resolution, using the
 era's sigFit coefficients. Edges snap to the common native histogram grid and
 must cover exactly 11--80 GeV. A short final bin is merged with its neighbour.
@@ -152,6 +160,24 @@ scale factor alone is not its total postfit/prefit yield ratio.
 
 The default Condor backend distributes the expensive **input preparation for
 every era and mass bin**, then constructs and fits the same combined likelihood.
+
+If an older batch completed preparation and assembly but failed with
+`modelObs_s = 0`, `function value is NAN` and `Missing fit_b`, pull the updated
+code and submit only its saved model with a fresh source snapshot:
+
+```bash
+python3 full_spectrum_fit.py --stage fit --masses 30 --target full \
+    --output-base full_spectrum_outputs/condor/OLD_BATCH/results \
+    --condor-dir full_spectrum_outputs/condor/M30_pdf_fix
+python3 full_spectrum_fit.py --stage collect \
+    --condor-dir full_spectrum_outputs/condor/M30_pdf_fix
+```
+
+Replace `OLD_BATCH` with the original batch name. This submits one fit job,
+reuses its verified model/card and leaves the original batch untouched.
+`--stage resume` on the original batch uses its old source snapshot and thus
+does not apply this fix. Additional nondefault model options must match the
+original configuration when loading its saved model.
 
 ## Condor preparation by era and mass bin
 

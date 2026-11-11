@@ -215,6 +215,27 @@ class CardTests(unittest.TestCase):
             self.assertIn('--saveShapes',fit)
             self.assertIn(f'fit_r{injection}',text)
 
+    def test_fit_card_keeps_legacy_model_and_uses_simultaneous_builder(self):
+        model=example_model()
+        opt=fs.make_parser().parse_args(['--masses','30'])
+        original=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
+        model['card_sha256']=hashlib.sha256(original.encode()).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)
+            (path/'datacard.txt').write_text(original)
+            with patch.object(base,'run_command') as run, patch.object(fs,'extract_summary'):
+                fs.run_fit(model,path,opt)
+            fit_card=path/'fit_r0/datacard.txt'
+            self.assertEqual(fit_card.read_text(),'shapes * * FAKE\n'+original)
+            self.assertEqual((path/'datacard.txt').read_text(),original)
+            self.assertEqual(run.call_args_list[0].args[0][1],str(fit_card))
+            self.assertEqual(shared.nominal_predictions(fit_card.read_text()),
+                             shared.nominal_predictions(original))
+            self.assertEqual(fs.fit_card_text(fit_card.read_text()),fit_card.read_text())
+            (path/'datacard.txt').write_text(original+'# changed\n')
+            with self.assertRaisesRegex(ValueError,'Datacard changed'):
+                fs.run_fit(model,path,opt)
+
     def test_saved_card_fingerprint_and_configuration(self):
         opt=fs.make_parser().parse_args([])
         with tempfile.TemporaryDirectory() as directory:
@@ -281,12 +302,41 @@ class CombineSmokeTest(unittest.TestCase):
                 opt.inject_r=injection
                 fit_dir=path/f'fit_r{base.mass_label(injection)}'
                 fit_dir.mkdir()
+                (fit_dir/'datacard.txt').write_text(fs.fit_card_text(text))
                 for command in fs.fit_commands(opt,30,path):
                     subprocess.run(command,cwd=fit_dir,check=True,stdout=subprocess.DEVNULL)
                 result=fs.extract_summary(model,path,opt)
                 for specification in result['fits']['fit_s']['normalisations'].values():
                     self.assertAlmostEqual(specification['scale'],1.,delta=.05)
                 self.assertAlmostEqual(result['fits']['fit_s']['r'],injection,delta=.05)
+
+    def test_large_counting_model_has_finite_nominal_nll(self):
+        import ROOT
+        # A product of 1055 nominal Poisson(100) probabilities underflows.
+        # The equivalent one-bin-shape likelihood must remain finite.
+        channels=[f'b{i}' for i in range(1055)]
+        text='\n'.join([
+            'imax 1055', 'jmax 1', 'kmax 0', 'bin '+' '.join(channels),
+            'observation '+' '.join(['100']*1055),
+            'bin '+' '.join(c for c in channels for _ in range(2)),
+            'process '+' '.join(['sig bkg']*1055),
+            'process '+' '.join(['0 1']*1055),
+            'rate '+' '.join(['1 100']*1055)])+'\n'
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)
+            (path/'card.txt').write_text(fs.fit_card_text(text))
+            subprocess.run(['text2workspace.py',str(path/'card.txt'),'-o',str(path/'w.root')],
+                           check=True,stdout=subprocess.DEVNULL)
+            handle=ROOT.TFile.Open(str(path/'w.root'))
+            try:
+                workspace=handle.Get('w')
+                workspace.var('r').setVal(0.)
+                pdf=workspace.pdf('model_s')
+                self.assertTrue(pdf.InheritsFrom('RooSimultaneous'))
+                nll=pdf.createNLL(workspace.data('data_obs'))
+                self.assertTrue(np.isfinite(nll.getVal()))
+            finally:
+                handle.Close()
 
 
 if __name__=='__main__':
