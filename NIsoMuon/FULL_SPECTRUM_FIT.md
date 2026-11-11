@@ -201,6 +201,38 @@ The worker wrapper activates the submitting user's `CMSSW_BASE` and
 the checkout's ROOT inputs, the batch directory, CMSSW and CVMFS must be
 accessible on the worker nodes; files are not transferred by Condor.
 
+If the submit host and shared-storage worker nodes advertise different
+`FileSystemDomain` labels, select the worker domain explicitly:
+
+```bash
+python3 full_spectrum_fit.py --masses 30 --target full \
+    --condor-filesystem-domain tamsa2-ib0
+```
+
+This adds an explicit `TARGET.FileSystemDomain` requirement while retaining
+`should_transfer_files = NO` and the normal CPU/memory/architecture checks.
+It requires the batch directory, inputs and CMSSW to be shared with that domain.
+For this cluster, the option can also be set for subsequent commands in the
+same shell with `export NPS26009_CONDOR_FILESYSTEM_DOMAIN=tamsa2-ib0`.
+
+For an existing active batch, run the following **on its original submit host**
+(tamsa1 for this example), from `NIsoMuon`:
+
+```bash
+python3 full_spectrum_fit.py --stage set-domain \
+    --condor-dir full_spectrum_condor/M30_r0_fixed \
+    --condor-filesystem-domain tamsa2-ib0
+```
+
+The command backs up and patches `submit.jds` for subsequent DAG nodes, then
+uses the local schedd's `condor_qedit` to change `FileSystemDomain` only on the
+current user's Idle vanilla jobs with this batch ID. Snapshots, manifests,
+running jobs and completed parts are preserved. The queue edit's output shows
+how many jobs matched; zero may indicate the wrong submit host or batch.
+The change is recorded in `domain_override.json` and inherited by recovery
+unless explicitly overridden. `--condor-dry-run` prints the planned changes.
+No new submission, deletion or manual editing of the source snapshot is needed.
+
 To prepare a real DAG without submitting, add `--condor-dry-run`. This reads
 nominal inputs and requires PyROOT/CMSSW. The separate `--dry-run` still prints
 fit commands without reading ROOT or creating a batch.

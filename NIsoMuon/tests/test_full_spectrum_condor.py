@@ -247,6 +247,33 @@ class CondorTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 batch.validate_options(other)
 
+    def test_domain_override_keeps_resource_constraints_and_patches_pending_nodes(self):
+        opt,args,payload=self.make_batch(extra=('--condor-filesystem-domain','tamsa2-ib0',
+                                               '--condor-requirements','TARGET.Cpus >= 1'))
+        path=Path(payload['batch'])/'submit.jds'
+        self.assertIn('(TARGET.Cpus >= 1) && (TARGET.FileSystemDomain == "tamsa2-ib0")',path.read_text())
+        before_manifest=batch.file_hash(Path(payload['batch'])/'manifest.json')
+        opt.stage='set-domain'
+        opt.condor_filesystem_domain='other-shared-domain'
+        opt.condor_dry_run=False
+        with patch.object(base,'require_command'), patch.object(base,'run_command') as run:
+            self.assertEqual(batch.manage(opt),0)
+        command=run.call_args.args[0]
+        self.assertEqual(command[0],'condor_qedit')
+        self.assertIn('JobStatus == 1 && JobUniverse == 5',command[2])
+        self.assertIn(payload['batch_id'],command[2])
+        self.assertEqual(command[-2:],['FileSystemDomain','"other-shared-domain"'])
+        self.assertIn('other-shared-domain',path.read_text())
+        self.assertTrue(list(path.parent.glob('submit.before_domain_*.jds')))
+        self.assertEqual(before_manifest,batch.file_hash(Path(payload['batch'])/'manifest.json'))
+        batch.load_manifest(payload['batch'])
+        batch.manage(self.recovery_options(payload))
+        recovered=batch.load_manifest(self.root/'recovered')
+        self.assertEqual(recovered['options']['condor_filesystem_domain'],'other-shared-domain')
+        opt.condor_filesystem_domain='bad"\nqueue 999'
+        with self.assertRaisesRegex(ValueError,'domain label'):
+            batch.validate_options(opt)
+
     def rewrite_manifest(self,payload):
         payload.pop('manifest_sha256',None)
         payload['manifest_sha256']=batch.digest(payload)

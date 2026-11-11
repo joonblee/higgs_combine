@@ -23,10 +23,11 @@ MAJOR = ('QCD', 'DY', 'tt')
 
 
 def make_parser():
+    import os
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
     p.add_argument('--target', type=shared.single_target, default='Run2Run3')
-    p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'recover', 'collect'), default='all')
+    p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'recover', 'set-domain', 'collect'), default='all')
     p.add_argument('--backend', choices=('local', 'condor'), default='condor',
                    help='Execution backend (default: condor); use local for foreground execution.')
     p.add_argument('--base-dir', default=base.DEFAULT_BASE_DIR)
@@ -54,6 +55,8 @@ def make_parser():
     batch.add_argument('--condor-memory', type=int, default=4000, help='Memory request per job in MB.')
     batch.add_argument('--condor-retries', type=int, default=2)
     batch.add_argument('--condor-requirements', default='')
+    batch.add_argument('--condor-filesystem-domain', default=os.environ.get('NPS26009_CONDOR_FILESYSTEM_DOMAIN'),
+                       help='Shared filesystem domain advertised by eligible workers; requires shared inputs/CMSSW.')
     batch.add_argument('--condor-cmssw-base')
     batch.add_argument('--condor-scram-arch')
     batch.add_argument('--condor-worker', help=argparse.SUPPRESS)
@@ -333,7 +336,7 @@ def main(argv=None):
         import full_spectrum_condor as batch
         batch.run_worker(Path(opt.condor_worker), opt.condor_index)
         return 0
-    if opt.stage in ('status', 'resume', 'recover', 'collect'):
+    if opt.stage in ('status', 'resume', 'recover', 'set-domain', 'collect'):
         import full_spectrum_condor as batch
         return batch.manage(opt)
     args = configuration(opt)

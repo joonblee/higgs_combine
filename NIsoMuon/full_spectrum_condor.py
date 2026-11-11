@@ -9,8 +9,10 @@ from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
+import getpass
 import hashlib
 import json
+import re
 from pathlib import Path
 import shlex
 import shutil
@@ -293,6 +295,16 @@ def validate_options(opt):
         raise ValueError('Require positive bins-per-job/memory and nonnegative maxjobs/retries.')
     if any(c in opt.condor_requirements for c in ('\n', '\r')):
         raise ValueError('Condor requirements must be one line.')
+    domain=getattr(opt,'condor_filesystem_domain',None)
+    if domain is not None and not re.fullmatch(r'[A-Za-z0-9_.@-]+',domain):
+        raise ValueError('Invalid --condor-filesystem-domain label.')
+
+
+def domain_requirements(requirements, domain):
+    if not domain:
+        return requirements
+    match='TARGET.FileSystemDomain == '+json.dumps(domain)
+    return f'({requirements}) && ({match})' if requirements else match
 
 
 def submit(opt, args, prepared_plan=None):
@@ -377,8 +389,9 @@ def submit(opt, args, prepared_plan=None):
         'should_transfer_files = NO', 'output = jobs/job_$(jobindex).out',
         'error = jobs/job_$(jobindex).err', 'request_cpus = 1',
         f'request_memory = {opt.condor_memory}MB', f'jobbatchname = NPSFullSpectrum_{batch_id}']
-    if opt.condor_requirements:
-        submit_lines.append('requirements = '+opt.condor_requirements)
+    requirements=domain_requirements(opt.condor_requirements,opt.condor_filesystem_domain)
+    if requirements:
+        submit_lines.append('requirements = '+requirements)
     (batch/'submit.jds').write_text('\n'.join(submit_lines+['queue 1', '']))
     dag = batch/'workflow.dag'
     reused = reuse_prepared_parts(prepared_plan, payload) if prepared_plan is not None else set()
@@ -487,6 +500,9 @@ def recover(opt, previous):
     new.condor_recovery_dir = None
     new.condor_dry_run = opt.condor_dry_run
     new.condor_maxjobs = opt.condor_maxjobs
+    override_path=Path(previous['batch'])/'domain_override.json'
+    override=json.loads(override_path.read_text()).get('domain') if override_path.exists() else None
+    new.condor_filesystem_domain = opt.condor_filesystem_domain or override or defaults.get('condor_filesystem_domain')
     new.condor_cmssw_base = previous['cmssw_base']
     new.condor_scram_arch = previous['scram_arch']
     new.backend, new.overwrite = 'condor', False
@@ -496,10 +512,49 @@ def recover(opt, previous):
     return 0
 
 
+def set_domain(opt, payload):
+    """Patch the submission file and queued Idle nodes, preserving snapshots.
+
+    Run on the original submit host, so condor_qedit uses its local schedd.
+    Running jobs and unrelated batches are excluded from the queue edit.
+    """
+    validate_options(opt)
+    if not opt.condor_filesystem_domain:
+        raise ValueError('--stage set-domain requires --condor-filesystem-domain.')
+    path=Path(payload['batch'])/'submit.jds'
+    text=path.read_text()
+    pattern=re.compile(r'^\s*requirements\s*=.*$',re.MULTILINE|re.IGNORECASE)
+    original=payload['options'].get('condor_requirements','')
+    requirements=domain_requirements(original,opt.condor_filesystem_domain)
+    line='requirements = '+requirements
+    updated=pattern.sub(lambda m:line,text) if pattern.search(text) else text.replace('queue 1',line+'\nqueue 1')
+    constraint='Owner == '+json.dumps(getpass.getuser())+' && JobStatus == 1 && JobUniverse == 5'
+    constraint+=' && JobBatchName == '+json.dumps('NPSFullSpectrum_'+payload['batch_id'])
+    command=['condor_qedit','-constraint',constraint,'FileSystemDomain',json.dumps(opt.condor_filesystem_domain)]
+    print('[DOMAIN] '+opt.condor_filesystem_domain+'; execute on the original submit host.',flush=True)
+    if opt.condor_dry_run:
+        print('[DOMAIN] planned requirements: '+requirements)
+        print('[DOMAIN] planned queue edit: '+shlex.join(command))
+        return 0
+    base.require_command('condor_qedit')
+    backup=path.with_name('submit.before_domain_'+uuid4().hex[:8]+'.jds')
+    shutil.copy2(path,backup)
+    temporary=path.with_suffix('.domain.tmp')
+    temporary.write_text(updated)
+    temporary.replace(path)
+    write_json(Path(payload['batch'])/'domain_override.json',dict(
+        domain=opt.condor_filesystem_domain,changed=time.time(),backup=str(backup),constraint=constraint))
+    base.run_command(command,Path(payload['batch']))
+    print('[DOMAIN] future DAG nodes use the patched submit file; see condor_qedit above for the number of queued jobs edited.')
+    return 0
+
+
 def manage(opt):
     if not opt.condor_dir:
         raise ValueError('--stage status/resume/recover/collect requires --condor-dir.')
     payload = load_manifest(opt.condor_dir)
+    if opt.stage == 'set-domain':
+        return set_domain(opt,payload)
     if opt.stage == 'recover':
         return recover(opt, payload)
     cache, states, pending = {}, Counter(), []
