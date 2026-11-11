@@ -4,11 +4,17 @@ Run `full_spectrum_fit.py` in **higgs_combine**, after activating the existing
 CMSSW/Combine environment. SKPlotMaker supplies the current ROOT estimates;
 there is no new SKPlotMaker production command for this step.
 
+Execution defaults to **Condor**, with **no submission cap added by the
+workflow** (`--condor-maxjobs 0`). The default preparation grouping is one
+spectrum bin per job (`--bins-per-job 1`). Use `--backend local` for foreground
+execution. Condor results are isolated under each batch's `results/` directory.
+
 From the checked-out `NIsoMuon` directory:
 
 ```bash
 python3 full_spectrum_fit.py --masses 30 --target full --dry-run
-python3 full_spectrum_fit.py --masses 30 --target full
+python3 full_spectrum_fit.py --masses 30 --target full \
+    --condor-dir full_spectrum_condor/M30_r0
 ```
 
 Start with one mass. Once that completes, build the other representative masses:
@@ -87,13 +93,16 @@ contain nominal background Asimov observations. `FitDiagnostics -t -1` builds
 the requested background-only or signal-injected Asimov dataset from the same
 model and performs both the B-only and floating-signal fits.
 
+The commands in this subsection explicitly use the local backend. For Condor
+execution and reuse of a batch's assembled card, see the next subsection.
+
 ```bash
 # Build only, or reuse the protected card for a fit:
-python3 full_spectrum_fit.py --masses 30 --target full --stage cards
-python3 full_spectrum_fit.py --masses 30 --target full --stage fit
+python3 full_spectrum_fit.py --backend local --masses 30 --target full --stage cards
+python3 full_spectrum_fit.py --backend local --masses 30 --target full --stage fit
 
 # Reuse the same card for a separate r=1 Asimov test:
-python3 full_spectrum_fit.py --masses 30 --target full --stage fit --inject-r 1
+python3 full_spectrum_fit.py --backend local --masses 30 --target full --stage fit --inject-r 1
 ```
 
 The first `--stage cards` command is an alternative to `--stage all`, not a
@@ -105,15 +114,15 @@ If card building stops, fix the reported error and rebuild before running a
 fit-only injection test. For example:
 
 ```bash
-python3 full_spectrum_fit.py --masses 30 --target full --overwrite && \
-python3 full_spectrum_fit.py --masses 30 --target full --stage fit --inject-r 1
+python3 full_spectrum_fit.py --backend local --masses 30 --target full --overwrite && \
+python3 full_spectrum_fit.py --backend local --masses 30 --target full --stage fit --inject-r 1
 ```
 
 The `&&` runs the injected fit only after the first command succeeds. A failed
 build has no usable `model.json`/datacard; the fit-only stage reports this and
 the rebuild command instead of a generic file-not-found error.
 
-Example output directory:
+Example local output directory:
 
     full_spectrum_outputs/Run2Run3_binsigma1_lnN1p5/M30/
 
@@ -133,9 +142,8 @@ below one indicates shrinking relative to the unit Gaussian prior. Both norms
 and shape responses can change a process's final integrated yield, so the broad
 scale factor alone is not its total postfit/prefit yield ratio.
 
-The default executes locally and sequentially. The Condor backend below
-distributes the expensive **input preparation for every era and mass bin**,
-then constructs and fits the same combined likelihood.
+The default Condor backend distributes the expensive **input preparation for
+every era and mass bin**, then constructs and fits the same combined likelihood.
 
 ## Condor preparation by era and mass bin
 
@@ -143,7 +151,6 @@ After activating the Combine CMSSW environment, submit from `NIsoMuon`:
 
 ```bash
 python3 full_spectrum_fit.py --masses 30 --target full \
-    --backend condor --bins-per-job 1 --condor-maxjobs 100 \
     --condor-dir full_spectrum_condor/M30_r0
 ```
 
@@ -167,12 +174,16 @@ jobs + 1 assembly job + 1 fit job**. `--stage cards` omits the last job.
 Submission reads nominal axes and audits the resolution inputs once; it does
 not run the spectrum-bin preparation loop on the submitting machine.
 
-`--bins-per-job 1` gives the finest distribution. Increase it, for example to
-5 or 10, to amortise ROOT startup and file-reading overhead over several bins.
-This changes job grouping only, never the binning or statistical model.
-`--condor-maxjobs 100` caps simultaneously submitted DAG nodes; 0 leaves the
-limit to pool scheduling. This is a concurrency cap, not a guaranteed number
-of available CPUs. Jobs request one CPU and `--condor-memory 4000` MB each.
+`--bins-per-job` is the number of consecutive spectrum bins assigned to one
+Condor preparation job, within one era and signal mass hypothesis. The default
+1 gives one bin per job; 5 gives up to five bins processed sequentially inside
+each job (the final job in an era may contain fewer). Increase it to amortise
+ROOT startup and file-reading overhead. This changes job grouping only, never
+the spectrum binning, number of CPUs per job or statistical model.
+`--condor-maxjobs 0` is the default: the workflow does not pass a `-maxjobs` cap
+to DAGMan. Available resources and cluster scheduling still determine how many
+jobs run. A positive value explicitly opts into a submission cap. Jobs request
+one CPU and `--condor-memory 4000` MB each.
 `--condor-retries 2` retries failed nodes twice before their dependants stop.
 Optional `--condor-requirements` is passed to the submit file.
 
@@ -231,7 +242,7 @@ without preparing the templates again:
 
 ```bash
 python3 full_spectrum_fit.py --masses 30 --target full --stage fit \
-    --backend condor --inject-r 1 \
+    --inject-r 1 \
     --output-base full_spectrum_condor/M30_r0/results \
     --condor-dir full_spectrum_condor/M30_r1
 ```

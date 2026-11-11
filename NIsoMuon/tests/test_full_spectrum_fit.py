@@ -75,6 +75,9 @@ class GeometryTests(unittest.TestCase):
                 fs.resolution_bins(edges,lambda m:1.)
 
     def test_cli_targets_and_invalid_inputs(self):
+        defaults=fs.make_parser().parse_args([])
+        self.assertEqual(defaults.backend,'condor')
+        self.assertEqual(defaults.condor_maxjobs,0)
         for value,expected in [('full','Run2Run3'),('Run2+3','Run2Run3'),('Run2','Run2'),('run3','Run3'),('2018','2018')]:
             opt=fs.make_parser().parse_args(['--target',value])
             fs.configuration(opt)

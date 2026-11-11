@@ -27,7 +27,8 @@ def make_parser():
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
     p.add_argument('--target', type=shared.single_target, default='Run2Run3')
     p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'collect'), default='all')
-    p.add_argument('--backend', choices=('local', 'condor'), default='local')
+    p.add_argument('--backend', choices=('local', 'condor'), default='condor',
+                   help='Execution backend (default: condor); use local for foreground execution.')
     p.add_argument('--base-dir', default=base.DEFAULT_BASE_DIR)
     p.add_argument('--sigfit-dir', default='./sigfit_inputs')
     p.add_argument('--resolution-map')
@@ -43,10 +44,12 @@ def make_parser():
     p.add_argument('--overwrite', action='store_true', help='Rebuild an existing mass directory and invalidate its old fits.')
     p.add_argument('--dry-run', action='store_true', help='Print planned commands without ROOT, template reads or fitting.')
     batch = p.add_argument_group('Condor: independent era/mass-bin preparation, then joint fit')
-    batch.add_argument('--bins-per-job', type=int, default=1)
+    batch.add_argument('--bins-per-job', type=int, default=1,
+                       help='Consecutive spectrum bins from one era per preparation job (default: 1).')
     batch.add_argument('--condor-dir', help='New batch directory; also identifies a batch for status/resume/collect.')
     batch.add_argument('--condor-dry-run', action='store_true', help='Prepare the real DAG and manifest without submitting (reads nominal axes).')
-    batch.add_argument('--condor-maxjobs', type=int, default=100, help='Maximum simultaneous DAG nodes; 0 leaves scheduling to the pool.')
+    batch.add_argument('--condor-maxjobs', type=int, default=0,
+                       help='DAG submission cap (default: 0, no cap added by this workflow).')
     batch.add_argument('--condor-memory', type=int, default=4000, help='Memory request per job in MB.')
     batch.add_argument('--condor-retries', type=int, default=2)
     batch.add_argument('--condor-requirements', default='')

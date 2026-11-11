@@ -205,7 +205,10 @@ class CondorTests(unittest.TestCase):
         self.assertIn('[BINS] 2018: 0/2 complete',report.stdout)
         self.assertIn('should_transfer_files = NO',(directory/'submit.jds').read_text())
         self.assertIn('RETRY J0 2',(directory/'workflow.dag').read_text())
-        self.assertIn('-maxjobs',batch.submission(payload,directory/'workflow.dag'))
+        self.assertNotIn('-maxjobs',batch.submission(payload,directory/'workflow.dag'))
+        capped=copy.deepcopy(payload)
+        capped['options']['condor_maxjobs']=100
+        self.assertIn('-maxjobs',batch.submission(capped,directory/'workflow.dag'))
         with self.assertRaisesRegex(ValueError,'already exists'):
             batch.submit(opt,args)
         with batch.job_lock(batch.workdir(payload,payload['jobs'][0])):
