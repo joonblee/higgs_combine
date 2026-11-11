@@ -24,6 +24,16 @@ Use `--base-dir`, `--sigfit-dir`, `--resolution-map` and `--trigger` if needed.
 DYAux and QCDStat metadata/derivatives must match the current consumer contract;
 missing or stale inputs fail rather than substituting MC backgrounds.
 
+The full-spectrum input audit distinguishes required templates and consistency
+checks from the validation-only diagonal scale diagnostic. A bin's simultaneous
+muR/muF response is compared with the product of its separate responses; a
+large residual is printed as `[SCALE DIAGNOSTIC]` and retained with the observed
+and predicted ratios in `model.json` (`input_audits[].diagnostic_failures` and
+the row's `warnings`). It does not stop card building. The existing separate
+muR and muF nuisance responses are retained. Missing scale members, a central
+scale/nominal mismatch, and other required-input failures still stop execution.
+The original counting and sideband audit policies are unchanged.
+
 ## Likelihood
 
 The fit includes every bin in **11--80 GeV** and retains all eight eras as
@@ -91,6 +101,18 @@ required rerun after it. Nonempty card directories require `--overwrite` or a
 new `--output-base`. Rebuilding invalidates old fit results. Fits verify the
 card hash and model configuration before execution.
 
+If card building stops, fix the reported error and rebuild before running a
+fit-only injection test. For example:
+
+```bash
+python3 full_spectrum_fit.py --masses 30 --target full --overwrite && \
+python3 full_spectrum_fit.py --masses 30 --target full --stage fit --inject-r 1
+```
+
+The `&&` runs the injected fit only after the first command succeeds. A failed
+build has no usable `model.json`/datacard; the fit-only stage reports this and
+the rebuild command instead of a generic file-not-found error.
+
 Example output directory:
 
     full_spectrum_outputs/Run2Run3_binsigma1_lnN1p5/M30/
@@ -135,3 +157,4 @@ closure, zero-DY statistics, blinding, saved-card protection and CLI targets.
 When PyROOT and Combine are available, the synthetic two-era test also runs
 text2workspace and both r=0/r=1 Asimov fits. Real-input fit performance must be
 checked in the analysis CMSSW environment.
+

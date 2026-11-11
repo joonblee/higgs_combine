@@ -238,6 +238,11 @@ def extract_summary(model, directory, opt):
 
 
 def load_model(directory, opt):
+    missing = [name for name in ('model.json', 'datacard.txt') if not (directory/name).is_file()]
+    if missing:
+        raise ValueError(f'No complete saved model in {directory} (missing {", ".join(missing)}). '
+                         'Card building must finish successfully before --stage fit; '
+                         'rerun with --stage all --overwrite using the same configuration.')
     model = json.loads((directory/'model.json').read_text())
     if (model.get('schema_version') != SCHEMA or model.get('signature') != signature(opt)
             or model.get('blind') is not True):
@@ -327,3 +332,4 @@ if __name__ == '__main__':
     except (ValueError, base.WorkflowError, OSError) as error:
         print('ERROR:', error, file=sys.stderr)
         raise SystemExit(1)
+

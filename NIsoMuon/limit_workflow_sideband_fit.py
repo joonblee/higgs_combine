@@ -206,9 +206,27 @@ def build_model(reader, args, opt, mass, files, windows_by_era=None):
             low, high = window['low'], window['high']
             channels, audit = base.build_channels_for_mass(reader, args, mass, files, [era], windows={era: (low, high)})
             failed = [k for k, v in audit.entries.items() if v.found != v.expected]
+            # The diagonal scale pair is validation-only. In a spectrum bin,
+            # its response need not equal the product of the two axis responses.
+            # Keep that diagnostic visible without treating it as a missing
+            # required histogram. Preserve the original sideband audit policy.
+            diagnostics = [k for k in failed if windows_by_era is not None
+                           and k.startswith('PDF_scale_factorisation/')]
+            failed = [k for k in failed if k not in diagnostics]
             if failed:
-                raise base.WorkflowError(f'{era}/{window["region"]}: failed audits: {failed}')
+                details = '; '.join(f'{k}: {audit.entries[k].missing}' for k in failed)
+                raise base.WorkflowError(f'{era}/{window["region"]}: failed required audits: {details}')
             ch = channels[era]
+            diagnostic_info = []
+            for key in diagnostics:
+                entry = audit.entries[key]
+                process = key.split('/', 1)[1]
+                messages = [message for message in ch.warnings
+                            if message.startswith(f'The {process} diagonal scale variation ')]
+                diagnostic_info.append(dict(check=key, found=entry.found, expected=entry.expected,
+                                            labels=list(entry.missing), messages=messages))
+                print(f'[SCALE DIAGNOSTIC] {era}/{window["region"]}: {key}; '
+                      + (' '.join(messages) or ', '.join(entry.missing)))
             stats = base.qcd_root_window_statistics(inputs, low, high, ch.raw_rates['QCD'])
             responses = np.asarray(stats['gradient']) @ factor
             # A free normalisation may absorb transport/NF terms ONLY if their
@@ -227,7 +245,8 @@ def build_model(reader, args, opt, mass, files, windows_by_era=None):
                        dy_stat=(ch.dy_nf_amc or 0.)*(ch.dy_lightjet_error or 0.),
                        dy_nf=ch.dy_nf_amc, warnings=ch.warnings)
             rows.append(row)
-            audits.append(dict(era=era, region=window['region'], requirements=len(audit.entries)))
+            audits.append(dict(era=era, region=window['region'], requirements=len(audit.entries),
+                               diagnostic_failures=diagnostic_info))
         if transfer_ratios and not np.allclose(transfer_ratios, transfer_ratios[0], rtol=1e-5, atol=1e-10):
             raise ValueError(f'{era}: QCD transfer changes shape; cannot absorb it into a free normalisation.')
         selected = [r for r in rows if r['era'] == era]
@@ -589,3 +608,4 @@ if __name__ == '__main__':
     except (ValueError, base.WorkflowError, OSError) as error:
         print('ERROR:', error, file=sys.stderr)
         raise SystemExit(1)
+

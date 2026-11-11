@@ -1,8 +1,9 @@
 """Full-domain geometry, card semantics, blinding and optional Combine test."""
 import copy
-from contextlib import ExitStack
+from contextlib import ExitStack, redirect_stdout
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import shutil
@@ -84,7 +85,7 @@ class GeometryTests(unittest.TestCase):
 
 
 class CardTests(unittest.TestCase):
-    def test_full_builder_preserves_all_bins_and_scales_full_signal(self):
+    def build_synthetic_model(self, audit=None):
         opt=fs.make_parser().parse_args(['--target','2018','--masses','30'])
         args=fs.configuration(opt)
         windows={'2018':[dict(region='B0000',low=11.,high=30.),
@@ -99,9 +100,13 @@ class CardTests(unittest.TestCase):
             low,high=windows['2018']
             width=high-low
             ch=SimpleNamespace(raw_rates=dict(sig=width,QCD=2*width,DY=width,tt=width,ST=1.,Others=1.),
-                nuisances={},qcd_shape_sigma_down=.1,qcd_shape_sigma_up=.2,
-                dy_nf_amc=.1,dy_lightjet_error=1.,warnings=[])
-            return {'2018':ch},SimpleNamespace(entries={})
+                nuisances={'PDF_scale_ST_muF':{'ST':'0.8/1.2'},
+                           'PDF_scale_ST_muR':{'ST':'0.9/1.1'}},
+                qcd_shape_sigma_down=.1,qcd_shape_sigma_up=.2,
+                dy_nf_amc=.1,dy_lightjet_error=1.,warnings=[
+                    'The ST diagonal scale variation (Down) does not factorise into the muF and muR '
+                    'responses in 2018: observed ratio=2, product=0.5.'])
+            return {'2018':ch}, audit if audit is not None else base.AuditLog()
         with ExitStack() as stack:
             stack.enter_context(patch.object(base,'prepare_resolution_coefficients'))
             stack.enter_context(patch.object(base,'relative_resolution',return_value=.01))
@@ -110,6 +115,10 @@ class CardTests(unittest.TestCase):
             stack.enter_context(patch.object(base,'qcd_root_window_statistics',return_value={'gradient':[1.]}))
             stack.enter_context(patch.object(base,'build_channels_for_mass',side_effect=channel_builder))
             model=fs.build_model(reader,args,opt,30.,{'2018':'signal.root'},windows)
+        return model
+
+    def test_full_builder_preserves_all_bins_and_scales_full_signal(self):
+        model=self.build_synthetic_model()
         self.assertEqual(model['eras']['2018']['bin_edges'],[11.,30.,80.])
         self.assertEqual(len(model['rows']),2)
         self.assertAlmostEqual(sum(r['rates']['sig'] for r in model['rows']),25.)
@@ -119,6 +128,41 @@ class CardTests(unittest.TestCase):
         text=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
         for r in model['rows']:
             self.assertAlmostEqual(shared.nominal_predictions(text)[r['channel']],r['asimov'])
+
+    def test_diagonal_scale_diagnostic_is_saved_without_dropping_axis_nuisances(self):
+        audit=base.AuditLog()
+        audit.add('PDF_scale_factorisation/ST','2018:Down',False)
+        audit.add('PDF_scale_factorisation/ST','2018:Up',True)
+        output=io.StringIO()
+        with redirect_stdout(output):
+            model=self.build_synthetic_model(audit)
+        self.assertIn('[SCALE DIAGNOSTIC] 2018/B0000',output.getvalue())
+        self.assertIn('observed ratio=2, product=0.5',output.getvalue())
+        for entry in model['input_audits']:
+            diagnostic=entry['diagnostic_failures'][0]
+            self.assertEqual(diagnostic['check'],'PDF_scale_factorisation/ST')
+            self.assertEqual(diagnostic['labels'],['2018:Down'])
+            self.assertEqual((diagnostic['found'],diagnostic['expected']),(1,2))
+            self.assertIn('observed ratio=2, product=0.5',diagnostic['messages'][0])
+        card=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
+        self.assertIn('CMS_NPS26009_QCDscale_fac_singleTop lnN',card)
+        self.assertIn('CMS_NPS26009_QCDscale_ren_singleTop lnN',card)
+        self.assertNotIn('muRmuF',card)
+        baseline=shared.card_text(self.build_synthetic_model(),normalisation_kappa=1.5,prefix='FS')
+        self.assertEqual(card,baseline)
+
+    def test_required_scale_and_consistency_failures_still_stop_build(self):
+        for key in ('PDF_scale_muF/ST','PDF_scale_muRmuF/ST',
+                    'PDF_scale_central_closure/ST','nominal/ST','background/DY_factorisation'):
+            with self.subTest(key=key):
+                audit=base.AuditLog()
+                audit.add('PDF_scale_factorisation/ST','2018:Down',False)
+                audit.add(key,'2018:missing-or-inconsistent',False)
+                with self.assertRaises(base.WorkflowError) as context:
+                    self.build_synthetic_model(audit)
+                self.assertIn('failed required audits',str(context.exception))
+                self.assertIn(key,str(context.exception))
+                self.assertIn('2018:missing-or-inconsistent',str(context.exception))
 
     def test_nominal_closure_and_broad_prior_semantics(self):
         model=example_model()
@@ -185,6 +229,19 @@ class CardTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'configuration differs'):
                 fs.load_model(path,opt)
 
+    def test_fit_only_missing_or_partial_model_explains_how_to_rebuild(self):
+        opt=fs.make_parser().parse_args([])
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)
+            for content in (None,'model.json','datacard.txt'):
+                for name in ('model.json','datacard.txt'):
+                    (path/name).unlink(missing_ok=True)
+                if content:
+                    (path/content).write_text('{}')
+                with self.assertRaisesRegex(ValueError,'--stage all --overwrite') as context:
+                    fs.load_model(path,opt)
+                self.assertIn('before --stage fit',str(context.exception))
+
     def test_target_data_blocked(self):
         reader=object.__new__(shared.BlindedReader)
         with patch.object(base.RootReader,'_file',side_effect=AssertionError('data opened')):
@@ -229,3 +286,4 @@ class CombineSmokeTest(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
