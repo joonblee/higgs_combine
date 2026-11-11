@@ -101,6 +101,76 @@ class GeometryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'both 11 and 80'):
                 fs.resolution_bins(edges,lambda m:1.)
 
+    def test_window_geometry_covers_native_bins_once_for_every_era_and_mass(self):
+        coeffs=json.loads((Path(base.__file__).parent/'sigfit_inputs/resolution_coefficients.json').read_text())
+        grid=np.round(np.arange(11.,80.001,.02),8)
+        counts=np.arange(len(grid)-1,dtype=float)+1
+        for era,ab in coeffs.items():
+            for mass in (12.,30.,70.):
+                sigma=mass*(ab['a']*mass+ab['b'])
+                low,high=max(11.,mass-5*sigma),min(80.,mass+5*sigma)
+                for refine in (1,2):
+                    bins=fs.window_bins(grid,low,high,refine=refine)
+                    self.assertEqual(bins[0]['low'],11.)
+                    self.assertEqual(bins[-1]['high'],80.)
+                    self.assertTrue(all(a['high']==b['low'] for a,b in zip(bins,bins[1:])))
+                    sr=[w for w in bins if w['region']=='SR']
+                    self.assertEqual(len(sr),1)
+                    self.assertLessEqual(sr[0]['low'],low+1e-8)
+                    self.assertGreaterEqual(sr[0]['high'],high-1e-8)
+                    integrated=sum(counts[np.searchsorted(grid,w['low']):np.searchsorted(grid,w['high'])].sum() for w in bins)
+                    self.assertEqual(integrated,counts.sum())
+                    self.assertTrue(all(w['low'] in grid and w['high'] in grid for w in bins))
+
+    def test_window_preflight_builds_distinct_plans_for_each_mass(self):
+        opt=fs.make_parser().parse_args(['--fit-layout','window','--target','2018','--masses','12,30,70'])
+        args=fs.configuration(opt)
+        args.resolution_coefficients={'2018':[0.,.01]}
+        signals={m:{'2018':f'signal{m}.root'} for m in opt.masses}
+        grid=np.round(np.arange(11.,80.001,.02),8)
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(base,'scan_signal_files',return_value=signals))
+            stack.enter_context(patch.object(base,'prepare_resolution_coefficients'))
+            stack.enter_context(patch.object(shared,'common_edges',return_value=grid))
+            found,plans=fs.prepare_inputs(None,args,opt)
+        self.assertEqual(found,signals)
+        windows=[]
+        for mass in opt.masses:
+            bins=fs.windows_for_mass(plans,mass,opt)['2018']
+            sr=next(w for w in bins if w['region']=='SR')
+            self.assertAlmostEqual(sr['low'],max(11.,mass*.95))
+            self.assertAlmostEqual(sr['high'],min(80.,mass*1.05))
+            windows.append((sr['low'],sr['high']))
+        self.assertEqual(len(set(windows)),3)
+
+    def test_small_sideband_fragments_merge_away_from_sr(self):
+        grid=np.arange(11.,80.001,.1)
+        bins=fs.window_bins(grid,30.1,39.9)
+        sr=next(w for w in bins if w['region']=='SR')
+        self.assertEqual((sr['low'],sr['high']),(30.1,39.9))
+        self.assertEqual(next(w for w in bins if w['high']==30.1)['low'],25.)
+        self.assertEqual(next(w for w in bins if w['low']==39.9)['high'],50.)
+        self.assertFalse(any(w['region'].startswith('L') for w in fs.window_bins(grid,11.,14.)))
+        self.assertFalse(any(w['region'].startswith('R') for w in fs.window_bins(grid,76.,80.)))
+
+    def test_window_cli_is_isolated_and_rejects_invalid_or_ignored_settings(self):
+        parser=fs.make_parser()
+        normal=parser.parse_args([])
+        window=parser.parse_args(['--fit-layout','window'])
+        refined=parser.parse_args(['--fit-layout','window','--sideband-refine','2'])
+        fs.configuration(window)
+        self.assertNotEqual(fs.model_directory(normal,30),fs.model_directory(window,30))
+        self.assertNotEqual(fs.model_directory(window,30),fs.model_directory(refined,30))
+        legacy=copy.copy(normal)
+        for name in ('fit_layout','sr_nsigma','sideband_edges','sideband_refine','sideband_fragment_fraction'):
+            delattr(legacy,name)
+        self.assertEqual(fs.signature(legacy),fs.signature(normal))
+        for extra in (['--fast-mode'],['--bin-sigma','2'],['--sideband-refine','0'],
+                      ['--sideband-edges','11,20,20,80'],['--sideband-edges','12,20,80'],
+                      ['--sideband-fragment-fraction','nan']):
+            with self.assertRaises(ValueError):
+                fs.configuration(parser.parse_args(['--fit-layout','window',*extra]))
+
     def test_cli_targets_and_invalid_inputs(self):
         defaults=fs.make_parser().parse_args([])
         self.assertEqual(defaults.backend,'condor')

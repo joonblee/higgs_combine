@@ -20,6 +20,7 @@ import limit_workflow_sideband_fit as shared
 DOMAIN = (11., 80.)
 SCHEMA = 'NPS26009_full_spectrum_step1_v1'
 MAJOR = ('QCD', 'DY', 'tt')
+SIDEBAND_EDGES = (11., 15., 20., 25., 30., 40., 50., 60., 80.)
 
 
 def make_parser():
@@ -34,6 +35,15 @@ def make_parser():
     p.add_argument('--resolution-map')
     p.add_argument('--region', default=base.DEFAULT_REGION)
     p.add_argument('--trigger', default='')
+    p.add_argument('--fit-layout', choices=('spectrum', 'window'), default='spectrum',
+                   help='spectrum: existing resolution bins; window: one SR count plus coarse sidebands.')
+    p.add_argument('--sr-nsigma', type=shared.finite_positive, default=5.)
+    p.add_argument('--sideband-edges', type=base.parse_float_list, default=list(SIDEBAND_EDGES),
+                   help='Reference sideband edges in GeV; must span 11--80.')
+    p.add_argument('--sideband-refine', type=int, default=1,
+                   help='Subdivide each reference sideband interval (2 for binning stability checks).')
+    p.add_argument('--sideband-fragment-fraction', type=float, default=.25,
+                   help='Merge an SR-adjacent sideband fragment narrower than this fraction of its reference bin.')
     p.add_argument('--bin-sigma', type=shared.finite_positive, default=1.,
                    help='Target bin width / local sigma_m(m); snapped to common native edges.')
     p.add_argument('--fast-mode', action='store_true',
@@ -66,6 +76,10 @@ def make_parser():
 
 
 def configuration(opt):
+    if getattr(opt, 'fit_layout', 'spectrum') == 'window':
+        validate_sideband_options(opt)
+        if getattr(opt, 'fast_mode', False) or opt.bin_sigma != 1.:
+            raise ValueError('Window layout uses --sideband-edges/--sideband-refine, not --fast-mode/--bin-sigma.')
     if opt.norm_prior <= 1:
         raise ValueError('--norm-prior must exceed one.')
     if not math.isfinite(opt.inject_r) or not 0 <= opt.inject_r < opt.r_max:
@@ -82,6 +96,8 @@ def configuration(opt):
         setattr(args, name, getattr(opt, name))
     args.mode, args.backend, args.strict = 'blind', 'local', True
     args.target, args.masses = opt.target, opt.masses
+    if getattr(opt, 'fit_layout', 'spectrum') == 'window':
+        args.n_sigma = opt.sr_nsigma
     args.output_base = str(Path(opt.output_base).resolve())
     base.validate_args(args)
     return args
@@ -122,11 +138,62 @@ def normalisation_name(process, era):
     return f'CMS_NPS26009_inSituNorm_{process}_BJetOS_{era}'
 
 
+def validate_sideband_options(opt):
+    edges = opt.sideband_edges
+    if (len(edges) < 2 or any(not math.isfinite(x) for x in edges)
+            or edges[0] != DOMAIN[0] or edges[-1] != DOMAIN[1]
+            or any(a >= b for a,b in zip(edges, edges[1:]))):
+        raise ValueError('Sideband edges must increase strictly from 11 to 80 GeV.')
+    if opt.sideband_refine < 1:
+        raise ValueError('--sideband-refine must be at least 1.')
+    if not math.isfinite(opt.sideband_fragment_fraction) or not 0 <= opt.sideband_fragment_fraction <= .5:
+        raise ValueError('Require 0 <= sideband-fragment-fraction <= 0.5.')
+
+
+def window_bins(edges, low, high, reference=SIDEBAND_EDGES, refine=1, fragment_fraction=.25):
+    """One whole-bin SR plus disjoint coarse sidebands, covering 11--80 exactly."""
+    validate_sideband_options(argparse.Namespace(sideband_edges=reference,
+        sideband_refine=refine, sideband_fragment_fraction=fragment_fraction))
+    grid = sorted(set(round(float(x),8) for x in edges if DOMAIN[0]-1e-7 <= x <= DOMAIN[1]+1e-7))
+    if len(grid) < 3 or grid[0] != DOMAIN[0] or grid[-1] != DOMAIN[1]:
+        raise ValueError('Common native histogram edges must include both 11 and 80 GeV.')
+    if not all(math.isfinite(x) for x in (low,high)) or not DOMAIN[0] <= low < high <= DOMAIN[1]:
+        raise ValueError('Invalid signal window.')
+    srlo = grid[max(0,int(np.searchsorted(grid,low+1e-8,side='right'))-1)]
+    srhi = grid[min(len(grid)-1,int(np.searchsorted(grid,high-1e-8,side='left')))]
+    anchors = sorted(set(min(grid,key=lambda g:abs(g-x))
+        for a,b in zip(reference,reference[1:]) for x in np.linspace(a,b,refine+1)))
+    left = sorted({DOMAIN[0],srlo,*[x for x in anchors if x < srlo]})
+    right = sorted({srhi,DOMAIN[1],*[x for x in anchors if x > srhi]})
+    def reference_width(x):
+        i = min(len(anchors)-2,max(0,int(np.searchsorted(anchors,x,side='right'))-1))
+        return anchors[i+1]-anchors[i]
+    if len(left) > 2 and srlo not in anchors and left[-1]-left[-2] < fragment_fraction*reference_width(srlo):
+        del left[-2]
+    if len(right) > 2 and srhi not in anchors and right[1]-right[0] < fragment_fraction*reference_width(srhi):
+        del right[1]
+    rows = [dict(region=f'L{i:04d}',low=a,high=b) for i,(a,b) in enumerate(zip(left,left[1:]))]
+    rows += [dict(region='SR',low=srlo,high=srhi)]
+    rows += [dict(region=f'R{i:04d}',low=a,high=b) for i,(a,b) in enumerate(zip(right,right[1:]))]
+    if len(rows) == 1:
+        raise ValueError('Signal window leaves no sideband in 11--80 GeV.')
+    return rows
+
+
+def windows_for_mass(windows, mass, opt):
+    return windows[base.mass_label(mass)] if getattr(opt,'fit_layout','spectrum') == 'window' else windows
+
+
 def effective_bin_sigma(opt):
     return opt.bin_sigma * (4. if getattr(opt, 'fast_mode', False) else 1.)
 
 
 def model_directory(opt, mass):
+    if getattr(opt,'fit_layout','spectrum') == 'window':
+        geometry = [opt.sideband_edges,opt.sideband_refine,opt.sideband_fragment_fraction]
+        code = hashlib.sha256(json.dumps(geometry).encode()).hexdigest()[:10]
+        tag = f'{opt.target}_window{base.mass_label(opt.sr_nsigma)}sigma_sb{code}_lnN{base.mass_label(opt.norm_prior)}'
+        return Path(opt.output_base).resolve()/tag/f'M{base.mass_label(mass)}'
     tag = f'{opt.target}_binsigma{base.mass_label(effective_bin_sigma(opt))}_lnN{base.mass_label(opt.norm_prior)}'
     if getattr(opt, 'fast_mode', False):
         tag += '_fast'
@@ -135,11 +202,15 @@ def model_directory(opt, mass):
 
 def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base',
-               'backend', 'bins_per_job', 'fast_mode'}
+               'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
+               'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction'}
     result = {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
     # Preserve compatibility with existing full-resolution saved models.
     if getattr(opt, 'fast_mode', False):
         result['fast_mode'] = True
+    if getattr(opt,'fit_layout','spectrum') == 'window':
+        for name in ('fit_layout','sr_nsigma','sideband_edges','sideband_refine','sideband_fragment_fraction'):
+            result[name] = getattr(opt,name)
     return result
 
 
@@ -159,10 +230,22 @@ def decorate_model(model, opt, windows):
                  uncertainty_model=('Step 1: broad QCD/DY/tt normalisations; inherited template '
                     'responses, SS covariance and envelope, DY source and MC statistics. '
                     'Additional DY closure/QCD transport shape studies remain separate.'))
+    if getattr(opt,'fit_layout','spectrum') == 'window':
+        model['fit_kind'] = 'window_count_with_sidebands'
+        model['effective_bin_sigma'] = None
+        model['sideband_binning'] = dict(reference_edges=list(opt.sideband_edges),
+            refine=opt.sideband_refine, fragment_fraction=opt.sideband_fragment_fraction,
+            sr_nsigma=opt.sr_nsigma, status='proposal_requires_binning_stability_check')
     for era in model['eras']:
         info = model['eras'][era]
-        info.pop('sidebands', None)
-        info.pop('signal_sb_over_sr', None)
+        if getattr(opt,'fit_layout','spectrum') == 'window':
+            sr = [w for w in windows[era] if w['region'] == 'SR']
+            if len(sr) != 1:
+                raise ValueError(f'{era}: window layout requires exactly one SR count.')
+            info['signal_window'] = [sr[0]['low'],sr[0]['high']]
+        else:
+            info.pop('sidebands', None)
+            info.pop('signal_sb_over_sr', None)
         info['bin_edges'] = [windows[era][0]['low']]+[w['high'] for w in windows[era]]
         info['zero_dy_bins'] = sum(r['rates']['DY'] == 0 for r in model['rows'] if r['era'] == era)
         print(f'[SPECTRUM] {era}: {len(windows[era])} bins, 11--80 GeV; zero-DY bins={info["zero_dy_bins"]}')
@@ -330,14 +413,22 @@ def prepare_inputs(reader, args, opt):
     if not signals:
         raise ValueError('No simulated signal files found.')
     reference = signals[min(signals)]
-    windows = {}
+    is_window = getattr(opt,'fit_layout','spectrum') == 'window'
+    windows = {base.mass_label(m):{} for m in opt.masses} if is_window else {}
     for era in base.target_years(opt.target):
         if era not in reference:
             raise ValueError(f'Missing reference signal in {era}.')
         edges = shared.common_edges(reader, args, era, reference[era])
-        windows[era] = resolution_bins(edges,
-            lambda m, era=era: m*base.relative_resolution(args, era, m), effective_bin_sigma(opt))
-        print(f'[BINS] {era}: {len(windows[era])} bins over 11--80 GeV', flush=True)
+        if is_window:
+            for mass in opt.masses:
+                low,high = base.mass_window(args,era,mass)
+                bins = window_bins(edges,low,high,opt.sideband_edges,opt.sideband_refine,opt.sideband_fragment_fraction)
+                windows[base.mass_label(mass)][era] = bins
+                print(f'[BINS] {era} M{mass:g}: 1 SR + {len(bins)-1} sideband bins over 11--80 GeV', flush=True)
+        else:
+            windows[era] = resolution_bins(edges,
+                lambda m, era=era: m*base.relative_resolution(args, era, m), effective_bin_sigma(opt))
+            print(f'[BINS] {era}: {len(windows[era])} bins over 11--80 GeV', flush=True)
     return signals, windows
 
 
@@ -440,6 +531,10 @@ def main(argv=None):
     if getattr(opt, 'fast_mode', False):
         print(f'[FAST] Test-only coarse spectrum: target bin width = {effective_bin_sigma(opt):g} sigma; '
               'systematics and fit diagnostics retained.', flush=True)
+    if getattr(opt,'fit_layout','spectrum') == 'window':
+        print('[LAYOUT] One signal-window count plus coarse sidebands; all regions fitted jointly. '
+              f'SR=+/-{opt.sr_nsigma:g} sigma, reference edges={opt.sideband_edges}, '
+              f'refine={opt.sideband_refine}.', flush=True)
     if opt.dry_run:
         for mass in opt.masses:
             print('[PLAN] blinded full spectrum, era channels, QCD/DY/tt lnN', opt.norm_prior)
@@ -467,7 +562,7 @@ def main(argv=None):
                 found = next((m for m in signals if abs(m-mass)<1e-6),None)
                 if found is None:
                     raise ValueError(f'No simulated signal at M={mass}; intermediate-mass interpolation is a later step.')
-                model = build_model(reader,args,opt,mass,signals[found],windows)
+                model = build_model(reader,args,opt,mass,signals[found],windows_for_mass(windows,mass,opt))
                 save_model(model, opt, mass, directory)
             else:
                 model = load_model(directory,opt)

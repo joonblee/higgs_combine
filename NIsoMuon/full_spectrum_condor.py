@@ -92,7 +92,7 @@ def make_jobs(opt, windows):
         parents = []
         if opt.stage in ('cards', 'all'):
             for era in base.target_years(opt.target):
-                bins = windows[era]
+                bins = fs.windows_for_mass(windows,mass,opt)[era]
                 for start in range(0, len(bins), opt.bins_per_job):
                     parents.append(add('prepare', mass, era=era,
                                        windows=bins[start:start+opt.bins_per_job]))
@@ -167,8 +167,9 @@ def worker_options(payload):
 
 def assemble(payload, job, opt, args):
     parts, fingerprints = [], dict(payload['preflight_inputs'])
+    windows = fs.windows_for_mass(payload['windows'],job['mass'],opt)
     expected = [(era, window) for era in base.target_years(opt.target)
-                for window in payload['windows'][era]]
+                for window in windows[era]]
     seen = []
     for index in job['dependencies']:
         parent = payload['jobs'][index]
@@ -197,7 +198,7 @@ def assemble(payload, job, opt, args):
     check_inputs(fingerprints)
     study = argparse.Namespace(**vars(opt), norm_scope='era')
     model = shared.assemble_model(args, study, job['mass'], parts, full_spectrum=True)
-    model = fs.decorate_model(model, opt, payload['windows'])
+    model = fs.decorate_model(model, opt, windows)
     model['batch_inputs'] = fingerprints
     model['condor_batch_id'] = payload['batch_id']
     directory = fs.model_directory(opt, job['mass'])

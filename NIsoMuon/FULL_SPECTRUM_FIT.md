@@ -10,6 +10,66 @@ workflow** (`--condor-maxjobs 0`). Every job requests **16000 MB** by default
 spectrum bin per job (`--bins-per-job 1`). Use `--backend local` for foreground
 execution. Condor results are isolated under each batch's `results/` directory.
 
+## Signal-window counting with coarse sidebands
+
+Use `--fit-layout window` for one integrated signal-window count per era plus
+coarse lower/upper sideband bins. This is a simultaneous fit of disjoint
+regions with shared background normalisations and systematic responses, not
+a normalisation-only prefit. The default `--fit-layout spectrum` preserves the
+existing full-spectrum geometry and saved batches.
+
+```bash
+python3 full_spectrum_fit.py --masses 30 --target full --fit-layout window
+
+# Independent, finer-binned stability comparison:
+python3 full_spectrum_fit.py --masses 30 --target full --fit-layout window \
+    --sideband-refine 2
+```
+
+The reference sideband edges are **11, 15, 20, 25, 30, 40, 50, 60, 80 GeV**.
+Override with `--sideband-edges 11,15,20,25,30,40,50,60,80`. Edges must be finite,
+strictly increasing and span 11--80. `--sideband-refine 2` subdivides each
+reference interval in two before snapping it to the common native grid.
+
+For every requested signal mass and era, the existing +/-5-sigma window
+(`--sr-nsigma 5`) is clipped to 11--80 and snapped outwards to whole native
+bins. All reference edges inside it are removed, leaving exactly one `SR`
+count. Sideband reference edges snap to the nearest common native edges.
+An SR-adjacent sideband fragment narrower than 25% of its reference interval
+is merged with its neighbour on the same side, when such a neighbour exists;
+`--sideband-fragment-fraction` controls this threshold. SR boundaries never
+move during this merging. Empty lower/upper sidebands at the domain edges
+are omitted. The resulting regions cover 11--80 exactly, without overlap,
+gaps or splitting native histogram bins. `[BINS]` reports actual counts.
+
+The planning geometry is mass-specific, including in multi-mass Condor DAGs.
+Yields, signed DY sources, template variations and statistical/covariance
+responses are integrated afresh over each region from the original inputs.
+Existing fine-bin error bars or nuisance values are not averaged. Signal
+leakage into sidebands is included. The internal r=1 convention still means
+25 signal events over the complete 11--80 domain, not 25 inside the SR.
+Broad lnN 1.5 priors and all currently implemented uncertainty/correlation
+prescriptions are retained. No new independent 30% DY modelling nuisance is
+introduced by this binning change; that remains a separate modelling task.
+
+Output model tags include `_window5sigma_sb<geometry hash>_lnN1p5`. Different
+edges, refinement or fragment thresholds have separate paths and protected
+model signatures. `model.json` stores the snapped per-era edges, signal
+window and proposed sideband settings. Fine-binned saved cards cannot be
+used as coarse-window cards: submit fresh preparation. `--fast-mode` and
+nondefault `--bin-sigma` are rejected with this layout; its speed comes from
+the coarse sideband geometry. Memory defaults to 16000 MB and B-only/S+B jobs
+remain parallel, with no workflow concurrency cap.
+
+These edges are a starting proposal, not a validated optimum. Compare nominal
+and refined plans at representative masses (e.g. 12, 30, 70 GeV), examining
+normalisations, errors/correlations and expected limits. A 5% limit change can
+be a chosen study target, not a universal requirement. Keep the underlying
+modelling-uncertainty prescription consistent: redefining independent shape
+nuisances whenever the fit binning changes would also change the model.
+This script runs blinded fit diagnostics; it does not yet implement a new
+window-plus-sideband CLs limit calculation or an observed-data workflow.
+
 From the checked-out `NIsoMuon` directory:
 
 ```bash

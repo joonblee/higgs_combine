@@ -69,7 +69,15 @@ class CondorTests(unittest.TestCase):
         args = fs.configuration(opt)
         def inputs(reader, args, opt):
             args.resolution_coefficients = {e:[0.,.01] for e in self.eras}
-            return {30.:{e:'signal.root' for e in self.eras}}, self.windows
+            signals={mass:{e:'signal.root' for e in self.eras} for mass in opt.masses}
+            windows=self.windows
+            if opt.fit_layout=='window':
+                grid=[11.+i*.02 for i in range(3451)]
+                windows={base.mass_label(mass):{era:fs.window_bins(grid,
+                    max(11.,mass-.05*mass),min(80.,mass+.05*mass),
+                    opt.sideband_edges,opt.sideband_refine,opt.sideband_fragment_fraction)
+                    for era in self.eras} for mass in opt.masses}
+            return signals,windows
         with patch.object(fs, 'prepare_inputs', side_effect=inputs):
             directory = batch.submit(opt, args)
         return opt, args, batch.load_manifest(directory)
@@ -134,6 +142,30 @@ class CondorTests(unittest.TestCase):
             self.assertIsNotNone(batch.completed(payload,job))
         opt.stage='collect'
         self.assertEqual(batch.manage(opt),0)
+
+    def test_window_batch_uses_mass_specific_geometry_and_matches_local_card(self):
+        opt,args,payload=self.make_batch(stage='cards',extra=('--fit-layout','window','--masses','12,30,70'))
+        self.workers(payload,'prepare')
+        self.workers(payload,'assemble')
+        worker,_=batch.worker_options(payload)
+        for mass in opt.masses:
+            windows=fs.windows_for_mass(payload['windows'],mass,opt)
+            saved=fs.load_model(fs.model_directory(worker,mass),worker)
+            self.assertEqual(saved['fit_kind'],'window_count_with_sidebands')
+            for era in self.eras:
+                rows=[r for r in saved['rows'] if r['era']==era]
+                self.assertEqual(sum(r['region']=='SR' for r in rows),1)
+                self.assertEqual([(r['low'],r['high']) for r in rows],
+                                 [(w['low'],w['high']) for w in windows[era]])
+                self.assertEqual(saved['eras'][era]['signal_window'],
+                                 [[r['low'],r['high']] for r in rows if r['region']=='SR'][0])
+            with patch.object(base,'prepare_resolution_coefficients'):
+                local=fs.build_model(FakeReader(),args,opt,mass,{e:'signal.root' for e in self.eras},windows)
+            self.assertEqual((fs.model_directory(worker,mass)/'datacard.txt').read_text(),
+                             shared.card_text(local,normalisation_kappa=1.5,prefix='FS'))
+            # Signal leakage into the sidebands remains in the model.
+            self.assertTrue(any(r['rates']['sig']>0 for r in saved['rows'] if r['region']!='SR'))
+            self.assertAlmostEqual(sum(r['rates']['sig'] for r in saved['rows']),25.)
 
     def test_grouping_preserves_card_and_configuration_signature(self):
         cards=[]
