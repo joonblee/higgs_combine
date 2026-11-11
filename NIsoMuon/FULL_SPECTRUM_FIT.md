@@ -133,8 +133,111 @@ below one indicates shrinking relative to the unit Gaussian prior. Both norms
 and shape responses can change a process's final integrated yield, so the broad
 scale factor alone is not its total postfit/prefit yield ratio.
 
-The default executes locally and sequentially; run it in an appropriate
-interactive/compute allocation. It is not a new Condor backend.
+The default executes locally and sequentially. The Condor backend below
+distributes the expensive **input preparation for every era and mass bin**,
+then constructs and fits the same combined likelihood.
+
+## Condor preparation by era and mass bin
+
+After activating the Combine CMSSW environment, submit from `NIsoMuon`:
+
+```bash
+python3 full_spectrum_fit.py --masses 30 --target full \
+    --backend condor --bins-per-job 1 --condor-maxjobs 100 \
+    --condor-dir full_spectrum_condor/M30_r0
+```
+
+This creates a new batch directory and submits a DAG automatically:
+
+1. One preparation job per **(signal mass hypothesis, era, spectrum bin)**.
+   Each reads nominal and varied inputs, performs the required audits and
+   stores raw yields, SS covariance responses and source statistics. These
+   are independent preparation jobs, not independent fits of the mass bins.
+2. One assembly job per mass, after **all** its bins finish. It checks exact
+   bin coverage, input consistency and mass independence of the replaced
+   normalisations across the entire era. Signal rescaling to 25 events is
+   applied once over the full selected spectrum, including all eras.
+3. One joint `FitDiagnostics` job per mass, after assembly. It includes every
+   selected era/bin and retains the correlations of the local model. Both
+   B-only and floating-signal fits use the requested Asimov dataset.
+
+For one mass with N total era/bin entries, the default creates **N preparation
+jobs + 1 assembly job + 1 fit job**. `--stage cards` omits the last job.
+`--masses 12,30,70` creates independent chains for all three hypotheses.
+Submission reads nominal axes and audits the resolution inputs once; it does
+not run the spectrum-bin preparation loop on the submitting machine.
+
+`--bins-per-job 1` gives the finest distribution. Increase it, for example to
+5 or 10, to amortise ROOT startup and file-reading overhead over several bins.
+This changes job grouping only, never the binning or statistical model.
+`--condor-maxjobs 100` caps simultaneously submitted DAG nodes; 0 leaves the
+limit to pool scheduling. This is a concurrency cap, not a guaranteed number
+of available CPUs. Jobs request one CPU and `--condor-memory 4000` MB each.
+`--condor-retries 2` retries failed nodes twice before their dependants stop.
+Optional `--condor-requirements` is passed to the submit file.
+
+The worker wrapper activates the submitting user's `CMSSW_BASE` and
+`SCRAM_ARCH`. Override them with `--condor-cmssw-base` and
+`--condor-scram-arch` if needed. As with the existing analysis Condor backend,
+the checkout's ROOT inputs, the batch directory, CMSSW and CVMFS must be
+accessible on the worker nodes; files are not transferred by Condor.
+
+To prepare a real DAG without submitting, add `--condor-dry-run`. This reads
+nominal inputs and requires PyROOT/CMSSW. The separate `--dry-run` still prints
+fit commands without reading ROOT or creating a batch.
+
+Monitor, verify or resume with:
+
+```bash
+python3 full_spectrum_fit.py --stage status \
+    --condor-dir full_spectrum_condor/M30_r0
+
+python3 full_spectrum_fit.py --stage collect \
+    --condor-dir full_spectrum_condor/M30_r0
+
+python3 full_spectrum_fit.py --stage resume \
+    --condor-dir full_spectrum_condor/M30_r0
+```
+
+`status` reports completed bins per era, job states, recorded failures and
+assembly/fit elapsed times. `collect` verifies every expected completion and
+product; assembly and fitting happen automatically in the DAG. `resume`
+creates and submits a new DAG for incomplete or stale jobs and their affected
+dependants, preserving verified bin results. Wait until the old DAG has exited,
+or remove it and its queued node jobs before resuming; an active batch is
+rejected to avoid duplicate workers. Add `--condor-dry-run` to inspect the
+resume DAG without submitting. Resume uses the batch's original options.
+
+Every batch has an immutable manifest and source snapshot. Worker inputs are
+recorded with size/mtime fingerprints and checked for changes during preparation
+and assembly. Missing/stale shards, changed products or incomplete coverage
+stop the dependent jobs. Updating the checkout does not change an existing
+batch. `--overwrite` does not replace a batch directory; choose a new directory
+for a fresh run. Batch results are isolated from any ongoing local run.
+
+For the example above, results are written under:
+
+    full_spectrum_condor/M30_r0/results/Run2Run3_binsigma1_lnN1p5/M30/
+
+The normal `model.json`, `datacard.txt` and `fit_r0/fit_summary.json` live there.
+Per-job status, raw parts and elapsed time are in `jobs/job_00000/status.json`
+and `part.json`; Condor stdout/stderr use `jobs/job_<index>.out` and `.err`.
+`[PREP]` messages include the era, bin ID and actual mass interval, instead of
+only repeating the tested signal mass. QCD derivative validation is cached
+within each worker, while each bin's statistical propagation remains separate.
+
+To reuse the assembled card for an r=1 Asimov test in another Condor batch,
+without preparing the templates again:
+
+```bash
+python3 full_spectrum_fit.py --masses 30 --target full --stage fit \
+    --backend condor --inject-r 1 \
+    --output-base full_spectrum_condor/M30_r0/results \
+    --condor-dir full_spectrum_condor/M30_r1
+```
+
+Use the same physics/input options as the original card. The new batch copies
+the verified card and model and runs only the joint fit.
 
 ## Scope and verification
 
@@ -150,6 +253,7 @@ Tests:
 ```bash
 python3 -m unittest discover -s tests -p 'test_full_spectrum_fit.py' -v
 python3 -m unittest discover -s tests -p 'test_sideband_fit.py' -v
+python3 -m unittest discover -s tests -p 'test_full_spectrum_condor.py' -v
 ```
 
 These check full-domain native-bin coverage, prior/bin correlations, nominal
@@ -157,4 +261,10 @@ closure, zero-DY statistics, blinding, saved-card protection and CLI targets.
 When PyROOT and Combine are available, the synthetic two-era test also runs
 text2workspace and both r=0/r=1 Asimov fits. Real-input fit performance must be
 checked in the analysis CMSSW environment.
+
+The Condor tests additionally exercise planning, raw shard assembly, exact
+local/batch datacard equivalence, zero-signal shards, grouping independence,
+dependency failures/retries, stale-product rejection, resume and snapshot
+integrity. They do not require an HTCondor pool. Actual queue submission and
+real-input worker/fit performance require the analysis cluster.
 

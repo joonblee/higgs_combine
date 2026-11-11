@@ -117,6 +117,27 @@ def regions(edges, mass, sigma, sr_nsigma=5., exclude_nsigma=5., width=2., outer
 
 class BlindedReader(base.RootReader):
     """Prevent target-data reads and enforce exactly disjoint input integrals."""
+    def __init__(self):
+        super().__init__()
+        self.qcd_input_cache = {}
+
+    def qcd_inputs(self, filename, template_path, era):
+        key = (filename, template_path, era)
+        if key not in self.qcd_input_cache:
+            self.qcd_input_cache[key] = base.read_qcd_stat_inputs(self._file(filename), era, template_path)
+        return self.qcd_input_cache[key]
+
+    def qcd_statistics(self, filename, template_path, low, high, era, nominal):
+        try:
+            inputs = self.qcd_inputs(filename, template_path, era)
+            return base.qcd_root_window_statistics(inputs, low, high, nominal)
+        except (ValueError, KeyError, TypeError, OverflowError) as exc:
+            raise base.WorkflowError(f'{filename}: {exc}') from exc
+
+    def close(self):
+        self.qcd_input_cache.clear()
+        super().close()
+
     def _file(self, filename):
         if Path(filename).name.lower() == 'data.root':
             raise base.WorkflowError('OS data.root is forbidden in this blinded workflow.')
@@ -180,76 +201,82 @@ def separation_diagnostic(rows):
                 interpretation='Nominal shapes with other nuisances fixed; full fit can be less constraining.')
 
 
-def build_model(reader, args, opt, mass, files, windows_by_era=None):
-    """Build integrated Poisson bins, preserving producer covariance modes.
+def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=False):
+    """Prepare raw bins independently; scale signals only after global assembly."""
+    if era not in files:
+        raise base.WorkflowError(f'Missing simulated signal for {era}, M={mass}.')
+    rows, audits = [], []
+    qfile = base.file_for_process(args, era, 'QCD', '', 'nominal')
+    inputs = base.read_qcd_stat_inputs(reader._file(qfile), era, base.hist_path(args.region))
+    qother = base.file_for_process(args, era, 'QCD', '', 'qcd')
+    if inputs[0] != base.read_qcd_stat_metadata(reader._file(qother), era, base.hist_path(args.region)):
+        raise ValueError(f'{era}: stale nominal/systematic QCD metadata')
+    factor = covariance_factor(inputs[0]['fit']['covariance'])
+    transfer_ratios = []
+    for window in windows:
+        low, high = window['low'], window['high']
+        if full_spectrum:
+            print(f'[PREP] {era}/{window["region"]} M{mass:g}: [{low:g}, {high:g}) GeV', flush=True)
+        channels, audit = base.build_channels_for_mass(reader, args, mass, files, [era], windows={era: (low, high)})
+        failed = [k for k, v in audit.entries.items() if v.found != v.expected]
+        # The diagonal scale pair is validation-only. In a spectrum bin,
+        # its response need not equal the product of the two axis responses.
+        # Keep that diagnostic visible without treating it as a missing
+        # required histogram. Preserve the original sideband audit policy.
+        diagnostics = [k for k in failed if full_spectrum
+                       and k.startswith('PDF_scale_factorisation/')]
+        failed = [k for k in failed if k not in diagnostics]
+        if failed:
+            details = '; '.join(f'{k}: {audit.entries[k].missing}' for k in failed)
+            raise base.WorkflowError(f'{era}/{window["region"]}: failed required audits: {details}')
+        ch = channels[era]
+        diagnostic_info = []
+        for key in diagnostics:
+            entry = audit.entries[key]
+            process = key.split('/', 1)[1]
+            messages = [message for message in ch.warnings
+                        if message.startswith(f'The {process} diagonal scale variation ')]
+            diagnostic_info.append(dict(check=key, found=entry.found, expected=entry.expected,
+                                        labels=list(entry.missing), messages=messages))
+            print(f'[SCALE DIAGNOSTIC] {era}/{window["region"]}: {key}; '
+                  + (' '.join(messages) or ', '.join(entry.missing)))
+        stats = base.qcd_root_window_statistics(inputs, low, high, ch.raw_rates['QCD'])
+        responses = np.asarray(stats['gradient']) @ factor
+        # A free normalisation may absorb transport/NF terms ONLY if their
+        # response is a mass-independent factor over every included region.
+        axis = inputs[1].GetXaxis()
+        first, last = axis.FindFixBin(low+1e-8), axis.FindFixBin(high-1e-8)
+        gradients = [float(h.Integral(first, last)) for h in inputs[2][6:8]]
+        if ch.raw_rates['QCD'] > 0:
+            transfer_ratios.append([g/ch.raw_rates['QCD'] for g in gradients])
+        elif any(abs(g) > 1e-12 for g in gradients):
+            raise ValueError('QCD transport is not a pure normalisation at zero nominal yield.')
+        row = dict(window, channel=f'bin_{era}_{window["region"]}', era=era,
+                   rates=dict(ch.raw_rates), nuisances=ch.nuisances,
+                   qcd_modes=responses.tolist(),
+                   qcd_shape=max(ch.qcd_shape_sigma_down or 0., ch.qcd_shape_sigma_up or 0.),
+                   dy_stat=(ch.dy_nf_amc or 0.)*(ch.dy_lightjet_error or 0.),
+                   dy_nf=ch.dy_nf_amc, warnings=ch.warnings)
+        rows.append(row)
+        audits.append(dict(era=era, region=window['region'], requirements=len(audit.entries),
+                           diagnostic_failures=diagnostic_info))
+    return dict(era=era, rows=rows, input_audits=audits, transfer_ratios=transfer_ratios)
 
-    Explicit windows are used by the full-spectrum workflow. Omitting them
-    retains the hypothesis-specific SR/sideband study and its checks.
-    """
-    base.prepare_resolution_coefficients(args)
-    rows, era_info, audits = [], {}, []
+
+def assemble_model(args, opt, mass, parts, full_spectrum=False):
+    """Assemble disjoint parts, preserving the original joint nuisance model."""
+    rows = [row for part in parts for row in part['rows']]
+    audits = [audit for part in parts for audit in part['input_audits']]
+    era_info = {}
     for era in base.target_years(opt.target):
-        if era not in files:
-            raise base.WorkflowError(f'Missing simulated signal for {era}, M={mass}.')
+        transfer_ratios = [ratio for part in parts if part['era'] == era
+                           for ratio in part['transfer_ratios']]
         sigma = mass*base.relative_resolution(args, era, mass)
-        windows = (windows_by_era[era] if windows_by_era is not None else
-                   regions(common_edges(reader, args, era, files[era]), mass, sigma,
-                           opt.sr_nsigma, opt.exclude_nsigma, opt.bin_width, opt.outer_nsigma))
-        qfile = base.file_for_process(args, era, 'QCD', '', 'nominal')
-        inputs = base.read_qcd_stat_inputs(reader._file(qfile), era, base.hist_path(args.region))
-        qother = base.file_for_process(args, era, 'QCD', '', 'qcd')
-        if inputs[0] != base.read_qcd_stat_metadata(reader._file(qother), era, base.hist_path(args.region)):
-            raise ValueError(f'{era}: stale nominal/systematic QCD metadata')
-        factor = covariance_factor(inputs[0]['fit']['covariance'])
-        transfer_ratios = []
-        for window in windows:
-            low, high = window['low'], window['high']
-            channels, audit = base.build_channels_for_mass(reader, args, mass, files, [era], windows={era: (low, high)})
-            failed = [k for k, v in audit.entries.items() if v.found != v.expected]
-            # The diagonal scale pair is validation-only. In a spectrum bin,
-            # its response need not equal the product of the two axis responses.
-            # Keep that diagnostic visible without treating it as a missing
-            # required histogram. Preserve the original sideband audit policy.
-            diagnostics = [k for k in failed if windows_by_era is not None
-                           and k.startswith('PDF_scale_factorisation/')]
-            failed = [k for k in failed if k not in diagnostics]
-            if failed:
-                details = '; '.join(f'{k}: {audit.entries[k].missing}' for k in failed)
-                raise base.WorkflowError(f'{era}/{window["region"]}: failed required audits: {details}')
-            ch = channels[era]
-            diagnostic_info = []
-            for key in diagnostics:
-                entry = audit.entries[key]
-                process = key.split('/', 1)[1]
-                messages = [message for message in ch.warnings
-                            if message.startswith(f'The {process} diagonal scale variation ')]
-                diagnostic_info.append(dict(check=key, found=entry.found, expected=entry.expected,
-                                            labels=list(entry.missing), messages=messages))
-                print(f'[SCALE DIAGNOSTIC] {era}/{window["region"]}: {key}; '
-                      + (' '.join(messages) or ', '.join(entry.missing)))
-            stats = base.qcd_root_window_statistics(inputs, low, high, ch.raw_rates['QCD'])
-            responses = np.asarray(stats['gradient']) @ factor
-            # A free normalisation may absorb transport/NF terms ONLY if their
-            # response is a mass-independent factor over every included region.
-            axis = inputs[1].GetXaxis()
-            first, last = axis.FindFixBin(low+1e-8), axis.FindFixBin(high-1e-8)
-            gradients = [float(h.Integral(first, last)) for h in inputs[2][6:8]]
-            if ch.raw_rates['QCD'] > 0:
-                transfer_ratios.append([g/ch.raw_rates['QCD'] for g in gradients])
-            elif any(abs(g) > 1e-12 for g in gradients):
-                raise ValueError('QCD transport is not a pure normalisation at zero nominal yield.')
-            row = dict(window, channel=f'bin_{era}_{window["region"]}', era=era,
-                       rates=dict(ch.raw_rates), nuisances=ch.nuisances,
-                       qcd_modes=responses.tolist(),
-                       qcd_shape=max(ch.qcd_shape_sigma_down or 0., ch.qcd_shape_sigma_up or 0.),
-                       dy_stat=(ch.dy_nf_amc or 0.)*(ch.dy_lightjet_error or 0.),
-                       dy_nf=ch.dy_nf_amc, warnings=ch.warnings)
-            rows.append(row)
-            audits.append(dict(era=era, region=window['region'], requirements=len(audit.entries),
-                               diagnostic_failures=diagnostic_info))
         if transfer_ratios and not np.allclose(transfer_ratios, transfer_ratios[0], rtol=1e-5, atol=1e-10):
             raise ValueError(f'{era}: QCD transfer changes shape; cannot absorb it into a free normalisation.')
         selected = [r for r in rows if r['era'] == era]
+        if not selected:
+            raise ValueError(f'{era}: no prepared bins.')
         if not np.allclose([r['dy_nf'] for r in selected], selected[0]['dy_nf'], rtol=1e-6):
             raise ValueError(f'{era}: DY NF is not constant across regions.')
         has_left = any(r['region'].startswith('L') for r in selected)
@@ -258,10 +285,10 @@ def build_model(reader, args, opt, mass, files, windows_by_era=None):
         signal_sb = sum(r['rates']['sig'] for r in selected if r['region'] != 'SR')
         era_info[era] = dict(sigma=sigma, sidebands='two-sided' if has_left and has_right else 'left-only' if has_left else 'right-only',
                             signal_sb_over_sr=signal_sb/signal_sr if signal_sr else None)
-        if windows_by_era is None:
+        if not full_spectrum:
             print(f'[REGIONS] {era} M{mass:g}: sigma={sigma:.5g}, {era_info[era]["sidebands"]}, {len(selected)-1} SB bins, S_SB/S_SR={era_info[era]["signal_sb_over_sr"]}')
     raw_sr = sum(r['rates']['sig'] for r in rows
-                 if windows_by_era is not None or r['region'] == 'SR')
+                 if full_spectrum or r['region'] == 'SR')
     if raw_sr <= 0:
         raise ValueError('No signal in the combined signal window.')
     alpha_unit = args.alpha_card_yield/raw_sr
@@ -275,13 +302,30 @@ def build_model(reader, args, opt, mass, files, windows_by_era=None):
         group = norm_name('QCD', row['era'], opt.norm_scope)
         groups.setdefault(group, []).append(row)
     diagnostics = {g: separation_diagnostic(rs) for g, rs in groups.items()}
-    if windows_by_era is None and any(not d['identifiable'] for d in diagnostics.values()):
+    if not full_spectrum and any(not d['identifiable'] for d in diagnostics.values()):
         raise ValueError(f'QCD/DY not separately identifiable: {diagnostics}. Widen sidebands or reconsider the model; no automatic regularisation.')
     return dict(schema_version=SCHEMA, blind=True, observation='nominal_background_Asimov',
                 target=opt.target, mass=mass, alpha_internal_unit=alpha_unit,
                 settings=vars(opt), domain=list(DOMAIN), eras=era_info, rows=rows,
                 separation=diagnostics, input_audits=audits,
                 uncertainty_model='QCD: shared SS-fit covariance modes + coherent absolute functional envelope; DY source stats independent in disjoint regions; pure QCD/DY normalisation priors replaced by free scales.')
+
+
+
+def build_model(reader, args, opt, mass, files, windows_by_era=None):
+    """Prepare and assemble bins locally, with the same path as batch workers."""
+    base.prepare_resolution_coefficients(args)
+    parts = []
+    for era in base.target_years(opt.target):
+        if era not in files:
+            raise base.WorkflowError(f'Missing simulated signal for {era}, M={mass}.')
+        sigma = mass*base.relative_resolution(args, era, mass)
+        windows = (windows_by_era[era] if windows_by_era is not None else
+                   regions(common_edges(reader, args, era, files[era]), mass, sigma,
+                           opt.sr_nsigma, opt.exclude_nsigma, opt.bin_width, opt.outer_nsigma))
+        parts.append(build_bin_rows(reader, args, opt, mass, files, era, windows,
+                                    full_spectrum=windows_by_era is not None))
+    return assemble_model(args, opt, mass, parts, full_spectrum=windows_by_era is not None)
 
 
 def card_text(model, normalisation_kappa=None, prefix='SB'):

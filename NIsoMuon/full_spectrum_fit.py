@@ -26,7 +26,8 @@ def make_parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
     p.add_argument('--target', type=shared.single_target, default='Run2Run3')
-    p.add_argument('--stage', choices=('cards', 'fit', 'all'), default='all')
+    p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'collect'), default='all')
+    p.add_argument('--backend', choices=('local', 'condor'), default='local')
     p.add_argument('--base-dir', default=base.DEFAULT_BASE_DIR)
     p.add_argument('--sigfit-dir', default='./sigfit_inputs')
     p.add_argument('--resolution-map')
@@ -41,6 +42,18 @@ def make_parser():
     p.add_argument('--output-base', default='full_spectrum_outputs')
     p.add_argument('--overwrite', action='store_true', help='Rebuild an existing mass directory and invalidate its old fits.')
     p.add_argument('--dry-run', action='store_true', help='Print planned commands without ROOT, template reads or fitting.')
+    batch = p.add_argument_group('Condor: independent era/mass-bin preparation, then joint fit')
+    batch.add_argument('--bins-per-job', type=int, default=1)
+    batch.add_argument('--condor-dir', help='New batch directory; also identifies a batch for status/resume/collect.')
+    batch.add_argument('--condor-dry-run', action='store_true', help='Prepare the real DAG and manifest without submitting (reads nominal axes).')
+    batch.add_argument('--condor-maxjobs', type=int, default=100, help='Maximum simultaneous DAG nodes; 0 leaves scheduling to the pool.')
+    batch.add_argument('--condor-memory', type=int, default=4000, help='Memory request per job in MB.')
+    batch.add_argument('--condor-retries', type=int, default=2)
+    batch.add_argument('--condor-requirements', default='')
+    batch.add_argument('--condor-cmssw-base')
+    batch.add_argument('--condor-scram-arch')
+    batch.add_argument('--condor-worker', help=argparse.SUPPRESS)
+    batch.add_argument('--condor-index', type=int, help=argparse.SUPPRESS)
     return p
 
 
@@ -107,14 +120,20 @@ def model_directory(opt, mass):
 
 
 def signature(opt):
-    ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base'}
-    return {k: v for k,v in vars(opt).items() if k not in ignored}
+    ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base',
+               'backend', 'bins_per_job'}
+    return {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
 
 
 def build_model(reader, args, opt, mass, files, windows):
     # The shared builder requires these only for its original sideband mode.
     study = argparse.Namespace(**vars(opt), norm_scope='era')
     model = shared.build_model(reader, args, study, mass, files, windows_by_era=windows)
+    return decorate_model(model, opt, windows)
+
+
+def decorate_model(model, opt, windows):
+    """Apply full-spectrum metadata after all raw bins are assembled."""
     model.update(schema_version=SCHEMA, fit_kind='full_spectrum', settings=vars(opt),
                  signal_normalisation_domain=list(DOMAIN),
                  uncertainty_model=('Step 1: broad QCD/DY/tt normalisations; inherited template '
@@ -259,32 +278,76 @@ def invalidate_fits(directory):
             path.unlink()
 
 
+def prepare_inputs(reader, args, opt):
+    signals = base.scan_signal_files(args)
+    base.prepare_resolution_coefficients(args)
+    if not signals:
+        raise ValueError('No simulated signal files found.')
+    reference = signals[min(signals)]
+    windows = {}
+    for era in base.target_years(opt.target):
+        if era not in reference:
+            raise ValueError(f'Missing reference signal in {era}.')
+        edges = shared.common_edges(reader, args, era, reference[era])
+        windows[era] = resolution_bins(edges,
+            lambda m, era=era: m*base.relative_resolution(args, era, m), opt.bin_sigma)
+        print(f'[BINS] {era}: {len(windows[era])} bins over 11--80 GeV', flush=True)
+    return signals, windows
+
+
+def save_model(model, opt, mass, directory):
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    invalidate_fits(directory)
+    text = shared.card_text(model, normalisation_kappa=opt.norm_prior, prefix='FS')
+    nominal = shared.nominal_predictions(text)
+    for row in model['rows']:
+        if not math.isclose(nominal[row['channel']], row['asimov'], rel_tol=1e-10, abs_tol=1e-12):
+            raise ValueError('Serialized nominal prediction differs from background Asimov.')
+    model['card_sha256'] = hashlib.sha256(text.encode()).hexdigest()
+    model['signature'] = signature(opt)
+    (directory/'datacard.txt').write_text(text)
+    (directory/'model.json').write_text(json.dumps(model, indent=2, allow_nan=False)+'\n')
+
+
+def run_fit(model, directory, opt):
+    directory = Path(directory)
+    fit_dir = directory/f'fit_r{base.mass_label(opt.inject_r)}'
+    fit_dir.mkdir(exist_ok=True)
+    commands = fit_commands(opt, model['mass'], directory)
+    (fit_dir/'commands.json').write_text(json.dumps(commands, indent=2)+'\n')
+    for name in ('workspace.root', 'fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json'):
+        (fit_dir/name).unlink(missing_ok=True)
+    for i, command in enumerate(commands):
+        base.run_command(command, fit_dir, stdout_path=fit_dir/f'step{i}.log')
+    extract_summary(model, directory, opt)
+
+
 def main(argv=None):
     opt = make_parser().parse_args(argv)
+    if opt.condor_worker:
+        import full_spectrum_condor as batch
+        batch.run_worker(Path(opt.condor_worker), opt.condor_index)
+        return 0
+    if opt.stage in ('status', 'resume', 'collect'):
+        import full_spectrum_condor as batch
+        return batch.manage(opt)
     args = configuration(opt)
     if opt.dry_run:
         for mass in opt.masses:
             print('[PLAN] blinded full spectrum, era channels, QCD/DY/tt lnN', opt.norm_prior)
             print(json.dumps(fit_commands(opt, mass, model_directory(opt,mass)), indent=2))
         return 0
+    if opt.backend == 'condor':
+        import full_spectrum_condor as batch
+        batch.submit(opt, args)
+        return 0
     reader = None
     try:
         signals, windows = None, {}
         if opt.stage in ('cards', 'all'):
             reader = shared.BlindedReader()
-            signals = base.scan_signal_files(args)
-            base.prepare_resolution_coefficients(args)
-            # A fixed reference determines binning for every hypothesis, even
-            # when running just one mass. All other axes are checked on read.
-            if not signals:
-                raise ValueError('No simulated signal files found.')
-            reference = signals[min(signals)]
-            for era in base.target_years(opt.target):
-                if era not in reference:
-                    raise ValueError(f'Missing reference signal in {era}.')
-                edges = shared.common_edges(reader,args,era,reference[era])
-                windows[era] = resolution_bins(edges,
-                    lambda m, era=era: m*base.relative_resolution(args,era,m), opt.bin_sigma)
+            signals, windows = prepare_inputs(reader, args, opt)
         for mass in opt.masses:
             directory = model_directory(opt,mass)
             if signals is not None:
@@ -298,15 +361,7 @@ def main(argv=None):
                 if found is None:
                     raise ValueError(f'No simulated signal at M={mass}; intermediate-mass interpolation is a later step.')
                 model = build_model(reader,args,opt,mass,signals[found],windows)
-                text = shared.card_text(model, normalisation_kappa=opt.norm_prior, prefix='FS')
-                nominal = shared.nominal_predictions(text)
-                for row in model['rows']:
-                    if not math.isclose(nominal[row['channel']], row['asimov'], rel_tol=1e-10, abs_tol=1e-12):
-                        raise ValueError('Serialized nominal prediction differs from background Asimov.')
-                model['card_sha256'] = hashlib.sha256(text.encode()).hexdigest()
-                model['signature'] = signature(opt)
-                (directory/'datacard.txt').write_text(text)
-                (directory/'model.json').write_text(json.dumps(model, indent=2, allow_nan=False)+'\n')
+                save_model(model, opt, mass, directory)
             else:
                 model = load_model(directory,opt)
             fit_dir = directory/f'fit_r{base.mass_label(opt.inject_r)}'
@@ -314,11 +369,7 @@ def main(argv=None):
             commands = fit_commands(opt,mass,directory)
             (fit_dir/'commands.json').write_text(json.dumps(commands, indent=2)+'\n')
             if opt.stage in ('fit', 'all'):
-                for name in ('workspace.root', 'fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json'):
-                    (fit_dir/name).unlink(missing_ok=True)
-                for i,command in enumerate(commands):
-                    base.run_command(command,fit_dir,stdout_path=fit_dir/f'step{i}.log')
-                extract_summary(model,directory,opt)
+                run_fit(model, directory, opt)
             print('[SAVED]', directory)
         return 0
     finally:
