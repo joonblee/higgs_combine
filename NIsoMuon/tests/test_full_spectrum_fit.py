@@ -153,15 +153,15 @@ class GeometryTests(unittest.TestCase):
         self.assertFalse(any(w['region'].startswith('L') for w in fs.window_bins(grid,11.,14.)))
         self.assertFalse(any(w['region'].startswith('R') for w in fs.window_bins(grid,76.,80.)))
 
-    def test_nested_sideband_presets_share_sr_and_have_exact_reference_ratios(self):
+    def test_nested_sideband_presets_share_sr_and_preserve_saved_geometry(self):
         presets=fs.SIDEBAND_PRESETS
-        self.assertEqual({k:len(v)-1 for k,v in presets.items()},dict(central=20,fine=40,coarse=10))
-        self.assertTrue(set(presets['coarse']) < set(presets['central']) < set(presets['fine']))
+        self.assertEqual({k:len(v)-1 for k,v in presets.items()},dict(central=20,fine=40,coarse=15,verycoarse=10))
+        self.assertTrue(set(presets['verycoarse']) < set(presets['coarse']) < set(presets['central']) < set(presets['fine']))
         self.assertTrue(all(b-a==1. for a,b in zip(presets['central'],presets['central'][1:]) if b<=20.))
         grid=np.round(np.arange(11.,80.001,.02),8)
         paths=set()
         signatures=[]
-        for name in ('central','fine','coarse'):
+        for name in presets:
             opt=fs.make_parser().parse_args(['--fit-layout','window','--sideband-binning',name])
             fs.configuration(opt)
             paths.add(fs.model_directory(opt,30))
@@ -170,8 +170,22 @@ class GeometryTests(unittest.TestCase):
                 bins=fs.window_bins(grid,low,high,fs.sideband_reference(opt))
                 self.assertEqual([(w['low'],w['high']) for w in bins if w['region']=='SR'],[(low,high)])
                 self.assertEqual(sum(w['high']-w['low'] for w in bins),69.)
-        self.assertEqual(len(paths),3)
-        self.assertEqual(len({json.dumps(s,sort_keys=True) for s in signatures}),3)
+        self.assertEqual(len(paths),4)
+        self.assertEqual(len({json.dumps(s,sort_keys=True) for s in signatures}),4)
+        # Renaming a preset must not change the geometry/signature of saved cards.
+        for name,edges in (
+                ('coarse',[11.,12.,13.,14.,15.,16.,17.,18.,19.,20.,22.,26.,30.,40.,60.,80.]),
+                ('verycoarse',list(fs.SIDEBAND_EDGES[::2]))):
+            named=fs.make_parser().parse_args(['--fit-layout','window','--sideband-binning',name])
+            custom=copy.copy(named)
+            custom.sideband_binning='central'
+            custom.sideband_edges=edges
+            self.assertEqual(fs.sideband_reference(named),edges)
+            self.assertEqual(fs.signature(named),fs.signature(custom))
+            self.assertEqual(fs.model_directory(named,30),fs.model_directory(custom,30))
+            for low,high in ((11.,13.),(28.3,31.7),(76.,80.)):
+                self.assertEqual(fs.window_bins(grid,low,high,fs.sideband_reference(named)),
+                                 fs.window_bins(grid,low,high,edges))
         # A custom-edge saved model predating named presets stays compatible.
         old=copy.copy(opt)
         old.sideband_edges=[11.,15.,20.,25.,30.,40.,50.,60.,80.]

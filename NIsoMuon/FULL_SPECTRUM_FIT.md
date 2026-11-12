@@ -27,6 +27,8 @@ python3 full_spectrum_fit.py --masses 30 --target full --fit-layout window \
     --sideband-binning fine
 python3 full_spectrum_fit.py --masses 30 --target full --fit-layout window \
     --sideband-binning coarse
+python3 full_spectrum_fit.py --masses 30 --target full --fit-layout window \
+    --sideband-binning verycoarse
 ```
 
 `--sideband-binning central` is the default for window layout. Motivated by
@@ -38,18 +40,24 @@ not an optimisation on the original per-era templates.
 | --- | ---: | --- |
 | central | 20 | 1-GeV widths from 11--20, 2 GeV from 20--30, 5 GeV from 30--40, 10 GeV from 40--80 |
 | fine | 40 | Bisect every central reference bin |
-| coarse | 10 | Merge adjacent central reference bins in pairs |
+| coarse | 15 | Previous medium15 custom grid; retain 1-GeV low-mass bins |
+| verycoarse | 10 | Previous coarse preset; merge adjacent central reference bins in pairs |
 
 Central edges: **11,12,13,14,15,16,17,18,19,20,22,24,26,28,30,35,40,50,60,70,80 GeV**.
-Coarse edges: **11,13,15,17,19,22,26,30,40,60,80 GeV**. Coarse bins can cross a
+Coarse edges: **11,12,13,14,15,16,17,18,19,20,22,26,30,40,60,80 GeV**.
+Verycoarse edges: **11,13,15,17,19,22,26,30,40,60,80 GeV**. Verycoarse bins can cross a
 width-transition boundary such as 20 GeV to preserve the exact pair merging.
-The presets are nested. Their exact factor-of-two bin counts apply to the
-reference grids; after SR insertion, native-grid snapping and fragment merging,
-the actual sideband counts need not have an exact factor-of-two ratio. The SR
-boundaries are identical in all three cases.
+The presets are nested: verycoarse, coarse, central, fine. Reference counts
+are before SR insertion, native-grid snapping and fragment merging; actual
+sideband counts can differ. The SR boundaries are identical in all four cases.
+The default remains central. `coarse` reproduces the earlier medium15 custom
+edges exactly, including the geometry hash and saved-model signature;
+`verycoarse` reproduces the previous coarse geometry. Existing batch snapshots
+retain their original definitions. Use verycoarse to reproduce an old coarse
+run with the updated source.
 
 Override central with `--sideband-edges 11,15,20,25,30,40,50,60,80` to reproduce
-the earlier proposal. Custom edges cannot be combined with fine/coarse presets.
+the earlier proposal. Custom edges cannot be combined with fine/coarse/verycoarse presets.
 Edges must be finite, strictly increasing and span 11--80.
 `--sideband-refine 2` remains available to subdivide each selected reference
 interval in two before snapping it to the common native grid.
@@ -494,6 +502,42 @@ Use the same physics/input options as the original card. The new batch copies
 the verified card and model and runs only the joint fit.
 
 ## Scope and verification
+
+### Continuing from the completed M30 medium15 batch
+
+Use the new `coarse` preset as the working binning. The previous M30 medium15
+custom-edge card is compatible, so its input preparation need not be repeated.
+From `NIsoMuon`, after updating the source and activating CMSSW/Combine:
+
+```bash
+# Check the same geometry at the low/high representative signal masses.
+python3 full_spectrum_fit.py --masses 12,70 --target full \
+    --fit-layout window --sideband-binning coarse \
+    --condor-dir full_spectrum_outputs/condor/M12_M70_coarse_r0
+
+# Structural signal-recovery check; reuse the completed M30 medium15 card.
+python3 full_spectrum_fit.py --masses 30 --target full --stage fit \
+    --fit-layout window --sideband-binning coarse --inject-r 1 \
+    --output-base full_spectrum_outputs/condor/M30_binning_medium15/results \
+    --condor-dir full_spectrum_outputs/condor/M30_coarse_r1
+```
+
+The second command creates a separate fit-only batch; the existing r=0 results
+are preserved. With the same input options, `fit_s` should recover the injected
+r=1 within numerical precision. `fit_b` fixes r=0 and can shift background
+parameters to accommodate the injected signal. Internal r=1 is 25 signal
+events summed over all eras and the entire 11--80 GeV domain, including
+sidebands. This same-model Asimov check does not measure toy bias or validate
+background modelling.
+
+Complete the binning comparison using normalisation correlations and total SR
+background uncertainties (including covariance), then study DY/QCD closure.
+Use the closure results to settle the shape-uncertainty model before running
+alternative-background and signal-injection toys. Choose injection sizes
+relative to sensitivity at each mass rather than treating 25 events as a
+universal benchmark. Expected limits and impacts follow those checks. The
+current full-spectrum CLI does not yet implement those closure/toy/limit
+stages; its `fit` stage runs Asimov FitDiagnostics only.
 
 This implements the first structural step. Existing experimental/theory
 responses and statistical inputs are retained. Additional DY closure and QCD

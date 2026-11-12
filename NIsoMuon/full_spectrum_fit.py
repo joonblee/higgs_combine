@@ -25,7 +25,8 @@ SIDEBAND_PRESETS = {
     'central': SIDEBAND_EDGES,
     'fine': tuple(sorted((*SIDEBAND_EDGES,
                          *((a+b)/2 for a,b in zip(SIDEBAND_EDGES,SIDEBAND_EDGES[1:]))))),
-    'coarse': SIDEBAND_EDGES[::2],
+    'coarse': tuple(float(x) for x in range(11,21)) + (22.,26.,30.,40.,60.,80.),
+    'verycoarse': SIDEBAND_EDGES[::2],
 }
 
 
@@ -44,8 +45,9 @@ def make_parser():
     p.add_argument('--fit-layout', choices=('spectrum', 'window'), default='spectrum',
                    help='spectrum: existing resolution bins; window: one SR count plus coarse sidebands.')
     p.add_argument('--sr-nsigma', type=shared.finite_positive, default=5.)
-    p.add_argument('--sideband-binning', choices=('central','fine','coarse'), default='central',
-                   help='Window-layout sidebands: central has 20 reference bins, fine 40, coarse 10.')
+    p.add_argument('--sideband-binning', choices=tuple(SIDEBAND_PRESETS), default='central',
+                   help='Window-layout sidebands: central has 20 reference bins, fine 40, '
+                        'coarse 15 (previous medium15), verycoarse 10 (previous coarse).')
     p.add_argument('--sideband-edges', type=base.parse_float_list,
                    help='Custom reference edges in GeV (overrides central); must span 11--80.')
     p.add_argument('--sideband-refine', type=int, default=1,
@@ -163,7 +165,7 @@ def sideband_reference(opt):
     preset = getattr(opt,'sideband_binning','central')
     if explicit is not None:
         if preset != 'central':
-            raise ValueError('Use either --sideband-edges or --sideband-binning fine/coarse.')
+            raise ValueError('Use either --sideband-edges or --sideband-binning fine/coarse/verycoarse.')
         return list(explicit)
     return list(SIDEBAND_PRESETS[preset])
 
