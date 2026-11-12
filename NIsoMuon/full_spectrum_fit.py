@@ -60,6 +60,12 @@ def make_parser():
                    help='Test only: multiply the target bin width by four; retain all fit diagnostics and systematics.')
     p.add_argument('--norm-prior', type=shared.finite_positive, default=1.5,
                    help='lnN kappa for each independent process/era QCD, DY and tt scale (>1).')
+    p.add_argument('--dy-shape-uncertainty', type=float, default=0.,
+                   help='Explicit review study: independent era/bin DY lnN shifts (e.g. 0.30 gives 0.70/1.30); 0 preserves the existing model.')
+    p.add_argument('--dy-normalisation', choices=('prior','free'), default='prior',
+                   help='prior: existing DY lnN; free: one unconstrained DY rateParam per era.')
+    p.add_argument('--dy-norm-max', type=shared.finite_positive, default=10.,
+                   help='Upper numerical bound of a free DY scale; not a prior.')
     p.add_argument('--inject-r', type=float, default=0., help='Asimov signal strength, e.g. 0 or 1.')
     p.add_argument('--r-max', type=shared.finite_positive, default=100.)
     p.add_argument('--output-base', default='full_spectrum_outputs')
@@ -92,6 +98,11 @@ def configuration(opt):
             raise ValueError('Window layout uses --sideband-edges/--sideband-refine, not --fast-mode/--bin-sigma.')
     if opt.norm_prior <= 1:
         raise ValueError('--norm-prior must exceed one.')
+    dy_unc = getattr(opt, 'dy_shape_uncertainty', 0.)
+    if not math.isfinite(dy_unc) or (dy_unc != 0 and not .30 <= dy_unc < 1.):
+        raise ValueError('--dy-shape-uncertainty must be zero or in [0.30, 1).')
+    if not math.isfinite(getattr(opt,'dy_norm_max',10.)) or getattr(opt, 'dy_norm_max', 10.) <= 1:
+        raise ValueError('--dy-norm-max must exceed one.')
     if not math.isfinite(opt.inject_r) or not 0 <= opt.inject_r < opt.r_max:
         raise ValueError('Require 0 <= inject-r < r-max.')
     if not opt.masses or len(set(opt.masses)) != len(opt.masses) or any(
@@ -213,17 +224,27 @@ def model_directory(opt, mass):
         geometry = [sideband_reference(opt),opt.sideband_refine,opt.sideband_fragment_fraction]
         code = hashlib.sha256(json.dumps(geometry).encode()).hexdigest()[:10]
         tag = f'{opt.target}_window{base.mass_label(opt.sr_nsigma)}sigma_sb{code}_lnN{base.mass_label(opt.norm_prior)}'
-        return Path(opt.output_base).resolve()/tag/f'M{base.mass_label(mass)}'
+        return Path(opt.output_base).resolve()/(tag+dy_study_tag(opt))/f'M{base.mass_label(mass)}'
     tag = f'{opt.target}_binsigma{base.mass_label(effective_bin_sigma(opt))}_lnN{base.mass_label(opt.norm_prior)}'
     if getattr(opt, 'fast_mode', False):
         tag += '_fast'
-    return Path(opt.output_base).resolve()/tag/f'M{base.mass_label(mass)}'
+    return Path(opt.output_base).resolve()/(tag+dy_study_tag(opt))/f'M{base.mass_label(mass)}'
+
+
+def dy_study_tag(opt):
+    tag = ''
+    if getattr(opt, 'dy_shape_uncertainty', 0.):
+        tag += '_DYshape'+base.mass_label(opt.dy_shape_uncertainty)
+    if getattr(opt, 'dy_normalisation', 'prior') == 'free':
+        tag += '_DYfree'+base.mass_label(opt.dy_norm_max)
+    return tag
 
 
 def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
-               'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning'}
+               'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
+               'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max'}
     result = {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
     # Preserve compatibility with existing full-resolution saved models.
     if getattr(opt, 'fast_mode', False):
@@ -232,6 +253,10 @@ def signature(opt):
         for name in ('fit_layout','sr_nsigma','sideband_edges','sideband_refine','sideband_fragment_fraction'):
             result[name] = getattr(opt,name)
         result['sideband_edges'] = sideband_reference(opt)
+    if getattr(opt, 'dy_shape_uncertainty', 0.):
+        result['dy_shape_uncertainty'] = opt.dy_shape_uncertainty
+    if getattr(opt, 'dy_normalisation', 'prior') == 'free':
+        result.update(dy_normalisation='free', dy_norm_max=opt.dy_norm_max)
     return result
 
 
@@ -274,6 +299,23 @@ def decorate_model(model, opt, windows):
     model['normalisations'] = {
         normalisation_name(p,e): dict(process=p, era=e, kappa=opt.norm_prior)
         for e in model['eras'] for p in MAJOR}
+    dy_unc = getattr(opt, 'dy_shape_uncertainty', 0.)
+    for row in model['rows']:
+        row['nuisances'] = {k:v for k,v in row['nuisances'].items()
+                            if not k.startswith('CMS_NPS26009_DYClosure_')}
+        if dy_unc:
+            name = f'CMS_NPS26009_DYClosure_{row["era"]}_{row["region"]}'
+            row['nuisances'][name] = {'DY': f'{1-dy_unc:.17g}/{1+dy_unc:.17g}'}
+    if getattr(opt, 'dy_normalisation', 'prior') == 'free':
+        for era in model['eras']:
+            model['normalisations'][normalisation_name('DY',era)] = dict(
+                process='DY', era=era, kappa=None, kind='rateParam', bounds=[0.,opt.dy_norm_max])
+    model['dy_review_study'] = dict(relative_bin_uncertainty=dy_unc,
+        correlation='independent per era and fit bin; all 11--80 GeV bins',
+        normalisation=getattr(opt,'dy_normalisation','prior'),
+        zero_yield='existing additive DY source statistics retained; relative shifts do not create a nonzero nominal')
+    if dy_unc or getattr(opt,'dy_normalisation','prior')=='free':
+        model['uncertainty_model'] += ' Explicit DY review: independent era/bin closure shifts; DY normalisation '+getattr(opt,'dy_normalisation','prior')+'.'
     # A broad prior regularises degenerate shapes; do not claim the data alone
     # separated the processes. Report the three-component nominal information.
     model['separation'] = {}
@@ -358,6 +400,24 @@ def poi_diagnostics(fit, name='r'):
     }
 
 
+def normalisation_diagnostics(parameter, specification, covariance_error=None):
+    value = float(parameter.getVal())
+    error = float(parameter.getError()) if covariance_error is None else covariance_error
+    if specification.get('kind') == 'rateParam':
+        low, high = specification['bounds']
+        return dict(specification, theta=value, theta_error=error, scale=value,
+            scale_low=value-error, scale_high=value+error, constraint=None,
+            parameterisation='free multiplicative scale; theta aliases the scale',
+            at_boundary=min(abs(value-low),abs(value-high)) < 1e-4,
+            hessian_interval_outside_bounds=value-error<low or value+error>high,
+            nearest_bound_distance_over_sigma=min(abs(value-low),abs(value-high))/error if error>0 else None,
+            interval_method='symmetric Hessian approximation; not a profile interval or a prior constraint')
+    kappa = specification['kappa']
+    return dict(specification, theta=value, theta_error=error,
+        scale=kappa**value, scale_low=kappa**(value-error), scale_high=kappa**(value+error),
+        constraint=error, interval_method='transformed symmetric Hessian error; not a profile interval')
+
+
 def extract_summary(model, directory, opt, fit_kind=None):
     """Report both fits, all norm pulls/constraints and their correlations."""
     import ROOT
@@ -395,11 +455,10 @@ def extract_summary(model, directory, opt, fit_kind=None):
             for name, specification in model['normalisations'].items():
                 if name not in by_name:
                     raise ValueError('Normalisation missing from fit: '+name)
-                theta, error = float(by_name[name].getVal()), float(by_name[name].getError())
-                kappa = specification['kappa']
-                info['normalisations'][name] = dict(specification, theta=theta, theta_error=error,
-                    scale=kappa**theta, scale_low=kappa**(theta-error), scale_high=kappa**(theta+error),
-                    constraint=error, interval_method='transformed symmetric Hessian error; not a profile interval')
+                variance=float(fit.covarianceMatrix()[indices[name]][indices[name]])
+                if not math.isfinite(variance) or variance<0:
+                    raise ValueError('Invalid normalisation covariance: '+name)
+                info['normalisations'][name] = normalisation_diagnostics(by_name[name], specification, math.sqrt(variance))
             covariance = fit.covarianceMatrix()
             for a in model['normalisations']:
                 i = indices[a]

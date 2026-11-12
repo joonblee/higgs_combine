@@ -367,9 +367,16 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
         for era in sorted({r['era'] for r in rows}):
             for process in ('QCD', 'DY', 'tt'):
                 name = f'CMS_NPS26009_inSituNorm_{process}_BJetOS_{era}'
-                lines.append(name+' lnN '+' '.join(
-                    f(normalisation_kappa) if r['era'] == era and p == process else '-'
-                    for r, p in columns))
+                specification = model.get('normalisations', {}).get(name, {})
+                if specification.get('kind') == 'rateParam':
+                    lo, hi = specification['bounds']
+                    for row in rows:
+                        if row['era'] == era:
+                            lines.append(f'{name} rateParam {row["channel"]} {process} 1 [{f(lo)},{f(hi)}]')
+                else:
+                    lines.append(name+' lnN '+' '.join(
+                        f(normalisation_kappa) if r['era'] == era and p == process else '-'
+                        for r, p in columns))
     params = set()
     for row in rows:
         era, channel = row['era'], row['channel']

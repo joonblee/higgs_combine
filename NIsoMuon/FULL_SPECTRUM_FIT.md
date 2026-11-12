@@ -615,6 +615,127 @@ uncertainties, or test the SS-data analytic fit/extrapolation. Those are
 separate checks. Inspect `closure_summary.json`, ratios and finite-MC errors
 before settling a DY/QCD shape-uncertainty prescription and running toys.
 
+### Reviewer studies: joint QCD response, DY30 with free normalisation, bias toys
+
+The following are explicit studies; all existing commands retain their original
+physics model unless the new DY options are supplied. No blinded OS data are
+read. Start in `NIsoMuon` with CMSSW/Combine activated.
+
+First, profile the coherent QCD envelope, correlated SS-fit modes and QCD
+normalisation together against the MC transport residual:
+
+```bash
+python3 qcd_joint_closure.py --model-roots \
+    full_spectrum_outputs/condor/M12_M70_coarse_r0/results \
+    full_spectrum_outputs/condor/M30_binning_medium15/results \
+    --closure-json full_spectrum_outputs/closure_coarse/closure_summary.json \
+    --output full_spectrum_outputs/qcd_joint_check.json
+```
+
+This local SciPy calculation profiles the actual clipped QCD response in a
+Gaussian approximation to an expected fit. Its covariance includes finite-MC
+transport errors and nominal total-count Poisson variances. Other background
+responses are fixed. It reports both the current lnN(1.5) normalisation and
+an unconstrained-scale cross-check. The output is a screening diagnostic, not
+an exact Poisson Combine fit, a coverage p-value or a background-model approval.
+Undefined MC ratios are listed as excluded; sparse expected-count bins are
+identified. Wider MC-only comparisons use 11--20, 20--30, 30--40, 40--60 and
+60--80 GeV where the stored intervals can be summed without splitting bins.
+
+Prepare a separate DY review model directly from the original saved cards:
+
+```bash
+python3 prepare_full_spectrum_review.py --model-roots \
+    full_spectrum_outputs/condor/M12_M70_coarse_r0/results \
+    full_spectrum_outputs/condor/M30_binning_medium15/results \
+    --output-base full_spectrum_outputs/review_dy30
+```
+
+The source `datacard.txt` must be present and match its saved model hash. This
+preserves every unrelated source nuisance line, including its existing naming
+and correlations. The preparation changes only:
+
+- DY normalisation: replace the broad lnN by one free scale per era, with
+  numerical range [0,10]; proximity to the bounds is reported.
+- DY shape: independent `0.70/1.30` lnN responses for every era/fit bin in the
+  entire 11--80 GeV domain. This implements a 30% floor without choosing an
+  arbitrary high-mass threshold. It is an explicit study prescription.
+
+The nominal yields, QCD modes/envelope and all existing statistical inputs
+are unchanged. DY_NFModel/NFStat remain excluded as in the existing in-situ
+model. Zero nominal DY retains its original additive source-statistical term;
+a relative closure shift does not create a nonzero central yield. Free-scale
+summary entries have `constraint: null`, because they have no Gaussian prior.
+
+Then submit **fit-only** Condor jobs (no raw input preparation):
+
+```bash
+python3 full_spectrum_fit.py --masses 12,30,70 --target full --stage fit \
+    --fit-layout window --sideband-binning coarse \
+    --dy-shape-uncertainty 0.30 --dy-normalisation free \
+    --output-base full_spectrum_outputs/review_dy30 \
+    --condor-dir full_spectrum_outputs/condor/M12_M30_M70_dy30_free
+```
+
+Model paths include `_DYshape0p3_DYfree10`; model signatures protect the chosen
+prescription. The fit batch snapshots the prepared cards. Check both fit
+qualities and free-DY bound proximity before using it as a toy fit model.
+
+For a small runtime/convergence pilot **after those fits pass**, submit:
+
+```bash
+python3 full_spectrum_toys.py --results \
+    full_spectrum_outputs/condor/M12_M30_M70_dy30_free/results \
+    --toys 10 --toys-per-job 5 --multipliers 0,1,2 \
+    --batch full_spectrum_outputs/condor/review_toy_pilot
+```
+
+This creates 18 independent Condor chunks and 90 toy fits for three masses and
+three injection levels. Injections are 0,1,2 times each new model's positive
+profile error (a sensitivity reference, not r95), so the signal event yields
+are mass dependent. A negative fit-r range is chosen from that error and the
+nominal Poisson-mean positivity bound. Generation uses nonnegative r and
+fixed nominal truth nuisances (`--toysNoSystematics`); fitting profiles all
+nuisances. Sources and fit/truth workspaces are snapshotted, checksummed and
+transferred. `--dry-run` prepares submission files without queueing jobs.
+
+Default toy fits use `--noErrors --minos none` to measure minimum-only empirical
+bias efficiently. They do not test per-toy covariance quality, pulls or interval
+coverage. `--toy-errors` also runs HESSE, but the bias summary deliberately uses
+the empirical distribution rather than RooRealVar.getError(). After the pilot,
+increase the toy count in a new batch only if fit quality and runtime permit.
+For later `0,r95,2*r95` studies, `--injection-r-json` accepts a JSON mapping
+from mass labels to explicit injection lists, overriding `--multipliers`.
+Supply the blinded expected-r95 values of the new model, not old counting-only
+limits. The profile error still determines the default negative fit-r range.
+Collect with:
+
+```bash
+python3 full_spectrum_toys.py --stage collect \
+    --batch full_spectrum_outputs/condor/review_toy_pilot
+```
+
+`toy_summary.json` preserves failed, missing and boundary toy counts. It reports
+the mean fitted r, its empirical spread and the Monte Carlo error on the mean
+bias. Any failed/missing/boundary fits mark the ensemble incomplete. No automatic
+pass/fail bias threshold is imposed.
+
+For alternative-background toys, `--truth-json` is supported for a single saved
+model. The JSON must contain its `mass`, exact `fit_card_sha256`, and a `factors`
+mapping from channel names to nonnegative background process factors. Example
+structure (replace the hash and use a reviewed alternative shape):
+
+```json
+{"mass":30,"fit_card_sha256":"<exact saved fit-card hash>",
+ "factors":{"bin_2018_SR":{"QCD":1.2,"DY":0.9}}}
+```
+
+Only the generator workspace gets these extra fixed-truth rate factors; toys
+are fitted with the nominal study workspace. Unspecified factors remain one.
+This interface does not turn sparse or negative weighted-MC closure ratios into
+a physical truth shape automatically. Select and validate the alternative
+before interpreting its toy result as a modelling-bias test.
+
 This implements the first structural step. Existing experimental/theory
 responses and statistical inputs are retained. Additional DY closure and QCD
 transport shape uncertainties, alternative-background bias tests, final signal
