@@ -536,8 +536,84 @@ Use the closure results to settle the shape-uncertainty model before running
 alternative-background and signal-injection toys. Choose injection sizes
 relative to sensitivity at each mass rather than treating 25 events as a
 universal benchmark. Expected limits and impacts follow those checks. The
-current full-spectrum CLI does not yet implement those closure/toy/limit
-stages; its `fit` stage runs Asimov FitDiagnostics only.
+current full-spectrum CLI's `fit` stage runs Asimov FitDiagnostics only.
+The separate MC-only shape-closure tool below provides the next diagnostic;
+alternative-background toys and final limits remain subsequent work.
+
+### Audit saved fits without refitting
+
+`full_spectrum_fit.py` now records three distinct POI error definitions:
+
+| Field | Meaning |
+| --- | --- |
+| `r_error` | Legacy `RooRealVar.getError()` value; not a profile interval |
+| `r_covariance_error` | Square root of the r diagonal of the covariance matrix |
+| `r_profile_error_low/high` | Stored signed lower / positive upper asymmetric errors |
+| `r_profile_crossing_low/high` | Best-fit r plus the corresponding stored error |
+
+Missing profile crossings are null. A stored asymmetric error of zero is not
+reported as a measured zero uncertainty. None of these fields is a CLs limit.
+Old batch snapshots and their summaries remain immutable. To audit their ROOT
+results with the updated error definitions, and compare the central/coarse SR
+bands without rerunning Combine minimisation:
+
+```bash
+python3 full_spectrum_audit.py --results \
+    full_spectrum_outputs/condor/M30_binning_central/results \
+    full_spectrum_outputs/condor/M30_binning_medium15/results \
+    --samples 5000 --seed 123456 \
+    --output-base full_spectrum_outputs/audit_M30_binning
+```
+
+This runs locally inside the existing CMSSW/Combine environment. It reads the
+saved workspace and fit covariance, and writes a new `fit_audit.json`. Each
+era's SR total background and the combined SR sum are sampled jointly. The
+combined error includes cross-era correlations. This is Gaussian nuisance
+covariance propagation through the original nonlinear yield functions, not
+new pseudo-data, a fit, or a model-bias test. Draws are untruncated and any
+draws outside original nuisance ranges are counted. Results also include
+local linear propagation at two finite-difference steps and four block RMS
+estimates to diagnose sampling precision. Clipped zero-yield responses need
+the nonlinear result; local derivatives alone can be misleading.
+
+`--samples 0` (default) only reads saved bands and RooFitResults, without
+deserialising the Combine workspace. It requires PyROOT but not the Combine
+library. Neither mode rewrites saved summaries, cards, or ROOT files.
+
+### MC-only shape transport closure
+
+Use the exact saved coarse geometry at all three representative masses:
+
+```bash
+python3 background_shape_closure.py --model-roots \
+    full_spectrum_outputs/condor/M12_M70_coarse_r0/results \
+    full_spectrum_outputs/condor/M30_binning_medium15/results \
+    --output-base full_spectrum_outputs/closure_coarse
+```
+
+No signal templates or fit rerun are needed. The tool reads only the nominal
+NLO DY and QCD inclusive MC files, in read-only mode. It produces separate
+JSON results and PDF/PNG plots for every era, process and mass geometry:
+
+- DY: OS light-jet mass shape, matched to OS b-jet DY MC over 11--80 GeV.
+- QCD: SS b-jet mass shape, matched to OS b-jet QCD MC over 11--80 GeV.
+
+The normalisation is removed separately for each era/process; the remaining
+residual tests shape transport relevant to the in-situ normalisation model.
+The covariance includes the correlation induced by using the same MC bins
+in the integral-matching factor. It assumes the source/target categories are
+disjoint. Weighted Sumw2 statistics, including signed bins, are preserved.
+Nonpositive source bins have null ratio entries; nonpositive full-domain
+integrals are reported as inconclusive rather than clipped or silently passed.
+The covariance-rank chi-square is a first-order diagnostic, not an automatic
+low-statistics p-value or a prescription for additional nuisance parameters.
+
+Only native-bin-aligned intervals are accepted. `--base-dir` can override the
+MC location stored in the model, and `--no-plots` writes JSON alone. The tool
+does not open collision data, update anchors/templates, assign new shape
+uncertainties, or test the SS-data analytic fit/extrapolation. Those are
+separate checks. Inspect `closure_summary.json`, ratios and finite-MC errors
+before settling a DY/QCD shape-uncertainty prescription and running toys.
 
 This implements the first structural step. Existing experimental/theory
 responses and statistical inputs are retained. Additional DY closure and QCD

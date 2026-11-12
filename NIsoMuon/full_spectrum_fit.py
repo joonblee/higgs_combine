@@ -324,6 +324,40 @@ def fit_card_text(text):
     return 'shapes * * FAKE\n'+text
 
 
+def poi_diagnostics(fit, name='r'):
+    """Keep the reported error, covariance error and profile crossings distinct.
+
+    Near a bounded POI, RooRealVar.getError() need not equal sqrt(V_ii).
+    A zero asymmetric error does not identify a measured crossing.
+    """
+    parameters = fit.floatParsFinal()
+    indices = {str(p.GetName()): i for i, p in enumerate(parameters)}
+    if name not in indices:
+        return {}
+    index = indices[name]
+    parameter = parameters[index]
+    value = float(parameter.getVal())
+    variance = float(fit.covarianceMatrix()[index][index])
+    if not math.isfinite(variance) or variance < 0:
+        raise ValueError('Invalid POI covariance variance: '+name)
+    lower, upper = float(parameter.getMin()), float(parameter.getMax())
+    lo = float(parameter.getAsymErrorLo()) if parameter.hasAsymError() else 0.
+    hi = float(parameter.getAsymErrorHi()) if parameter.hasAsymError() else 0.
+    return {
+        name: value,
+        name+'_error': float(parameter.getError()),  # legacy field, not a profile interval
+        name+'_error_method': 'RooRealVar.getError(); use covariance/profile fields for interpretation',
+        name+'_covariance_error': math.sqrt(variance),
+        name+'_profile_error_low': lo if lo < 0 else None,
+        name+'_profile_error_high': hi if hi > 0 else None,
+        name+'_profile_crossing_low': value+lo if lo < 0 else None,
+        name+'_profile_crossing_high': value+hi if hi > 0 else None,
+        name+'_profile_note': 'Missing crossings are null; never interpret a stored zero error as zero uncertainty.',
+        name+'_range': [lower, upper],
+        name+'_at_boundary': abs(value-lower) < 1e-5 or abs(value-upper) < 1e-5,
+    }
+
+
 def extract_summary(model, directory, opt, fit_kind=None):
     """Report both fits, all norm pulls/constraints and their correlations."""
     import ROOT
@@ -380,8 +414,7 @@ def extract_summary(model, directory, opt, fit_kind=None):
                 workspace.var('r').setVal(0.)
             info['r'] = float(workspace.var('r').getVal())
             if 'r' in by_name:
-                info['r_error'] = float(by_name['r'].getError())
-                info['r_at_boundary'] = abs(info['r']) < 1e-5 or abs(info['r']-opt.r_max) < 1e-5
+                info.update(poi_diagnostics(fit))
             info['bins'] = []
             for row in model['rows']:
                 yields = {}
