@@ -978,3 +978,54 @@ dependency completion IDs rejecting stale children. Use `--dry-run` to prepare
 without submitting, `--task limits` or `--task impacts` to select one calculation,
 and optionally `--max-jobs 100` to cap simultaneous DAG nodes. Default memory
 is 16000 MB per job. Do not submit a resume DAG while the original DAG is active.
+
+### Diagnose the conditional-toy bias with the same saved datasets
+
+`complete: false` in `toy_summary.json` may mean failed fits even when every
+chunk has returned. The bias and its standard error currently use successful
+fits only. First list failed chunk/entry IDs and the original ensemble summaries:
+
+```bash
+python3 full_spectrum_toy_refits.py --stage audit \
+    --source-batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_toy100
+```
+
+Refit the saved datasets with strategy 2, tighter minimiser tolerance (`1e-4`),
+a matching fallback and a larger call budget. The original injected starting
+value, signed POI range, nuisance model, seed and ordering within each saved
+chunk are preserved. No `GenerateOnly` command is run. Compare all toys, not
+only failures, to check numerical stability of the successful fits as well:
+
+```bash
+python3 full_spectrum_toy_refits.py --stage refit \
+    --source-batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_toy100 \
+    --batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_toy100_refit \
+    --selection all
+
+# After the comparison jobs finish
+python3 full_spectrum_toy_refits.py --stage collect \
+    --batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_toy100_refit
+```
+
+For the 900-toy, five-toys-per-chunk pilot this submits 180 independent Condor
+chunks. Default memory is 16000 MB per job. The wrapper transfers the saved
+GenerateOnly datasets and fit workspaces; use the initialised Combine CMSSW
+environment. `--dry-run` prepares without submitting. `--selection failed` can
+instead select chunks containing failures; it also refits the successful toys
+inside those chunks and is not an unbiased control selection over the ensemble.
+
+`toy_refit_summary.json` records recovered failures, newly failed fits, paired
+changes in fitted r, and before/after ensemble bias and dispersion. It includes
+all completed selected refits, even those that regress, rather than choosing a
+result by whether it moves towards the injected signal. Pending chunks prevent
+publication of a mixed partial ensemble bias estimate. Original archives and
+summaries are not overwritten. The comparison fits keep the original error
+calculation setting; by default this is a minimum-only numerical check, not a
+pull or confidence-interval coverage test.
+
+If fitted r changes materially on the same datasets, inspect minimisation and
+remaining failures before increasing the ensemble. If results remain stable
+but the negative mean bias persists, more independent toys can reduce its
+sampling uncertainty; they cannot by themselves remove estimator bias. Check
+profile-interval coverage before interpreting a stable shift as a limit bias.
+There is no automatic subtraction of the measured bias from limits.
