@@ -1152,3 +1152,37 @@ Other inference/toy workflows retain their existing quality checks.
 Use `--fit-components b-only` or `--fit-components s-only` to rerun only one
 failed hypothesis. Each mass then has workspace, selected fit and summary
 nodes; no template preparation, limits or impacts are repeated.
+
+## Impact crossing defaults and isolated comparison
+
+Impact scans now default to Combine's `--stepSize 0.1` and
+`--setCrossingTolerance 1e-4`; minimiser strategy/tolerance and interval audits
+are unchanged. `limit_workflow.py` exposes `--impact-step-size` and
+`--impact-crossing-tolerance` for explicit numerical studies. Existing source
+snapshots and running commands do not change when the checkout is updated.
+
+To compare only unfinished final-impact repairs while the original jobs run:
+
+```bash
+python3 full_spectrum_impact_repair.py \
+  --source-batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_inference \
+  --batch full_spectrum_outputs/condor/M12_M30_M70_impact_defaultCrossing_compare \
+  --indices 2221,2983,4524
+```
+
+This submits three independent Condor jobs. Each validates and copies completed
+initial/nuisance scan inputs into its own directory, recollects the original
+scans, and runs the existing repair/validation pipeline with the new crossing
+settings. It does not modify the original batch or consume its running repair
+outputs. Already successful parent scans are retained; limits and the 4510
+nuisance jobs are not resubmitted. The numerical comparison is independent;
+results are not automatically substituted into the old batch or selected by
+which finishes first. Compare validated intervals/impacts when both are ready.
+
+```bash
+python3 full_spectrum_impact_repair.py --stage collect \
+  --batch full_spectrum_outputs/condor/M12_M30_M70_impact_defaultCrossing_compare
+```
+
+Fine M70 FitDiagnostics covariance audits are separate and should remain
+running; this impact crossing study is not a speed fix for those jobs.

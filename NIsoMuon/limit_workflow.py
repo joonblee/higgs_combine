@@ -122,7 +122,7 @@ python3 -u limit_workflow.py \
    INTERNAL r is explicit, including M12 in every target; --impact-parallel 40
    runs at most 40 nuisance fits for the current mass/target, not 40 targets.
    The driver uses -t -1 --expectSignal 0, robustFit 1, strategy 1, tolerance
-   1e-4 and crossing tolerance 1e-8, then validates/repairs nuisance intervals
+   1e-4 and crossing tolerance 1e-4, then validates/repairs nuisance intervals
    and the POI interval. Nominal yield safety can clip the requested lower
    bound, and lower-bound checks can trigger an automatic full-range retry.
 
@@ -3891,7 +3891,7 @@ def repair_impact_initial_poi(args, card, target, label, mass, outdir,
                    "--cminDefaultMinimizerStrategy", "2",
                    "--cminDefaultMinimizerTolerance", "1e-4",
                    "--setRobustFitStrategy", "2", "--setRobustFitTolerance", "1e-4",
-                   "--setCrossingTolerance", "1e-8", "--stepSize", "0.02",
+                   *impact_scan_options(args),
                    "--cminFallbackAlgo", "Minuit2,Migrad,1:1e-4",
                    *explicit_range_args(rmin, upper, card)]
         if args.mode == "blind":
@@ -4578,7 +4578,7 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
               "--cminDefaultMinimizerStrategy", "2",
               "--cminDefaultMinimizerTolerance", "1e-4",
               "--setRobustFitStrategy", "2", "--setRobustFitTolerance", "1e-4",
-              "--setCrossingTolerance", "1e-12", "--stepSize", "0.02",
+              *impact_scan_options(args),
               *explicit_range_args(rmin, rmax, card)]
     # Review S+B impacts use the same repair logic with their original injected
     # signal. Never substitute background-only Asimov data during a retry.
@@ -4734,6 +4734,14 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
     return payload
 
 
+def impact_scan_options(args):
+    step = float(getattr(args, "impact_step_size", 0.1))
+    tolerance = float(getattr(args, "impact_crossing_tolerance", 1e-4))
+    if not all(math.isfinite(x) and x > 0 for x in (step, tolerance)):
+        raise WorkflowError("Impact step size and crossing tolerance must be finite and positive")
+    return ["--stepSize", str(step), "--setCrossingTolerance", str(tolerance)]
+
+
 def impact_common_command(args, card, target, label, mass, workspace, rmin, rmax):
     injection = float(getattr(args, "impact_expect_signal", 0.0))
     if not math.isfinite(injection) or injection < 0:
@@ -4741,7 +4749,7 @@ def impact_common_command(args, card, target, label, mass, workspace, rmin, rmax
     command = [
         "combineTool.py", "-M", "Impacts", "-d", str(workspace),
         "-m", format_mass_for_combine(mass),
-        "--robustFit", "1", "--setCrossingTolerance", "1e-8",
+        "--robustFit", "1", *impact_scan_options(args),
         "--cminDefaultMinimizerStrategy", "1", "--cminDefaultMinimizerTolerance", "1e-4",
         "--setRobustFitStrategy", "1", "--setRobustFitTolerance", "1e-4",
         "--setParameters", f"r={injection:.12g}", *explicit_range_args(rmin, rmax, card),
@@ -5936,6 +5944,10 @@ def build_parser() -> argparse.ArgumentParser:
     combine.add_argument("--impact-masses", type=parse_float_list, default=None)
     combine.add_argument("--run-impacts-all-masses", dest="run_impacts_all_masses", action="store_true", default=True)
     combine.add_argument("--no-run-impacts-all-masses", dest="run_impacts_all_masses", action="store_false")
+    combine.add_argument("--impact-step-size", type=float, default=0.1,
+                         help="Robust impact crossing search step size (Combine default: 0.1).")
+    combine.add_argument("--impact-crossing-tolerance", type=float, default=1e-4,
+                         help="Robust impact crossing tolerance (Combine default: 1e-4).")
     combine.add_argument("--impact-parallel", type=int, default=1,
                          help="Local-only: concurrent nuisance fits per target/mass (requires --local).")
     combine.add_argument("--repair-impacts", action="store_true",
