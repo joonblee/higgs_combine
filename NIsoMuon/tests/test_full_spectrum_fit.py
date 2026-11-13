@@ -242,7 +242,8 @@ class CardTests(unittest.TestCase):
         native=SimpleNamespace(GetXaxis=lambda:axis)
         derivative=SimpleNamespace(Integral=lambda a,b:.2*(b-a+2e-8))
         inputs=(metadata,native,[None]*6+[derivative,derivative])
-        reader=SimpleNamespace(_file=lambda path:object())
+        reader=SimpleNamespace(_file=lambda path:object(),qcd_inputs=lambda filename,path,era:
+            base.read_qcd_stat_inputs(object(),era,path))
         def channel_builder(reader,args,mass,files,eras,windows):
             low,high=windows['2018']
             width=high-low

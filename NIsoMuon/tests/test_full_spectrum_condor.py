@@ -47,6 +47,19 @@ class FakeReader:
 
 
 class CondorTests(unittest.TestCase):
+    def test_worker_reuses_common_dependency_checks_and_workspace_hash(self):
+        opt,args,payload=self.make_batch()
+        self.workers(payload,'prepare');self.workers(payload,'assemble');self.run_fits(payload)
+        job=next(j for j in payload['jobs'] if j['kind']=='summarize')
+        original=Path.open;workspace_reads=[]
+        def opened(path,*args,**kwargs):
+            if path.name=='workspace.root' and args and args[0]=='rb':
+                workspace_reads.append(str(path))
+            return original(path,*args,**kwargs)
+        with patch.object(Path,'open',new=opened):
+            batch.run_worker(Path(payload['batch']),job['index'])
+        self.assertEqual(len(workspace_reads),1)
+
     def test_limits_only_graph_has_no_diagnostic_fit_or_summary(self):
         opt,args,payload=self.make_batch('limits_only',extra=(
             '--fit-components','none','--expected-limits'))
@@ -537,7 +550,7 @@ class CondorTests(unittest.TestCase):
 class ReaderTests(unittest.TestCase):
     def test_qcd_validation_cached_across_bins_but_integrals_recomputed(self):
         reader=object.__new__(shared.BlindedReader)
-        reader.qcd_input_cache={}
+        reader.validated_input_cache={}
         inputs=object()
         with patch.object(shared.BlindedReader,'_file',return_value=object()), \
              patch.object(base,'read_qcd_stat_inputs',return_value=inputs) as read, \

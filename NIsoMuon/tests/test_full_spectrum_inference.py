@@ -17,6 +17,37 @@ from test_condor_impacts import IMPACT_TOOL, PLOT_IMPACTS
 
 
 class InferenceTests(unittest.TestCase):
+    def test_worker_checks_own_dependency_inputs_not_other_masses(self):
+        payload = self.prepare()
+        job = next(j for j in payload['jobs'] if j['kind']=='impact_initial' and j['mass']==12.)
+        unrelated = next(j for j in payload['jobs'] if j['mass']==30.)
+        Path(unrelated['workspace']).write_text('unrelated input changed')
+        original = Path.open
+        reads = []
+        def opened(path, *args, **kwargs):
+            if str(path)==job['workspace'] and args and args[0]=='rb':
+                reads.append(str(path))
+            return original(path, *args, **kwargs)
+        with patch.object(Path,'open',new=opened):
+            inf.worker(self.batch,job['index'])
+        self.assertEqual(len(reads),1)
+        self.assertEqual(json.loads((Path(job['workdir'])/'status.json').read_text())['state'],'success')
+        # Collection must still validate all mass hypotheses.
+        with self.assertRaisesRegex(ValueError,'workspace changed'):
+            inf.report(self.batch)
+
+    def test_worker_rejects_input_mutation_during_cached_validation(self):
+        payload = self.prepare()
+        job = next(j for j in payload['jobs'] if j['kind']=='impact_initial')
+        def initial(payload,args,row,directory):
+            product=directory/'product';product.write_text('result')
+            Path(row['workspace']).write_text('changed during worker execution')
+            return dict(files=[str(product)])
+        with patch.object(inf,'initial_job',side_effect=initial):
+            with self.assertRaisesRegex(inf.base.WorkflowError,'Input changed during validation'):
+                inf.worker(self.batch,job['index'])
+        self.assertEqual(json.loads((Path(job['workdir'])/'status.json').read_text())['state'],'failed')
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='inference_')
         self.addCleanup(self.temporary.cleanup)

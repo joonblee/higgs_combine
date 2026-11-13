@@ -117,36 +117,19 @@ def regions(edges, mass, sigma, sr_nsigma=5., exclude_nsigma=5., width=2., outer
 
 class BlindedReader(base.RootReader):
     """Prevent target-data reads and enforce exactly disjoint input integrals."""
-    def __init__(self):
-        super().__init__()
-        self.qcd_input_cache = {}
-
-    def qcd_inputs(self, filename, template_path, era):
-        key = (filename, template_path, era)
-        if key not in self.qcd_input_cache:
-            self.qcd_input_cache[key] = base.read_qcd_stat_inputs(self._file(filename), era, template_path)
-        return self.qcd_input_cache[key]
-
-    def qcd_statistics(self, filename, template_path, low, high, era, nominal):
-        try:
-            inputs = self.qcd_inputs(filename, template_path, era)
-            return base.qcd_root_window_statistics(inputs, low, high, nominal)
-        except (ValueError, KeyError, TypeError, OverflowError) as exc:
-            raise base.WorkflowError(f'{filename}: {exc}') from exc
-
-    def close(self):
-        self.qcd_input_cache.clear()
-        super().close()
-
     def _file(self, filename):
         if Path(filename).name.lower() == 'data.root':
             raise base.WorkflowError('OS data.root is forbidden in this blinded workflow.')
         return super()._file(filename)
 
     def integral(self, filename, path, low, high):
+        if Path(filename).name.lower() == 'data.root':
+            raise base.WorkflowError('OS data.root is forbidden in this blinded workflow.')
+        key = (filename, path, round(low, 12), round(high, 12))
+        if key in self.integral_cache:
+            return self.integral_cache[key]
         if DOMAIN[0]-1e-7 <= low < high <= DOMAIN[1]+1e-7:
-            handle = self._file(filename)
-            hist = handle.Get(path) if handle else None
+            hist = self.histogram(filename, path)
             if hist and hasattr(hist, 'GetNbinsX'):
                 a, b = base.whole_bin_window(hist, low, high)
                 if abs(a-low) > 1e-7 or abs(b-high) > 1e-7:
@@ -211,9 +194,9 @@ def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=F
             reader = interpolation.SpectrumSignalReader(reader,args,args.signal_interpolation_anchors,mass,era)
     rows, audits = [], []
     qfile = base.file_for_process(args, era, 'QCD', '', 'nominal')
-    inputs = base.read_qcd_stat_inputs(reader._file(qfile), era, base.hist_path(args.region))
+    inputs = reader.qcd_inputs(qfile, base.hist_path(args.region), era)
     qother = base.file_for_process(args, era, 'QCD', '', 'qcd')
-    if inputs[0] != base.read_qcd_stat_metadata(reader._file(qother), era, base.hist_path(args.region)):
+    if inputs[0] != reader.qcd_inputs(qother, base.hist_path(args.region), era)[0]:
         raise ValueError(f'{era}: stale nominal/systematic QCD metadata')
     factor = covariance_factor(inputs[0]['fit']['covariance'])
     transfer_ratios = []

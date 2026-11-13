@@ -1113,6 +1113,8 @@ def nonfatal_or_raise(args: argparse.Namespace, message: str) -> None:
 # -------------------------------------------------------------------------------------------------
 
 class RootReader:
+    histogram_cache_limit = 512
+
     def __init__(self) -> None:
         try:
             import ROOT  # type: ignore
@@ -1129,6 +1131,8 @@ class RootReader:
             pass
         self.files: Dict[str, Any] = {}
         self.integral_cache: Dict[Tuple[str, str, float, float], Optional[YieldResult]] = {}
+        self.validated_input_cache = {}
+        self.histogram_cache = {}
 
     def close(self) -> None:
         for f in self.files.values():
@@ -1137,6 +1141,35 @@ class RootReader:
             except Exception:
                 pass
         self.files.clear()
+        self.integral_cache.clear()
+        self.validated_input_cache.clear()
+        self.histogram_cache.clear()
+
+    def validated_input(self, filename, key, loader):
+        """Validate immutable ROOT inputs once per reader, rejecting replacement."""
+        handle = self._file(filename)  # Apply a blinded reader's guard first.
+        def stamp():
+            try:
+                return _validation_stamp(filename)
+            except OSError:
+                return None
+        before = stamp()
+        cache = self.__dict__.setdefault('validated_input_cache', {})
+        cache_key = (filename, key)
+        if cache_key in cache:
+            previous, value = cache[cache_key]
+            if previous != before:
+                raise WorkflowError(f'Input changed after validation: {filename}')
+            return value
+        value = loader(handle)
+        if stamp() != before:
+            raise WorkflowError(f'Input changed during validation: {filename}')
+        cache[cache_key] = (before, value)
+        return value
+
+    def qcd_inputs(self, filename, template_path, era):
+        return self.validated_input(filename, ('qcd', template_path, era),
+            lambda handle: read_qcd_stat_inputs(handle, era, template_path))
 
     def _file(self, filename: str):
         if filename in self.files:
@@ -1155,11 +1188,7 @@ class RootReader:
         key = (filename, hist_path_in, round(low, 12), round(high, 12))
         if key in self.integral_cache:
             return self.integral_cache[key]
-        f = self._file(filename)
-        if f is None:
-            self.integral_cache[key] = None
-            return None
-        h = f.Get(hist_path_in)
+        h = self.histogram(filename, hist_path_in)
         if not h:
             self.integral_cache[key] = None
             return None
@@ -1180,10 +1209,20 @@ class RootReader:
         self.integral_cache[key] = result
         return result
 
+    def histogram(self, filename, path):
+        """Bounded LRU of histograms across window integrals; clear on close()."""
+        handle = self._file(filename)
+        cache = self.__dict__.setdefault('histogram_cache', {})
+        key = (filename, path)
+        value = cache.pop(key) if key in cache else (handle.Get(path) if handle else None)
+        cache[key] = value
+        if len(cache) > self.histogram_cache_limit:
+            cache.pop(next(iter(cache)))
+        return value
+
     def qcd_statistics(self, filename, template_path, low, high, era, nominal):
-        f = self._file(filename)
         try:
-            inputs = read_qcd_stat_inputs(f, era, template_path)
+            inputs = self.qcd_inputs(filename, template_path, era)
             return qcd_root_window_statistics(inputs, low, high, nominal)
         except (ValueError, KeyError, TypeError, OverflowError) as exc:
             raise WorkflowError(f"{era}: {filename}: {exc}") from exc
@@ -2883,7 +2922,7 @@ def apply_parameterisation(
 def read_dy_closure_inputs(reader, filename):
     """Read/audit the optional linear-closure protocol without touching OS data."""
     import dy_closure_shape
-    return dy_closure_shape.read_inputs(reader._file(filename))
+    return reader.validated_input(filename, ('dy_closure',), dy_closure_shape.read_inputs)
 
 
 def nuisance_global_name(local: str, year: str) -> str:
@@ -3397,7 +3436,7 @@ def build_cards(args: argparse.Namespace) -> List[CardInfo]:
                 for collection in ("nominal", "qcd"):
                     filename = file_for_process(args, year, "QCD", "", collection)
                     try:
-                        metadata.append(read_qcd_stat_metadata(reader._file(filename), year, hist_path(args.region)))
+                        metadata.append(reader.qcd_inputs(filename, hist_path(args.region), year)[0])
                     except (ValueError, KeyError, TypeError, OverflowError) as exc:
                         raise WorkflowError(f"{year}: {filename}: {exc}; existing cards were not removed.") from exc
                 if metadata[0] != metadata[1]:
@@ -4611,7 +4650,7 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
         context = {"mode": args.mode, "rmin": rmin, "rmax": rmax,
                    "expected_signal": expected_signal,
                    "initial_sha256": hashlib.sha256((outdir / initial).read_bytes()).hexdigest(),
-                   "workspace_sha256": (hashlib.sha256(workspace.read_bytes()).hexdigest()
+                   "workspace_sha256": (validation_digest(workspace)
                                         if workspace.exists() else None)}
         manifest = repair_dir / "retry_context.json"
         previous = json.loads(manifest.read_text()) if manifest.exists() else None
@@ -5332,7 +5371,7 @@ def submit_condor_workflow(args: argparse.Namespace) -> Path:
                      "-o", str(workspace)], directory)
         parameters = sorted(impact_workspace_parameters(workspace))
         initial = add_job("impact_initial", workspace=str(workspace),
-                          workspace_sha256=hashlib.sha256(workspace.read_bytes()).hexdigest())
+                          workspace_sha256=validation_digest(workspace))
         nuisance_jobs = [add_job("impact_nuisance", [initial["index"]], initial=initial["index"],
                                  nuisance=nuisance) for nuisance in parameters]
         add_job("impact_final", [initial["index"], *[j["index"] for j in nuisance_jobs]],
@@ -5452,7 +5491,14 @@ def validation_digest(path):
     if cache is not None and key in cache['digests']:
         return cache['digests'][key]
     _watch_validation_file(path)
-    value = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    before = _validation_stamp(path)
+    result = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for block in iter(lambda: stream.read(1024*1024), b''):
+            result.update(block)
+    if _validation_stamp(path) != before:
+        raise WorkflowError('Input changed during hashing: '+str(path))
+    value = result.hexdigest()
     if cache is not None:
         cache['digests'][key] = value
     return value
@@ -5515,7 +5561,7 @@ def condor_impact_context(payload, args, initial_index):
 
 def run_condor_impact_initial(args, job, card, label, mass, workdir):
     workspace = Path(job["workspace"])
-    if hashlib.sha256(workspace.read_bytes()).hexdigest() != job["workspace_sha256"]:
+    if validation_digest(workspace) != job["workspace_sha256"]:
         raise WorkflowError("Submitted impact workspace changed")
     target = job["target"]
     name = f".Impacts_{tag_for(args, target)}_M{label}"

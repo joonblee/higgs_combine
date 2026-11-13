@@ -29,11 +29,7 @@ SOURCES=('full_spectrum_toys.py','full_spectrum_audit.py','full_spectrum_fit.py'
 
 
 def digest(path):
-    value=hashlib.sha256()
-    with Path(path).open('rb') as stream:
-        for block in iter(lambda:stream.read(1024*1024),b''):
-            value.update(block)
-    return value.hexdigest()
+    return base.validation_digest(path)
 
 
 def manifest_digest(payload):
@@ -201,6 +197,11 @@ def collect(batch):
 
 
 def submit(opt):
+    with base.validation_cache():
+        return _submit(opt)
+
+
+def _submit(opt):
     if opt.toys<1 or opt.toys_per_job<1 or any(not math.isfinite(x) or x<0 for x in opt.multipliers):
         raise ValueError('Use positive toy counts and finite nonnegative injection multipliers.')
     batch=Path(opt.batch).resolve()
@@ -235,6 +236,7 @@ def submit(opt):
             base.run_command(['text2workspace.py',str(card),'-m',str(model['mass']),'-o',str(truth_workspace)],batch/'input',stdout_path=batch/'input'/('truth_'+label+'.log'))
             truth_label=Path(opt.truth_json).name;truth_hash=digest(Path(opt.truth_json))
         levels=[(None,float(v)) for v in injections[base.mass_label(model['mass'])]] if injections is not None else [(v,v*reference) for v in opt.multipliers]
+        input_hashes={str(p.relative_to(batch)):digest(p) for p in (copied,truth_workspace)}
         for multiplier,injection in levels:
             for start in range(0,opt.toys,opt.toys_per_job):
                 index=len(tasks)
@@ -245,7 +247,7 @@ def submit(opt):
                     toy_errors=opt.toy_errors,fit_card_sha256=summary['fit_card_sha256'],
                     truth_label=truth_label,truth_sha256=truth_hash,
                     fit_workspace=str(copied.relative_to(batch)),truth_workspace=str(truth_workspace.relative_to(batch)))
-                task['inputs']={p:digest(batch/p) for p in {task['fit_workspace'],task['truth_workspace']}}
+                task['inputs']=dict(input_hashes)
                 tasks.append(task);(batch/'jobs'/f'job_{index:05d}').mkdir()
     payload=dict(schema_version=1,blind=True,tasks=tasks,source_hashes=source_hashes)
     payload['manifest_sha256']=manifest_digest(payload)

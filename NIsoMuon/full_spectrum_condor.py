@@ -37,11 +37,7 @@ def digest(value):
 
 
 def file_hash(path):
-    result = hashlib.sha256()
-    with Path(path).open('rb') as stream:
-        for block in iter(lambda: stream.read(1024*1024), b''):
-            result.update(block)
-    return result.hexdigest()
+    return base.validation_digest(path)
 
 
 def write_json(path, value):
@@ -194,6 +190,7 @@ def completed(payload, job, cache=None):
         if (status.get('state') != 'success' or status.get('batch_id') != payload['batch_id']
                 or status.get('job_sha256') != digest(job)):
             raise ValueError('No valid completion')
+        base._watch_validation_file(path)
         for parent in job['dependencies']:
             previous = completed(payload, payload['jobs'][parent], cache)
             if not previous or status['dependency_completions'].get(str(parent)) != previous['completion_id']:
@@ -284,12 +281,13 @@ def run_worker(manifest, index):
                       state='running', started=time.time(), kind=job['kind'], index=index)
         write_json(directory/'status.json', status)
         try:
-            dependencies = {}
-            for parent in job['dependencies']:
-                previous = completed(payload, payload['jobs'][parent])
-                if not previous:
-                    raise ValueError(f'Dependency job {parent} is incomplete or stale.')
-                dependencies[str(parent)] = previous['completion_id']
+            dependencies, completion_cache = {}, {}
+            with base.validation_cache():
+                for parent in job['dependencies']:
+                    previous = completed(payload, payload['jobs'][parent], completion_cache)
+                    if not previous:
+                        raise ValueError(f'Dependency job {parent} is incomplete or stale.')
+                    dependencies[str(parent)] = previous['completion_id']
             opt, args = worker_options(payload)
             check_inputs(payload['preflight_inputs'])
             if job['kind'] == 'prepare':

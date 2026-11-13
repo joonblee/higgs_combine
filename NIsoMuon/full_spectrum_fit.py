@@ -851,7 +851,7 @@ def run_expected_limits(model, directory, opt):
     unit = model['alpha_internal_unit']
     payload = dict(blind=True, mass=mass, target=target, card_sha256=model['card_sha256'],
         fit_card_sha256=hashlib.sha256(card.read_bytes()).hexdigest(),
-        workspace_sha256=hashlib.sha256((fit_dir/'workspace.root').read_bytes()).hexdigest(),
+        workspace_sha256=base.validation_digest(fit_dir/'workspace.root'),
         alpha_internal_unit=unit, r=values, alpha={key:value*unit for key,value in values.items()})
     destination.write_text(json.dumps(payload, indent=2, allow_nan=False)+'\n')
     print(f'[LIMIT] M{mass:g}: median alpha={payload["alpha"]["exp0"]:.6g}')

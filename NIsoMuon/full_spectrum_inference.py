@@ -35,22 +35,48 @@ def manifest_digest(payload):
         if k != 'manifest_sha256'}, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
-def read_manifest(batch):
+def read_manifest(batch, index=None, check_inputs=True):
     batch = Path(batch).resolve()
     payload = json.loads((batch/'manifest.json').read_text())
     if payload.get('schema') != SCHEMA or payload.get('manifest_sha256') != manifest_digest(payload):
         raise ValueError('Invalid or modified inference manifest.')
+    if index is not None and (not isinstance(index,int) or not 0 <= index < len(payload['jobs'])):
+        raise ValueError('Invalid inference job index.')
+    if check_inputs:
+        _check_manifest_inputs(batch,payload,index)
+    return payload
+
+
+def _check_manifest_inputs(batch,payload,index=None):
     for name, expected in payload['source_hashes'].items():
         if digest(batch/name) != expected:
             raise ValueError('Submitted source changed: '+name)
-    checked = set()
-    for job in payload['jobs']:
+    selected = set()
+    def include(current):
+        if not isinstance(current, int) or not 0 <= current < len(payload['jobs']):
+            raise ValueError('Invalid inference job/dependency index.')
+        if current in selected:
+            return
+        selected.add(current)
+        row = payload['jobs'][current]
+        for parent in row.get('dependencies', []):
+            include(parent)
+        if 'initial' in row:
+            include(row['initial'])
+    if index is None:
+        selected.update(range(len(payload['jobs'])))
+    else:
+        include(index)
+    checked = {}
+    for current in sorted(selected):
+        job = payload['jobs'][current]
         for key in ('card', 'workspace'):
+            if job[key] in checked and checked[job[key]] != job[key+'_sha256']:
+                raise ValueError('Conflicting input fingerprints: '+job[key])
             if job[key] not in checked:
                 if digest(job[key]) != job[key+'_sha256']:
                     raise ValueError('Submitted card/workspace changed: '+job[key])
-                checked.add(job[key])
-    return payload
+                checked[job[key]] = job[key+'_sha256']
 
 
 def options(payload, job=None):
@@ -147,59 +173,82 @@ def initial_job(payload, args, job, directory):
 
 
 def worker(batch, index):
-    payload = read_manifest(batch)
-    job = payload['jobs'][index]
-    args = options(payload, job)
-    directory = Path(job['workdir'])
+    payload = read_manifest(batch,index=index,check_inputs=False)
+    directory = Path(payload['jobs'][index]['workdir'])
     with (directory/'worker.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         try:
-            base.completed_condor_job(payload, args, job)
-            print('[REUSE]', index)
-            return
-        except base.WorkflowError:
-            pass
-        status = dict(batch_id=payload['batch_id'], index=index, target=job['target'], mode='blind',
-            kind=job['kind'], card_sha256=job['card_sha256'], state='running')
-        status_path = directory/'status.json'
-        base.write_condor_status(status_path, status)
-        try:
+            with base.validation_cache():
+                _check_manifest_inputs(Path(batch).resolve(),payload,index)
+                return _worker(payload,index)
+        except base.WorkflowError as error:
+            # Cache exit checks run while the worker lock is still held.
+            if str(error).startswith('Input changed during validation:'):
+                path = directory/'status.json'
+                if path.is_file():
+                    status = json.loads(path.read_text())
+                    status.update(state='failed', error=str(error))
+                    base.write_condor_status(path, status)
+            raise
+
+
+def _worker(payload, index):
+    job = payload['jobs'][index]
+    args = options(payload, job)
+    directory = Path(job['workdir'])
+    try:
+        base.completed_condor_job(payload, args, job)
+        print('[REUSE]', index)
+        return
+    except base.WorkflowError:
+        pass
+    status = dict(batch_id=payload['batch_id'], index=index, target=job['target'], mode='blind',
+        kind=job['kind'], card_sha256=job['card_sha256'], state='running')
+    status_path = directory/'status.json'
+    base.write_condor_status(status_path, status)
+    try:
+        with base.validation_cache():
             if digest(job['card']) != job['card_sha256'] or digest(job['workspace']) != job['workspace_sha256']:
                 raise ValueError('Submitted card/workspace changed.')
             parents = {str(i): base.completed_condor_job(payload, args, payload['jobs'][i])['completion_id']
                        for i in job['dependencies']}
-            card = Path(job['card'])
-            mass, label = job['mass'], base.mass_label(job['mass'])
-            if job['kind'] == 'limits':
-                result = base.run_asymptotic(args, Path(job['workspace']), job['target'], label, mass, directory)
-                products = dict(expected=str(result.expected), files=[str(result.expected)])
-            elif job['kind'] == 'impact_initial':
-                products = initial_job(payload, args, job, directory)
-            elif job['kind'] == 'impact_nuisance':
-                products = base.run_condor_impact_nuisance(payload, args, job, card, label, mass, directory)
-            elif job['kind'] == 'impact_final':
-                products = base.run_condor_impact_final(payload, args, job, card, label, mass, directory)
-            elif job['kind'] == 'limit_plot':
-                rows = [payload['jobs'][i] for i in job['dependencies']]
-                outputs = [Path(base.completed_condor_job(payload, args, j)['expected']) for j in rows]
-                base.collect_and_plot_limits(args, job['target'], [Path(j['card']) for j in rows],
-                    outputs, outputs, directory)
-                prefix = directory/f'limits_{job["target"]}_alpha'
-                products = dict(files=[str(prefix.with_suffix(s)) for s in ('.json', '.pdf', '.png')])
-            else:
-                raise ValueError('Unknown job kind.')
-            if any(not Path(p).is_file() or Path(p).stat().st_size == 0 for p in products['files']):
-                raise ValueError('Missing/empty inference output.')
-            status.update(products, state='success', completion_id=uuid4().hex, dependency_completions=parents)
-        except Exception as error:
-            status.update(state='failed', error=str(error))
-            base.write_condor_status(status_path, status)
-            raise
+        card = Path(job['card'])
+        mass, label = job['mass'], base.mass_label(job['mass'])
+        if job['kind'] == 'limits':
+            result = base.run_asymptotic(args, Path(job['workspace']), job['target'], label, mass, directory)
+            products = dict(expected=str(result.expected), files=[str(result.expected)])
+        elif job['kind'] == 'impact_initial':
+            products = initial_job(payload, args, job, directory)
+        elif job['kind'] == 'impact_nuisance':
+            products = base.run_condor_impact_nuisance(payload, args, job, card, label, mass, directory)
+        elif job['kind'] == 'impact_final':
+            products = base.run_condor_impact_final(payload, args, job, card, label, mass, directory)
+        elif job['kind'] == 'limit_plot':
+            rows = [payload['jobs'][i] for i in job['dependencies']]
+            outputs = [Path(base.completed_condor_job(payload, args, j)['expected']) for j in rows]
+            base.collect_and_plot_limits(args, job['target'], [Path(j['card']) for j in rows],
+                outputs, outputs, directory)
+            prefix = directory/f'limits_{job["target"]}_alpha'
+            products = dict(files=[str(prefix.with_suffix(s)) for s in ('.json', '.pdf', '.png')])
+        else:
+            raise ValueError('Unknown job kind.')
+        if any(not Path(p).is_file() or Path(p).stat().st_size == 0 for p in products['files']):
+            raise ValueError('Missing/empty inference output.')
+        status.update(products, state='success', completion_id=uuid4().hex, dependency_completions=parents)
+    except Exception as error:
+        status.update(state='failed', error=str(error))
         base.write_condor_status(status_path, status)
-        print('[DONE]', job['kind'], job['target'], mass, job.get('injected_r'))
+        raise
+    base.write_condor_status(status_path, status)
+    print('[DONE]', job['kind'], job['target'], mass, job.get('injected_r'))
 
 
 def write_dag(batch, payload, resume=False):
+    with base.validation_cache():
+        return _write_dag(batch, payload, resume)
+
+
+def _write_dag(batch, payload, resume=False):
     lines = []
     for job in payload['jobs']:
         done = False

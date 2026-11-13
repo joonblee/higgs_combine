@@ -1233,6 +1233,23 @@ operation only. Watched file size/mtime/inode are checked before accepting the
 operation; concurrent input changes abort validation. No persistent cache or
 weaker acceptance criterion is introduced.
 
+Input preparation also reuses validated QCD derivatives and DY linear-closure
+inputs for the lifetime of one ROOT reader. Initial preparation and window
+statistics use the same QCD cache; different window integrals and propagated
+errors are still evaluated separately. Replacing an input after validation
+raises an error. A bounded 512-entry histogram LRU avoids repeated ROOT
+deserialisation across window integrations and is cleared when the reader closes.
+
+An inference worker checks the card/workspace inputs for its own dependency
+chain; status/collection still checks every mass. Worker validation, dependency
+traversal and resume planning share operation-local caches. Large ROOT-file
+hashes are streamed in 1 MiB blocks, with unchanged SHA-256 fingerprints and
+input-change detection. Toy submission and saved-toy refit preparation reuse
+workspace hashes across chunks; independent workers still verify their inputs.
+These changes do not modify fit objectives, tolerances, yields, nuisances or
+toy datasets. They apply to newly submitted source snapshots. Existing jobs
+and batches retain their submitted code.
+
 For a new fit-only batch that only needs background scales and constraints,
 add `--fit-output norms` to `full_spectrum_fit.py`. RooFitResult, covariance and
 normalisation extraction/audits remain enabled; `--saveShapes` and

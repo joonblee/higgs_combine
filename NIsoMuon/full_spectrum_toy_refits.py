@@ -154,6 +154,11 @@ def worker(path, index, destination):
 
 
 def prepare(opt):
+    with base.validation_cache():
+        return _prepare(opt)
+
+
+def _prepare(opt):
     source = Path(opt.source_batch).resolve()
     parent, rows, failures = original(source)
     selected = {f['chunk'] for f in failures}

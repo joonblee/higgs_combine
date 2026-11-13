@@ -15,6 +15,17 @@ import full_spectrum_toy_refits as refit
 
 
 class SavedToyRefits(unittest.TestCase):
+    def test_workspace_hash_is_shared_across_saved_toy_chunks(self):
+        original=Path.open;reads=[]
+        def opened(path,*args,**kwargs):
+            if path.name=='fit_abc.root' and args and args[0]=='rb':
+                reads.append(str(path))
+            return original(path,*args,**kwargs)
+        with patch.object(Path,'open',new=opened):
+            self.prepare()
+        self.assertEqual(len(reads),2) # original workspace + copied snapshot
+        self.assertEqual(len(set(reads)),2)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix='saved_refit_')
         self.addCleanup(self.temporary.cleanup)
