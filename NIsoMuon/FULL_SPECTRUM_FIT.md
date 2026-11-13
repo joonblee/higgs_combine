@@ -1237,3 +1237,25 @@ normalisation extraction/audits remain enabled; `--saveShapes` and
 existing output. Shape plots require full output. This option does not change
 the model signature, likelihood or nuisances. Use a new batch directory when
 changing diagnostic output; do not overwrite active results.
+
+## Dense expected limits without redundant FitDiagnostics
+
+For a resolution-spaced limit scan, read the frozen `mass_scan_grid.json`
+(229 hypotheses, approximately half a reference resolution apart), pass its
+masses with `--interpolate-signal`, and select
+`--fit-components none --expected-limits`. The Condor graph then prepares
+cards, builds workspaces and computes limits per mass without B/S diagnostics.
+The final tables node writes expected_limits.csv and a physical-alpha
+limits_TARGET_alpha.json/pdf/png. Limits are independently computed at each
+mass; no interpolation of limit values occurs. There is no normalisation table
+in this mode. Normal fit diagnostics remain the default.
+
+Representative impacts need completed B/S diagnostic summaries. Prepare a
+separate central-binning batch for masses 12,20,30,40,50,60,70 with
+`--interpolate-signal --fit-output norms`. This can run concurrently with the
+dense limit scan. After its validated summaries are ready, submit
+`full_spectrum_inference.py --task impacts --impact-injections 0,1` against
+only that representative batch's results. All masses/injections and nuisance
+jobs run independently subject to the initial-fit dependencies. The inference
+reader accepts externally supplied covariance only with the saved successful
+robustHesse audit; bare covQual=-1 is still rejected.

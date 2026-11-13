@@ -84,7 +84,10 @@ def input_case(path):
         raise ValueError('Missing saved workspace: '+str(workspace))
     for kind in ('fit_b', 'fit_s'):
         fit = summary['fits'][kind]
-        if fit['status'] != 0 or fit['covQual'] != 3:
+        audit = fit.get('covariance_audit', {})
+        external = (fit['covQual'] == -1 and audit.get('method') == 'robustHesse'
+                    and audit.get('validated') is True)
+        if fit['status'] != 0 or not (fit['covQual'] == 3 or external):
             raise ValueError('Failed Asimov fit quality: '+str(path))
     # The raw bounded RooRealVar error is deliberately never used as sensitivity.
     reference = summary['fits']['fit_s'].get('r_profile_error_high')

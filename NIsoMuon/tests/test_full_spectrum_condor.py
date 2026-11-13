@@ -47,6 +47,32 @@ class FakeReader:
 
 
 class CondorTests(unittest.TestCase):
+    def test_limits_only_graph_has_no_diagnostic_fit_or_summary(self):
+        opt,args,payload=self.make_batch('limits_only',extra=(
+            '--fit-components','none','--expected-limits'))
+        kinds=[j['kind'] for j in payload['jobs']]
+        self.assertNotIn('fit_b',kinds)
+        self.assertNotIn('fit_s',kinds)
+        self.assertNotIn('summarize',kinds)
+        workspace=next(j for j in payload['jobs'] if j['kind']=='workspace')
+        limit=next(j for j in payload['jobs'] if j['kind']=='limits')
+        self.assertEqual(limit['dependencies'],[workspace['index']])
+        self.assertEqual(payload['jobs'][-1]['kind'],'tables')
+        opt.output_base=str(self.root/'table_inputs')
+        directory=fs.model_directory(opt,30)/'fit_r0'/'limits'
+        directory.mkdir(parents=True)
+        (directory/'expected_limits.json').write_text(json.dumps(dict(
+            target='Run2',card_sha256='c',fit_card_sha256='f',
+            alpha={k:float(i+1) for i,k in enumerate(base.EXPECTED_LIMIT_KEYS)})))
+        def plot(command,cwd):
+            self.assertIn('--show',command)
+            for ext in ('pdf','png'):
+                (Path(cwd)/('limits_Run2_alpha.'+ext)).write_text('plot')
+        with patch.object(base,'run_command',side_effect=plot):
+            products=batch.result_tables(payload,opt)
+        self.assertTrue(all(p.is_file() for p in products))
+        self.assertFalse((Path(payload['batch'])/'normalisations.csv').exists())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

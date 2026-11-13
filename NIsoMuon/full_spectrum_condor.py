@@ -18,6 +18,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 from uuid import uuid4
 
@@ -28,7 +29,7 @@ import limit_workflow_sideband_fit as shared
 SCHEMA = 'NPS26009_full_spectrum_condor_v1'
 SOURCES = ('full_spectrum_fit.py', 'full_spectrum_condor.py',
            'limit_workflow.py', 'limit_workflow_sideband_fit.py', 'dy_closure_shape.py',
-           'signal_spectrum_interpolation.py')
+           'signal_spectrum_interpolation.py', 'python/plotLimits.py', 'python/plotting.py')
 
 
 def digest(value):
@@ -103,7 +104,8 @@ def make_jobs(opt, windows):
         if opt.stage in ('fit', 'all'):
             workspace = add('workspace', mass, parents)
             fits = [add(kind, mass, [workspace]) for kind in fs.selected_fits(opt)]
-            final.append(add('summarize', mass, fits))
+            if fits:
+                final.append(add('summarize', mass, fits))
             if getattr(opt, 'expected_limits', False):
                 final.append(add('limits', mass, [workspace]))
     if getattr(opt, 'expected_limits', False) and final:
@@ -116,8 +118,9 @@ def result_tables(payload, opt):
     limits, normalisations = [], []
     for mass in opt.masses:
         directory = fs.model_directory(opt, mass)/'fit_r0'
-        summary = json.loads((directory/'fit_summary.json').read_text())
         limit = json.loads((directory/'limits/expected_limits.json').read_text())
+        summary = (json.loads((directory/'fit_summary.json').read_text())
+                   if fs.selected_fits(opt) else dict(limit, fits={}))
         if summary['card_sha256'] != limit['card_sha256'] or summary['fit_card_sha256'] != limit['fit_card_sha256']:
             raise ValueError('Limit and normalisation summaries use different cards.')
         limits.append(dict(mass=mass, target=summary['target'],
@@ -131,6 +134,8 @@ def result_tables(payload, opt):
                         **{key:value.get(key) for key in ('era','process','scale','scale_low','scale_high','constraint')}))
     paths = []
     for name, rows in (('expected_limits.csv', limits), ('normalisations.csv', normalisations)):
+        if not rows:
+            continue
         path = Path(payload['batch'])/name
         with path.open('w', newline='') as stream:
             writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
@@ -138,6 +143,18 @@ def result_tables(payload, opt):
             writer.writerows(rows)
         paths.append(path)
         print('[TABLE]', path)
+    if not fs.selected_fits(opt):
+        output = Path(payload['batch'])
+        plotdata = {str(row['mass']): {key:row[key.replace('+','plus').replace('-','minus')]
+                    for key in base.EXPECTED_LIMIT_KEYS} for row in limits}
+        stem = f'limits_{opt.target}_alpha'
+        path = output/(stem+'.json')
+        path.write_text(json.dumps(plotdata,indent=2)+'\n')
+        base.run_command([sys.executable,str(Path(__file__).parent/'python/plotLimits.py'),
+            path.name,'--logy','--show','exp','--x-title',"m_{Z'} (GeV)",
+            '--y-title',base.y_axis_title('alpha'),'--title-right',base.lumi_label(opt.target),
+            '--output',stem],output)
+        paths.extend([path,output/(stem+'.pdf'),output/(stem+'.png')])
     return paths
 
 
@@ -425,6 +442,7 @@ def submit(opt, args, prepared_plan=None):
     batch.mkdir(parents=True)
     (batch/'source').mkdir()
     for name in SOURCES:
+        (batch/'source'/name).parent.mkdir(parents=True,exist_ok=True)
         shutil.copy2(Path(__file__).parent/name, batch/'source'/name)
     payload = dict(schema=SCHEMA, batch_id=batch_id, batch=str(batch), options=vars(opt),
         jobs=jobs, windows=windows, signal_files=selected, preflight_inputs=preflight,

@@ -86,8 +86,8 @@ def make_parser():
     p.add_argument('--r-max', type=shared.finite_positive, default=100.)
     p.add_argument('--expected-limits', action='store_true',
                    help='Also compute blinded expected limits from each workspace; no impacts or toys. Condor writes limit/normalisation CSV tables automatically.')
-    p.add_argument('--fit-components', choices=('both','b-only','s-only'), default='both',
-                   help='Select both diagnostic fits, B-only or S+B-only; no nuisance/model change.')
+    p.add_argument('--fit-components', choices=('both','b-only','s-only','none'), default='both',
+                   help='Select diagnostic fits; none builds workspace and limits without FitDiagnostics (requires --expected-limits).')
     p.add_argument('--fit-output', choices=('full','norms'), default='full',
                    help='norms: save fit/covariance/normalisations without shapes or sampled shape uncertainties.')
     p.add_argument('--fit-strategy', type=int, choices=(0,1,2), default=1)
@@ -124,6 +124,8 @@ def make_parser():
 
 
 def configuration(opt):
+    if not selected_fits(opt) and not opt.expected_limits:
+        raise ValueError("--fit-components none requires --expected-limits")
     if getattr(opt,'fit_max_calls',None) is not None and opt.fit_max_calls < 1:
         raise ValueError('--fit-max-calls must be positive.')
     if getattr(opt, 'expected_limits', False) and (opt.stage == 'cards' or opt.inject_r != 0 or getattr(opt, 'fast_mode', False)):
@@ -407,7 +409,7 @@ def decorate_model(model, opt, windows):
 
 
 def selected_fits(opt):
-    return {'b-only':('fit_b',), 's-only':('fit_s',), 'both':('fit_b','fit_s')}[getattr(opt,'fit_components','both')]
+    return {'b-only':('fit_b',), 's-only':('fit_s',), 'both':('fit_b','fit_s'), 'none':()}[getattr(opt,'fit_components','both')]
 
 
 def fit_commands(opt, mass, directory, fit_kind=None):
@@ -909,7 +911,10 @@ def main(argv=None):
             commands = fit_commands(opt,mass,directory)
             (fit_dir/'commands.json').write_text(json.dumps(commands, indent=2)+'\n')
             if opt.stage in ('fit', 'all'):
-                run_fit(model, directory, opt)
+                if selected_fits(opt):
+                    run_fit(model, directory, opt)
+                else:
+                    prepare_workspace(model, directory, opt)
                 if getattr(opt, 'expected_limits', False):
                     run_expected_limits(model, directory, opt)
             print('[SAVED]', directory)
