@@ -8,6 +8,11 @@ Existing counting/sideband production commands and results are unchanged.
 --dy-shape-model linear adds the common AN linear DY closure shape with an
 exact per-era nominal-yield normaliser for every nuisance value. It retains
 lnN 1.5 normalisation and source statistics; regenerated DYAux inputs required.
+--interpolate-signal optionally morphs bracketed intermediate masses: align
+anchor peaks/resolutions, interpolate unit-area shapes linearly and full-axis
+yields log-linearly. Includes systematic histograms and independent anchor
+Sumw2, with provenance/preflight checks in local and Condor execution. No mass
+extrapolation; no additional interpolation modelling uncertainty is invented.
 """
 import argparse
 import hashlib
@@ -35,6 +40,8 @@ SIDEBAND_PRESETS = {
 
 def make_parser():
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--interpolate-signal', action='store_true',
+                   help='Morph full signal spectra between adjacent simulated masses, including systematic templates; no extrapolation')
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
     p.add_argument('--target', type=shared.single_target, default='Run2Run3')
     p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'recover', 'set-domain', 'collect'), default='all')
@@ -251,8 +258,10 @@ def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
-               'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model'}
+               'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal'}
     result = {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
+    if getattr(opt, 'interpolate_signal', False):
+        result['interpolate_signal'] = True
     # Preserve compatibility with existing full-resolution saved models.
     if getattr(opt, 'fast_mode', False):
         result['fast_mode'] = True
@@ -587,6 +596,11 @@ def prepare_inputs(reader, args, opt):
             windows[era] = resolution_bins(edges,
                 lambda m, era=era: m*base.relative_resolution(args, era, m), effective_bin_sigma(opt))
             print(f'[BINS] {era}: {len(windows[era])} bins over 11--80 GeV', flush=True)
+    if getattr(opt, 'interpolate_signal', False):
+        import signal_spectrum_interpolation as interpolation
+        args.signal_interpolation_anchors = signals
+        args.signal_interpolation_audit = interpolation.preflight(
+            reader,args,signals,opt.masses,base.target_years(opt.target))
     return signals, windows
 
 
@@ -755,10 +769,10 @@ def main(argv=None):
                 invalidate_fits(directory)
                 for name in ('model.json', 'datacard.txt'):
                     (directory/name).unlink(missing_ok=True)
-                found = next((m for m in signals if abs(m-mass)<1e-6),None)
-                if found is None:
-                    raise ValueError(f'No simulated signal at M={mass}; intermediate-mass interpolation is a later step.')
-                model = build_model(reader,args,opt,mass,signals[found],windows_for_mass(windows,mass,opt))
+                import signal_spectrum_interpolation as interpolation
+                files = interpolation.requested_files(signals,mass,base.target_years(opt.target),
+                                                      getattr(opt,'interpolate_signal',False))
+                model = build_model(reader,args,opt,mass,files,windows_for_mass(windows,mass,opt))
                 save_model(model, opt, mass, directory)
             else:
                 model = load_model(directory,opt)

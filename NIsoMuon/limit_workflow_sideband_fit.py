@@ -205,6 +205,10 @@ def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=F
     """Prepare raw bins independently; scale signals only after global assembly."""
     if era not in files:
         raise base.WorkflowError(f'Missing simulated signal for {era}, M={mass}.')
+    if full_spectrum and getattr(opt, 'interpolate_signal', False):
+        import signal_spectrum_interpolation as interpolation
+        if Path(files[era]).name.startswith(interpolation.PREFIX):
+            reader = interpolation.SpectrumSignalReader(reader,args,args.signal_interpolation_anchors,mass,era)
     rows, audits = [], []
     qfile = base.file_for_process(args, era, 'QCD', '', 'nominal')
     inputs = base.read_qcd_stat_inputs(reader._file(qfile), era, base.hist_path(args.region))
@@ -315,6 +319,8 @@ def assemble_model(args, opt, mass, parts, full_spectrum=False):
                 target=opt.target, mass=mass, alpha_internal_unit=alpha_unit,
                 settings=vars(opt), domain=list(DOMAIN), eras=era_info, rows=rows,
                 separation=diagnostics, input_audits=audits,
+                signal_interpolation=[record for record in getattr(args,'signal_interpolation_audit',[])
+                                      if abs(record['mass']-mass) < 1e-6],
                 uncertainty_model='QCD: shared SS-fit covariance modes + coherent absolute functional envelope; DY source stats independent in disjoint regions; pure QCD/DY normalisation priors replaced by free scales.')
 
 

@@ -828,3 +828,67 @@ DY sums at theta=-3,-1,-0.5,0,0.5,1,3 and aborts before fitting if conservation
 fails. `fit_summary.json` records the shape parameter, error and its correlation
 with each DY normalisation. A nonzero post-fit correlation is allowed. Covariance
 propagation and pre/postfit yields use the workspace expectations automatically.
+
+## Intermediate masses in the full spectrum
+
+```bash
+python3 full_spectrum_fit.py --masses 12,13,14,15,30,32.5,70 \
+  --interpolate-signal --target full --fit-layout window \
+  --sideband-binning coarse --norm-prior 1.5 --dy-shape-model linear \
+  --condor-dir full_spectrum_outputs/condor/intermediate_DYlinear
+```
+
+The opt-in interpolation supports both local and Condor preparation, including
+recovery manifests. Exact simulated points bypass morphing. Intermediate
+points require bracketing samples for every selected era; mass extrapolation
+is forbidden. Align each anchor's mass and nominal resolution with the target,
+linearly interpolate the resulting unit-area histogram shapes, and log-linearly
+interpolate full native-axis yields. Every detector/theory histogram follows
+the same mapping. Fractional native-bin overlap assumes constant density in
+each native bin. The independent anchor Sumw2 propagation includes covariance
+between each partial integral and the anchor normalisation. It does not invent
+an interpolation modelling uncertainty. Keep the existing final combined
+signal normalisation convention (25 expected events for r=1).
+
+Condor preflight checks all required bracketing histograms. The source snapshot
+includes `signal_spectrum_interpolation.py`; manifests retain the anchor map,
+resolution coefficients, interpolation method and input fingerprints. Models
+record interpolated mass/era brackets. Enabling this option changes the study
+signature so old models cannot be reused silently. Before claiming validated
+coverage at intermediate masses, perform signal-template leave-one-out closure
+and the usual injection/bias checks; algorithm tests are not that physics study.
+
+## Component-relative prefit uncertainty plots
+
+After a workspace is compiled by the usual joint-fit workflow:
+
+```bash
+python3 full_spectrum_component_uncertainties.py /path/to/M30/model.json \
+  --periods Run2,Run3,Run2+3
+```
+
+Default workspace: `M30/fit_r0/workspace.root`, with the corresponding
+`fit_r0/datacard.txt`. Override `--workspace` for a different fit directory.
+Outputs below `M30/component_uncertainties` include separate QCD/DY/tt plots
+and JSON. For each independent constrained nuisance, vary +/- one prior sigma,
+sum era yields coherently, then combine responses in quadrature. Groups:
+statistics, normalisation, modelling, other, and total. The denominator is the
+component's own nominal yield, not total background. Curves show the larger
+of the upward/downward relative responses; JSON retains both and every
+nuisance's absolute signed response. Zero nominal yield has undefined relative
+uncertainty and is omitted, not labelled zero.
+
+These are **prefit prior-response plots**, not impacts or a postfit error
+breakdown. Unconstrained rateParams have no prior width and are reported,
+never assigned an arbitrary uncertainty. Poisson observation uncertainty is
+not a template nuisance. No autoMCStats terms are added by this diagnostic;
+existing finite-MC and dedicated DY/QCD source-statistical terms are used.
+A combined mass axis is coarsened to edges common to all selected eras, with
+whole fit bins summed; no fit bin is artificially subdivided. This may give
+coarse combined plots when era-specific SR boundaries differ.
+
+`sigfit_inputs/signal_windows_5sigma_native0p02.csv` tabulates all 13 anchor
+mass hypotheses using the current resolution-coefficient JSON. It gives both
+analytic +/-5 sigma limits (clipped to 11--80) and boundaries snapped outward
+to a 0.02 GeV native grid. Actual model.json `eras[ERA].signal_window` is the
+authoritative boundary when using a different resolution map or input grid.

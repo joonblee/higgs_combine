@@ -26,7 +26,8 @@ import limit_workflow_sideband_fit as shared
 
 SCHEMA = 'NPS26009_full_spectrum_condor_v1'
 SOURCES = ('full_spectrum_fit.py', 'full_spectrum_condor.py',
-           'limit_workflow.py', 'limit_workflow_sideband_fit.py', 'dy_closure_shape.py')
+           'limit_workflow.py', 'limit_workflow_sideband_fit.py', 'dy_closure_shape.py',
+           'signal_spectrum_interpolation.py')
 
 
 def digest(value):
@@ -162,6 +163,8 @@ def worker_options(payload):
     args = fs.configuration(opt)
     args.base_dir = payload['input_base_dir']
     args.resolution_coefficients = payload['resolution_coefficients']
+    args.signal_interpolation_anchors = payload.get('signal_interpolation_anchors', {})
+    args.signal_interpolation_audit = payload.get('signal_interpolation_audit', [])
     return opt, args
 
 
@@ -343,6 +346,8 @@ def submit(opt, args, prepared_plan=None):
         check_inputs(preflight)
         signals = {mass:prepared_plan['signal_files'][base.mass_label(mass)] for mass in opt.masses}
         args.resolution_coefficients = prepared_plan['resolution_coefficients']
+        args.signal_interpolation_anchors = prepared_plan.get('signal_interpolation_anchors', {})
+        args.signal_interpolation_audit = prepared_plan.get('signal_interpolation_audit', [])
     elif opt.stage in ('cards', 'all'):
         reader = InputReader()
         try:
@@ -354,10 +359,10 @@ def submit(opt, args, prepared_plan=None):
     selected = {}
     for mass in opt.masses:
         if opt.stage in ('cards', 'all'):
-            found = next((m for m in signals if abs(m-mass) < 1e-6), None)
-            if found is None:
-                raise ValueError(f'No simulated signal at M={mass}.')
-            selected[base.mass_label(mass)] = {era:str(Path(signals[found][era]).resolve())
+            import signal_spectrum_interpolation as interpolation
+            files = signals[mass] if prepared_plan is not None else interpolation.requested_files(
+                signals,mass,base.target_years(opt.target),getattr(opt,'interpolate_signal',False))
+            selected[base.mass_label(mass)] = {era:str(Path(files[era]).resolve())
                 for era in base.target_years(opt.target)}
         else:
             fs.load_model(fs.model_directory(opt, mass), opt)
@@ -372,6 +377,8 @@ def submit(opt, args, prepared_plan=None):
         jobs=jobs, windows=windows, signal_files=selected, preflight_inputs=preflight,
         input_base_dir=str(Path(args.base_dir).expanduser().resolve()),
         resolution_coefficients=getattr(args, 'resolution_coefficients', {}),
+        signal_interpolation_anchors={str(m):files for m,files in getattr(args,'signal_interpolation_anchors',{}).items()},
+        signal_interpolation_audit=getattr(args,'signal_interpolation_audit',[]),
         cmssw_base=str(cmssw), scram_arch=arch,
         source_hashes={name:file_hash(batch/'source'/name) for name in SOURCES})
     if prepared_plan is not None:
