@@ -26,7 +26,7 @@ import limit_workflow_sideband_fit as shared
 
 SCHEMA = 'NPS26009_full_spectrum_condor_v1'
 SOURCES = ('full_spectrum_fit.py', 'full_spectrum_condor.py',
-           'limit_workflow.py', 'limit_workflow_sideband_fit.py')
+           'limit_workflow.py', 'limit_workflow_sideband_fit.py', 'dy_closure_shape.py')
 
 
 def digest(value):
@@ -258,6 +258,8 @@ def run_worker(manifest, index):
                 if job['kind'] == 'workspace':
                     fs.prepare_workspace(model, model_dir, opt)
                     products = [fit_dir/name for name in ('datacard.txt', 'workspace.root')]
+                    if model.get('dy_linear_shape'):
+                        products.append(fit_dir/'dy_shape_audit.json')
                 elif job['kind'] in ('fit_b', 'fit_s'):
                     fs.run_fit_component(model, model_dir, opt, job['kind'])
                     products = [fit_dir/job['kind']/name for name in
@@ -443,6 +445,7 @@ def check_recovery_sources(previous):
     old = Path(previous['batch'])/'source'
     current = Path(__file__).parent
     checks = {
+        'dy_closure_shape.py': {},
         'limit_workflow.py': dict(excluded=('validate_common_transfer', '_validate_common_transfer_rows')),
         'limit_workflow_sideband_fit.py': {},
         'full_spectrum_fit.py': dict(excluded=('make_parser', 'main')),

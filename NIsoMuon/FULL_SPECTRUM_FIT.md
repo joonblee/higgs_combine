@@ -771,3 +771,60 @@ discrete decisions and meaningful numerical differences. Recovery tests check
 reuse under the corrected validator, preservation of the original batch and
 rejection of changed calculation code or inputs.
 
+
+
+## Integral-preserving linear DY closure shape
+
+After updating **both** repositories, regenerate the eight individual-era NF
+estimates with SKPlotMaker (`dy_bkg_estimation.py --era ERA --blind`). NF output
+now includes `DYAux/ClosureLinearMetadata` and signed pre-NF source weights
+`ClosureLinearSourceUp/Down`. The nominal source, NF and source Sumw2 are
+unchanged. Old DY files are rejected when the new shape is requested.
+
+```bash
+python3 full_spectrum_fit.py --masses 12,30,70 --target full \
+    --fit-layout window --sideband-binning coarse \
+    --norm-prior 1.5 --dy-shape-model linear \
+    --condor-dir full_spectrum_outputs/condor/M12_M30_M70_coarse_DYlinear_r0
+```
+
+Submit a **fresh batch**: existing snapshots/cards/parts do not contain the new
+shape inputs. The existing Condor DAG still prepares era/mass bins in parallel,
+assembles a joint card, then runs B-only and S+B fits separately in parallel.
+The new protocol module is included in worker snapshots and source hashes.
+`--dy-shape-model none` (default) preserves existing model signatures and paths.
+`linear` adds `_DYlinearShape_v1`; it cannot be combined with the independent
+`--dy-shape-uncertainty 0.30` study. No free normalisation is enabled implicitly.
+
+The adopted modelling variation uses the **central** Run2+3 fit
+`R(m)=0.00583*m/GeV+0.9038`, measured over 11--70 GeV and extrapolated to 80 GeV.
+Its fit statistical errors are not separate shape parameters. One nuisance,
+`CMS_NPS26009_DYClosureLinearShape`, is shared across all eras and mass bins.
+The existing independent per-era DY lnN 1.5 normalisations remain; NFStat/NFModel
+remain excluded from these in-situ cards. Source statistics are retained once.
+This is a correlated tilt, not a guarantee of independent >=30% freedom in
+every high-mass bin.
+
+Signed weighted sources are integrated over the **actual final fit bins**.
+The existing nominal physical-boundary prescription is retained. Nominal-zero
+bins stay zero in closure variations and retain their additive source error.
+Up is normalised to each era's full 11--80 nominal DY integral; Down reflects
+Up about nominal. Any negative variation bins are bounded at zero before a
+final renormalisation and recorded explicitly in `model.json` (clipped_up and
+clipped_down). No source bins are clipped in the producer. A complete disjoint
+11--80 domain is required; do not normalise individual SR/sideband channels.
+
+For arbitrary nuisance values, nonnegative piecewise-linear bin responses are
+multiplied by a common per-era denominator. A single `DYClosureNorm_ERA`
+rateParam denominator is shared through identity formula aliases by positive-DY
+channels, avoiding quadratic card size for fine spectrum binning.
+This preserves the full nominal DY yield for all shape values with other
+nuisances at nominal, including beyond +/-1 sigma. The independent DY scale
+still changes the total. Other statistical/detector nuisances retain their
+existing responses.
+
+After text2workspace, `fit_r0/dy_shape_audit.json` checks the **compiled** per-era
+DY sums at theta=-3,-1,-0.5,0,0.5,1,3 and aborts before fitting if conservation
+fails. `fit_summary.json` records the shape parameter, error and its correlation
+with each DY normalisation. A nonzero post-fit correlation is allowed. Covariance
+propagation and pre/postfit yields use the workspace expectations automatically.

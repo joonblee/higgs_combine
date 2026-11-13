@@ -213,6 +213,9 @@ def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=F
         raise ValueError(f'{era}: stale nominal/systematic QCD metadata')
     factor = covariance_factor(inputs[0]['fit']['covariance'])
     transfer_ratios = []
+    closure = None
+    if getattr(opt, 'dy_shape_model', 'none') == 'linear':
+        closure = base.read_dy_closure_inputs(reader, base.file_for_process(args, era, 'DY', '', 'nominal'))
     for window in windows:
         low, high = window['low'], window['high']
         if full_spectrum:
@@ -257,6 +260,10 @@ def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=F
                    qcd_shape=max(ch.qcd_shape_sigma_down or 0., ch.qcd_shape_sigma_up or 0.),
                    dy_stat=(ch.dy_nf_amc or 0.)*(ch.dy_lightjet_error or 0.),
                    dy_nf=ch.dy_nf_amc, warnings=ch.warnings)
+        if closure is not None:
+            import dy_closure_shape
+            row['dy_closure_raw_up'] = ch.dy_nf_amc * dy_closure_shape.integrate(closure[1], low, high)
+            row['dy_closure_metadata'] = closure[2]
         rows.append(row)
         audits.append(dict(era=era, region=window['region'], requirements=len(audit.entries),
                            diagnostic_failures=diagnostic_info))
@@ -397,6 +404,11 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
             name = f'{prefix}_DYStat_{channel}'
             lines += [f'{name} param 0 1',
                       f'{prefix}_DYYield_{channel} rateParam {channel} DY max(0.,{f(row["dy_stat"])}*@0) {name}']
+    if model.get('dy_linear_shape'):
+        import dy_closure_shape
+        lines.append(dy_closure_shape.NUISANCE+' param 0 1')
+        for era in sorted({row['era'] for row in rows}):
+            lines.extend(dy_closure_shape.card_lines(rows, era))
     return '\n'.join(lines)+'\n'
 
 
@@ -430,9 +442,9 @@ def nominal_predictions(text):
             return float(node.value)
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
             return arithmetic(node.operand)*(1 if isinstance(node.op, ast.UAdd) else -1)
-        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mult)):
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mult, ast.Div)):
             left, right = arithmetic(node.left), arithmetic(node.right)
-            return left+right if isinstance(node.op, ast.Add) else left*right
+            return left+right if isinstance(node.op, ast.Add) else left/right if isinstance(node.op, ast.Div) else left*right
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'max' and not node.keywords:
             return max(arithmetic(arg) for arg in node.args)
         raise ValueError('Unsupported rateParam arithmetic')
@@ -447,6 +459,7 @@ def nominal_predictions(text):
             for index in reversed(range(len(parameters))):
                 formula = formula.replace('@'+str(index), '('+str(means[parameters[index]])+')')
             value = arithmetic(ast.parse(formula, mode='eval'))
+        means[line[0]] = value  # Later formula rateParams may reference this shared function.
         key = (line[2], line[3])
         modifiers[key] = modifiers.get(key, 1.)*value
     bins = [line[1:] for line in lines if line[0] == 'bin'][-1]

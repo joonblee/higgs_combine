@@ -2878,6 +2878,12 @@ def apply_parameterisation(
     return scale, alpha_unit, reference_xsec
 
 
+def read_dy_closure_inputs(reader, filename):
+    """Read/audit the optional linear-closure protocol without touching OS data."""
+    import dy_closure_shape
+    return dy_closure_shape.read_inputs(reader._file(filename))
+
+
 def nuisance_global_name(local: str, year: str) -> str:
     """Return the datacard nuisance name for the prescribed source correlation.
 

@@ -779,3 +779,8 @@ python3 -u limit_workflow.py \
 
 For these six selected results, success is six `[IMPACT CHECK]` lines followed by the final `[DONE]`. Failure prints an `[ERROR]` with the location of the corresponding log. This repair does not rerun AsymptoticLimits or rebuild background estimates.
 
+
+
+The opt-in integral-preserving linear DY closure model and fresh-batch commands
+are documented in [NIsoMuon/FULL_SPECTRUM_FIT.md](NIsoMuon/FULL_SPECTRUM_FIT.md#integral-preserving-linear-dy-closure-shape).
+It requires updated SKPlotMaker DYAux files and retains the existing DY lnN 1.5.

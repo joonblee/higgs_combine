@@ -5,6 +5,9 @@ Run in the existing CMSSW/Combine environment; see FULL_SPECTRUM_FIT.md.
 Consumes the current SKPlotMaker ROOT estimates without reading OS data.root.
 Each era is retained and every disjoint mass bin enters the same likelihood.
 Existing counting/sideband production commands and results are unchanged.
+--dy-shape-model linear adds the common AN linear DY closure shape with an
+exact per-era nominal-yield normaliser for every nuisance value. It retains
+lnN 1.5 normalisation and source statistics; regenerated DYAux inputs required.
 """
 import argparse
 import hashlib
@@ -60,6 +63,8 @@ def make_parser():
                    help='Test only: multiply the target bin width by four; retain all fit diagnostics and systematics.')
     p.add_argument('--norm-prior', type=shared.finite_positive, default=1.5,
                    help='lnN kappa for each independent process/era QCD, DY and tt scale (>1).')
+    p.add_argument('--dy-shape-model', choices=('none','linear'), default='none',
+                   help='linear: common yield-preserving AN DY closure shape (requires new SKPlotMaker DYAux); none preserves existing cards.')
     p.add_argument('--dy-shape-uncertainty', type=float, default=0.,
                    help='Explicit review study: independent era/bin DY lnN shifts (e.g. 0.30 gives 0.70/1.30); 0 preserves the existing model.')
     p.add_argument('--dy-normalisation', choices=('prior','free'), default='prior',
@@ -99,6 +104,8 @@ def configuration(opt):
     if opt.norm_prior <= 1:
         raise ValueError('--norm-prior must exceed one.')
     dy_unc = getattr(opt, 'dy_shape_uncertainty', 0.)
+    if dy_unc and getattr(opt, 'dy_shape_model', 'none') == 'linear':
+        raise ValueError('Choose linear DY shape OR independent-bin --dy-shape-uncertainty, not both.')
     if not math.isfinite(dy_unc) or (dy_unc != 0 and not .30 <= dy_unc < 1.):
         raise ValueError('--dy-shape-uncertainty must be zero or in [0.30, 1).')
     if not math.isfinite(getattr(opt,'dy_norm_max',10.)) or getattr(opt, 'dy_norm_max', 10.) <= 1:
@@ -232,7 +239,7 @@ def model_directory(opt, mass):
 
 
 def dy_study_tag(opt):
-    tag = ''
+    tag = '_DYlinearShape_v1' if getattr(opt, 'dy_shape_model', 'none') == 'linear' else ''
     if getattr(opt, 'dy_shape_uncertainty', 0.):
         tag += '_DYshape'+base.mass_label(opt.dy_shape_uncertainty)
     if getattr(opt, 'dy_normalisation', 'prior') == 'free':
@@ -244,7 +251,7 @@ def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
-               'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max'}
+               'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model'}
     result = {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
     # Preserve compatibility with existing full-resolution saved models.
     if getattr(opt, 'fast_mode', False):
@@ -257,6 +264,8 @@ def signature(opt):
         result['dy_shape_uncertainty'] = opt.dy_shape_uncertainty
     if getattr(opt, 'dy_normalisation', 'prior') == 'free':
         result.update(dy_normalisation='free', dy_norm_max=opt.dy_norm_max)
+    if getattr(opt, 'dy_shape_model', 'none') == 'linear':
+        result['dy_shape_model'] = 'linear'
     return result
 
 
@@ -314,6 +323,28 @@ def decorate_model(model, opt, windows):
         correlation='independent per era and fit bin; all 11--80 GeV bins',
         normalisation=getattr(opt,'dy_normalisation','prior'),
         zero_yield='existing additive DY source statistics retained; relative shifts do not create a nonzero nominal')
+    if getattr(opt, 'dy_shape_model', 'none') == 'linear' and dy_unc:
+        raise ValueError('Choose linear DY shape OR independent-bin uncertainty, not both')
+    if getattr(opt, 'dy_shape_model', 'none') != 'linear':
+        model.pop('dy_linear_shape', None)
+    if getattr(opt, 'dy_shape_model', 'none') == 'linear':
+        import dy_closure_shape as closure
+        model['dy_linear_shape'] = dict(configuration=closure.configuration(), eras={})
+        for era in model['eras']:
+            selected = sorted([r for r in model['rows'] if r['era'] == era], key=lambda r:r['low'])
+            if (abs(selected[0]['low']-11.) > 1e-7 or abs(selected[-1]['high']-80.) > 1e-7
+                    or any(abs(a['high']-b['low']) > 1e-7 for a,b in zip(selected,selected[1:]))):
+                raise ValueError('Linear DY shape requires the complete disjoint 11--80 GeV domain')
+            if any('dy_closure_raw_up' not in r or 'dy_closure_metadata' not in r for r in selected):
+                raise ValueError('Linear DY shape requires fresh preparation from updated DYAux inputs')
+            if any(r['dy_closure_metadata'] != selected[0]['dy_closure_metadata'] for r in selected):
+                raise ValueError('Mixed DY closure input versions across prepared bins')
+            up, down, audit = closure.templates([r['rates']['DY'] for r in selected],
+                                               [r['dy_closure_raw_up'] for r in selected])
+            for row, u, d in zip(selected, up, down):
+                row.update(dy_closure_up=u, dy_closure_down=d)
+            model['dy_linear_shape']['eras'][era] = dict(audit, inputs=selected[0]['dy_closure_metadata'])
+        model['uncertainty_model'] += ' Common integral-preserving linear DY closure shape; nominal-zero source statistics unchanged.'
     if dy_unc or getattr(opt,'dy_normalisation','prior')=='free':
         model['uncertainty_model'] += ' Explicit DY review: independent era/bin closure shifts; DY normalisation '+getattr(opt,'dy_normalisation','prior')+'.'
     # A broad prior regularises degenerate shapes; do not claim the data alone
@@ -467,6 +498,19 @@ def extract_summary(model, directory, opt, fit_kind=None):
                     j = indices[b]
                     denom = math.sqrt(max(float(covariance[i][i])*float(covariance[j][j]), 1e-300))
                     info['normalisation_correlations'][a][b] = float(covariance[i][j])/denom
+            if model.get('dy_linear_shape'):
+                import dy_closure_shape
+                name = dy_closure_shape.NUISANCE
+                if name not in by_name:
+                    raise ValueError('Missing DY closure shape in validated fit')
+                i = indices[name]
+                info['dy_linear_shape'] = dict(value=float(by_name[name].getVal()),
+                    error=math.sqrt(max(float(covariance[i][i]),0.)), normalisation_correlations={})
+                for norm in model['normalisations']:
+                    if model['normalisations'][norm]['process'] == 'DY':
+                        j = indices[norm]
+                        denom = math.sqrt(max(float(covariance[i][i])*float(covariance[j][j]),1e-300))
+                        info['dy_linear_shape']['normalisation_correlations'][norm] = float(covariance[i][j])/denom
             # Set every floating parameter, then explicitly set the fixed POI.
             workspace.allVars().assignValueOnly(parameters)
             if key == 'fit_b':
@@ -517,7 +561,7 @@ def load_model(directory, opt):
 def invalidate_fits(directory):
     """An old successful fit must not survive as a result of a rebuilt card."""
     for path in directory.glob('fit_r*/**/*'):
-        if path.name in ('workspace.root', 'fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json'):
+        if path.name in ('workspace.root', 'fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json', 'dy_shape_audit.json'):
             path.unlink()
 
 
@@ -561,6 +605,43 @@ def save_model(model, opt, mass, directory):
     (directory/'model.json').write_text(json.dumps(model, indent=2, allow_nan=False)+'\n')
 
 
+def audit_dy_shape_workspace(model, fit_dir):
+    """Verify the compiled Combine expectations, not just the input templates."""
+    if not model.get('dy_linear_shape'):
+        return
+    import ROOT
+    import dy_closure_shape
+    handle = ROOT.TFile.Open(str(Path(fit_dir)/'workspace.root'))
+    if not handle or handle.IsZombie():
+        raise ValueError('Cannot audit DY closure workspace')
+    try:
+        workspace = handle.Get('w')
+        theta = workspace.var(dy_closure_shape.NUISANCE) if workspace else None
+        if not theta:
+            raise ValueError('Compiled DY closure shape parameter is missing')
+        totals = {era:sum(r['rates']['DY'] for r in model['rows'] if r['era']==era) for era in model['eras']}
+        audit = dict(nuisance=dy_closure_shape.NUISANCE, nominal_totals=totals, points=[])
+        original = float(theta.getVal())
+        for value in (-3., -1., -.5, 0., .5, 1., 3.):
+            theta.setVal(value)
+            sums = {era:0. for era in totals}
+            for row in model['rows']:
+                function = workspace.function(f'n_exp_bin{row["channel"]}_proc_DY')
+                if not function:
+                    raise ValueError('Missing compiled DY expectation')
+                y = float(function.getVal())
+                if not math.isfinite(y) or y < -1e-10:
+                    raise ValueError('Invalid DY closure expectation')
+                sums[row['era']] += y
+            if any(not math.isclose(sums[e],totals[e],rel_tol=1e-8,abs_tol=1e-9) for e in totals):
+                raise ValueError('Compiled DY closure changes total yield; aborting before fits')
+            audit['points'].append(dict(theta=value, totals=sums))
+        theta.setVal(original)
+        (Path(fit_dir)/'dy_shape_audit.json').write_text(json.dumps(audit,indent=2,allow_nan=False)+'\n')
+    finally:
+        handle.Close()
+
+
 def prepare_workspace(model, directory, opt):
     """Compile once, before either independent hypothesis fit starts."""
     directory = Path(directory)
@@ -574,9 +655,10 @@ def prepare_workspace(model, directory, opt):
     (fit_dir/'datacard.txt').write_text(fit_card_text(source_card.decode()))
     commands = fit_commands(opt, model['mass'], directory)
     (fit_dir/'commands.json').write_text(json.dumps(commands[:1], indent=2)+'\n')
-    for name in ('workspace.root', 'fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json'):
+    for name in ('workspace.root', 'fitDiagnostics.FullSpectrum.root', 'fit_summary.json', 'fit_failure.json', 'dy_shape_audit.json'):
         (fit_dir/name).unlink(missing_ok=True)
     base.run_command(commands[0], fit_dir, stdout_path=fit_dir/'step0.log')
+    audit_dy_shape_workspace(model, fit_dir)
 
 
 def run_fit_component(model, directory, opt, fit_kind):
