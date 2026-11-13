@@ -94,4 +94,18 @@ class ExpectedLimitTests(unittest.TestCase):
                 condor.result_tables(dict(batch=tmp),opt)
 
 
+class StageMemoryTests(unittest.TestCase):
+    def test_light_and_workspace_memory_preserve_fit_resources(self):
+        options=vars(fs.make_parser().parse_args([]))
+        for kind in ('prepare','assemble','tables'):
+            self.assertEqual(condor.memory_for_job(options,kind),2048)
+        self.assertEqual(condor.memory_for_job(options,'workspace'),4096)
+        for kind in ('fit_b','fit_s','limits','summarize','fit'):
+            self.assertEqual(condor.memory_for_job(options,kind),16000)
+        for kind in ('prepare','workspace','fit_b'):
+            self.assertEqual(condor.memory_for_job({'condor_memory':12000},kind),12000)
+        options['condor_light_memory']=3072
+        self.assertEqual(condor.memory_for_job(options,'assemble'),3072)
+
+
 if __name__=='__main__':unittest.main()

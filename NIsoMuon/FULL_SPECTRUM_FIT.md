@@ -1074,3 +1074,13 @@ final CSV node can run. Investigate any failure rather than substituting a
 missing comparison point. The optional flag does not alter the card signature
 or existing default job graph. Use `--stage status --condor-dir <batch>` to
 check progress, and the existing resume mechanism for incomplete nodes.
+
+New full-spectrum DAG submissions request memory by stage: preparation,
+assembly and CSV tables use 2048 MB (`--condor-light-memory`); workspace
+compilation uses 4096 MB (`--condor-workspace-memory`); fits, expected limits
+and ROOT fit-summary collection retain 16000 MB (`--condor-memory`). These
+are reservations, not measurements of actual memory use. Adjust per-stage
+requests if measured usage warrants it. Old submitted DAGs retain their
+snapshot and existing requests; updating the checkout does not change queued
+ClassAds. Old manifests without stage-specific options retain their original
+memory value during DAG generation.

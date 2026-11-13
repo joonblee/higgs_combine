@@ -329,12 +329,21 @@ def run_worker(manifest, index):
             print(f'[JOB] {index} {job["kind"]}: {status["state"]}; {status["elapsed_seconds"]:.1f} s', flush=True)
 
 
+def memory_for_job(options, kind):
+    if kind in ('prepare', 'assemble', 'tables'):
+        return options.get('condor_light_memory', options['condor_memory'])
+    if kind == 'workspace':
+        return options.get('condor_workspace_memory', options['condor_memory'])
+    return options['condor_memory']
+
+
 def write_dag(payload, indices, path):
     selected = set(indices)
     lines = []
     for index in indices:
         job = payload['jobs'][index]
-        lines += [f'JOB J{index} submit.jds', f'VARS J{index} jobindex="{index}"',
+        memory = memory_for_job(payload['options'], job['kind'])
+        lines += [f'JOB J{index} submit.jds', f'VARS J{index} jobindex="{index}" memory="{memory}"',
                   f'RETRY J{index} {payload["options"]["condor_retries"]}']
         parents = [i for i in job['dependencies'] if i in selected]
         if parents:
@@ -353,6 +362,8 @@ def submission(payload, dag):
 def validate_options(opt):
     if opt.bins_per_job < 1 or opt.condor_memory < 1 or opt.condor_maxjobs < 0 or opt.condor_retries < 0:
         raise ValueError('Require positive bins-per-job/memory and nonnegative maxjobs/retries.')
+    if any(getattr(opt, name, opt.condor_memory) < 1 for name in ('condor_light_memory', 'condor_workspace_memory')):
+        raise ValueError('Stage-specific memory requests must be positive.')
     if any(c in opt.condor_requirements for c in ('\n', '\r')):
         raise ValueError('Condor requirements must be one line.')
     domain=getattr(opt,'condor_filesystem_domain',None)
@@ -455,7 +466,7 @@ def submit(opt, args, prepared_plan=None):
         'should_transfer_files = YES', 'when_to_transfer_output = ON_EXIT',
         'transfer_output_files = ""', 'output = jobs/job_$(jobindex).out',
         'error = jobs/job_$(jobindex).err', 'request_cpus = 1',
-        f'request_memory = {opt.condor_memory}MB', f'jobbatchname = NPSFullSpectrum_{batch_id}']
+        'request_memory = $(memory)MB', f'jobbatchname = NPSFullSpectrum_{batch_id}']
     requirements=domain_requirements(opt.condor_requirements,opt.condor_filesystem_domain)
     if requirements:
         submit_lines.append('requirements = '+requirements)
