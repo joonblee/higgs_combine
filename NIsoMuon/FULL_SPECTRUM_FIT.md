@@ -1076,11 +1076,22 @@ or existing default job graph. Use `--stage status --condor-dir <batch>` to
 check progress, and the existing resume mechanism for incomplete nodes.
 
 New full-spectrum DAG submissions request memory by stage: preparation,
-assembly and CSV tables use 2048 MB (`--condor-light-memory`); workspace
-compilation uses 4096 MB (`--condor-workspace-memory`); fits, expected limits
-and ROOT fit-summary collection retain 16000 MB (`--condor-memory`). These
-are reservations, not measurements of actual memory use. Adjust per-stage
-requests if measured usage warrants it. Old submitted DAGs retain their
-snapshot and existing requests; updating the checkout does not change queued
-ClassAds. Old manifests without stage-specific options retain their original
-memory value during DAG generation.
+assembly, workspace compilation, summary collection and CSV tables use 2048 MB.
+Fits and expected limits retain 16000 MB (`--condor-memory`). Override the light
+stages with `--condor-light-memory`, or compilation independently with
+`--condor-workspace-memory`. Reservations are not measurements of actual use.
+
+For batches already submitted, update both future/retried DAG submissions and
+currently idle node ClassAds without resubmitting the DAG:
+
+```bash
+python3 full_spectrum_fit.py --stage set-memory --condor-dir <existing-batch>
+```
+
+This preserves the original batch's fit/limit memory value, uses current light
+and workspace memory options, and leaves running jobs unchanged. It edits only
+`submit.jds` (backing up its original contents) and idle RequestMemory attributes;
+manifest, source snapshots, calculations and completed results are unchanged.
+The original source snapshot continues to execute. `--condor-dry-run` previews
+edits. A subsequent DAG retry uses the updated submit expression automatically.
+Updating the checkout alone does not change existing queued jobs.

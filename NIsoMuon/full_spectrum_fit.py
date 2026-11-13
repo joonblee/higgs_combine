@@ -47,7 +47,7 @@ def make_parser():
                    help='Use limit_workflow counting-yield interpolation for bracketed masses, with corresponding sideband counts; no extrapolation')
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
     p.add_argument('--target', type=shared.single_target, default='Run2Run3')
-    p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'recover', 'set-domain', 'collect'), default='all')
+    p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'recover', 'set-domain', 'set-memory', 'collect'), default='all')
     p.add_argument('--backend', choices=('local', 'condor'), default='condor',
                    help='Execution backend (default: condor); use local for foreground execution.')
     p.add_argument('--base-dir', default=base.DEFAULT_BASE_DIR)
@@ -96,11 +96,11 @@ def make_parser():
     batch.add_argument('--condor-dry-run', action='store_true', help='Prepare the real DAG and manifest without submitting (reads nominal axes).')
     batch.add_argument('--condor-maxjobs', type=int, default=0,
                        help='DAG submission cap (default: 0, no cap added by this workflow).')
-    batch.add_argument('--condor-memory', type=int, default=16000, help='Memory in MB for fits, limits and ROOT summaries (default: 16000).')
+    batch.add_argument('--condor-memory', type=int, default=16000, help='Memory in MB for fits and limits (default: 16000).')
     batch.add_argument('--condor-light-memory', type=int, default=2048,
                        help='Memory in MB for preparation, assembly and table jobs (default: 2048).')
-    batch.add_argument('--condor-workspace-memory', type=int, default=4096,
-                       help='Memory in MB for workspace compilation (default: 4096).')
+    batch.add_argument('--condor-workspace-memory', type=int, default=2048,
+                       help='Memory in MB for workspace compilation (default: 2048).')
     batch.add_argument('--condor-retries', type=int, default=2)
     batch.add_argument('--condor-requirements', default='')
     batch.add_argument('--condor-filesystem-domain', default=None,
@@ -788,7 +788,7 @@ def main(argv=None):
         import full_spectrum_condor as batch
         batch.run_worker(Path(opt.condor_worker), opt.condor_index)
         return 0
-    if opt.stage in ('status', 'resume', 'recover', 'set-domain', 'collect'):
+    if opt.stage in ('status', 'resume', 'recover', 'set-domain', 'set-memory', 'collect'):
         import full_spectrum_condor as batch
         return batch.manage(opt)
     args = configuration(opt)

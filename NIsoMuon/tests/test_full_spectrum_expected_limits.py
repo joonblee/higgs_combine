@@ -95,12 +95,36 @@ class ExpectedLimitTests(unittest.TestCase):
 
 
 class StageMemoryTests(unittest.TestCase):
+    def test_active_batch_update_keeps_heavy_jobs_and_snapshots_intact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory=Path(tmp)
+            submit=directory/'submit.jds'
+            submit.write_text('request_memory = 16000MB\nqueue 1\n')
+            opt=fs.make_parser().parse_args(['--stage','set-memory'])
+            payload=dict(batch=tmp,batch_id='example',options=dict(condor_memory=16000),
+                jobs=[dict(index=i,kind=kind) for i,kind in enumerate(('assemble','workspace','fit_b','fit_s','limits','summarize'))])
+            ads=[dict(ClusterId=123,ProcId=0,DAGNodeName='J1'),
+                 dict(ClusterId=124,ProcId=0,DAGNodeName='J4')]
+            import subprocess
+            with patch.object(condor.subprocess,'check_output',return_value=json.dumps(ads)), \
+                 patch.object(condor.base,'run_command') as run:
+                condor.set_memory(opt,payload)
+            self.assertEqual(run.call_args_list[0].args[0][-1],'2048')
+            self.assertEqual(run.call_args_list[1].args[0][-1],'16000')
+            self.assertIn('JobStatus == 1',run.call_args_list[0].args[0][2])
+            expression=submit.read_text()
+            self.assertIn('$(jobindex) == 2',expression)
+            self.assertIn('$(jobindex) == 3',expression)
+            self.assertIn('$(jobindex) == 4',expression)
+            self.assertNotIn('$(jobindex) == 1',expression)
+            self.assertEqual((directory/'submit.jds.before_stage_memory').read_text(),'request_memory = 16000MB\nqueue 1\n')
+
     def test_light_and_workspace_memory_preserve_fit_resources(self):
         options=vars(fs.make_parser().parse_args([]))
-        for kind in ('prepare','assemble','tables'):
+        for kind in ('prepare','assemble','summarize','tables'):
             self.assertEqual(condor.memory_for_job(options,kind),2048)
-        self.assertEqual(condor.memory_for_job(options,'workspace'),4096)
-        for kind in ('fit_b','fit_s','limits','summarize','fit'):
+        self.assertEqual(condor.memory_for_job(options,'workspace'),2048)
+        for kind in ('fit_b','fit_s','limits','fit'):
             self.assertEqual(condor.memory_for_job(options,kind),16000)
         for kind in ('prepare','workspace','fit_b'):
             self.assertEqual(condor.memory_for_job({'condor_memory':12000},kind),12000)

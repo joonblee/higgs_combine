@@ -330,7 +330,7 @@ def run_worker(manifest, index):
 
 
 def memory_for_job(options, kind):
-    if kind in ('prepare', 'assemble', 'tables'):
+    if kind in ('prepare', 'assemble', 'summarize', 'tables'):
         return options.get('condor_light_memory', options['condor_memory'])
     if kind == 'workspace':
         return options.get('condor_workspace_memory', options['condor_memory'])
@@ -662,10 +662,63 @@ def set_domain(opt, payload):
     return 0
 
 
+def set_memory(opt, payload):
+    """Update future DAG submissions and idle ClassAds, leaving running jobs intact."""
+    validate_options(opt)
+    options = dict(payload['options'], condor_light_memory=opt.condor_light_memory,
+                   condor_workspace_memory=opt.condor_workspace_memory)
+    choices = {}
+    for job in payload['jobs']:
+        choices.setdefault(memory_for_job(options, job['kind']), []).append(job['index'])
+    fallback = options['condor_light_memory']
+    expression = str(fallback)
+    for memory, indices in choices.items():
+        if memory != fallback:
+            condition = ' || '.join(f'$(jobindex) == {i}' for i in indices)
+            expression = f'ifThenElse(({condition}), {memory}, {expression})'
+    batch = Path(payload['batch'])
+    submit = batch/'submit.jds'
+    text, count = re.subn(r'^request_memory\s*=.*$', 'request_memory = '+expression,
+                         submit.read_text(), flags=re.MULTILINE)
+    if count != 1:
+        raise ValueError('Expected exactly one request_memory in submit.jds.')
+    constraint = 'JobBatchName == '+json.dumps('NPSFullSpectrum_'+payload['batch_id'])+' && JobStatus == 1'
+    command = ['condor_q', '-constraint', constraint, '-json']
+    ads = json.loads(subprocess.check_output(command, text=True))
+    edits = []
+    for ad in ads:
+        match = re.fullmatch(r'J(\d+)', str(ad.get('DAGNodeName','')))
+        if not match:
+            continue
+        index = int(match.group(1))
+        if not 0 <= index < len(payload['jobs']):
+            raise ValueError('Unknown queued DAG node.')
+        memory = memory_for_job(options, payload['jobs'][index]['kind'])
+        selection = f'ClusterId == {int(ad["ClusterId"])} && ProcId == {int(ad["ProcId"])} && JobStatus == 1'
+        edits.append(['condor_qedit', '-constraint', selection, 'RequestMemory', str(memory)])
+    if opt.condor_dry_run:
+        print('[MEMORY] future request_memory =', expression)
+        for command in edits:
+            print('[MEMORY]', shlex.join(command))
+        return 0
+    backup = submit.with_name('submit.jds.before_stage_memory')
+    if not backup.exists():
+        shutil.copy2(submit, backup)
+    temporary = submit.with_name('submit.jds.'+uuid4().hex+'.tmp')
+    temporary.write_text(text)
+    temporary.replace(submit)
+    for command in edits:
+        base.run_command(command, batch)
+    print(f'[MEMORY] Updated future submissions and {len(edits)} idle jobs; running jobs unchanged.')
+    return 0
+
+
 def manage(opt):
     if not opt.condor_dir:
         raise ValueError('--stage status/resume/recover/collect requires --condor-dir.')
     payload = load_manifest(opt.condor_dir)
+    if opt.stage == 'set-memory':
+        return set_memory(opt, payload)
     if opt.stage == 'set-domain':
         return set_domain(opt,payload)
     if opt.stage == 'recover':
