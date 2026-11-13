@@ -27,11 +27,7 @@ SCHEMA = 'NPS26009_full_spectrum_inference_v1'
 
 
 def digest(path):
-    value = hashlib.sha256()
-    with Path(path).open('rb') as stream:
-        for block in iter(lambda: stream.read(1024*1024), b''):
-            value.update(block)
-    return value.hexdigest()
+    return base.validation_digest(path)
 
 
 def manifest_digest(payload):
@@ -322,21 +318,22 @@ def submit(opt):
 
 
 def report(batch):
-    payload = read_manifest(batch)
-    counts, products = Counter(), []
-    for job in payload['jobs']:
-        try:
-            status = base.completed_condor_job(payload, options(payload, job), job)
-            state = 'success'
-            if job['kind'] in ('limit_plot', 'impact_final'):
-                products.append(dict(kind=job['kind'], target=job['target'], mass=job['mass'],
-                    injected_r=job.get('injected_r'), files=status['files']))
-        except base.WorkflowError:
-            path = Path(job['workdir'])/'status.json'
-            state = json.loads(path.read_text()).get('state', 'pending') if path.exists() else 'pending'
-            if state == 'success':
-                state = 'stale'
-        counts[job['kind']+':'+state] += 1
+    with base.validation_cache():
+        payload = read_manifest(batch)
+        counts, products = Counter(), []
+        for job in payload['jobs']:
+            try:
+                status = base.completed_condor_job(payload, options(payload, job), job)
+                state = 'success'
+                if job['kind'] in ('limit_plot', 'impact_final'):
+                    products.append(dict(kind=job['kind'], target=job['target'], mass=job['mass'],
+                        injected_r=job.get('injected_r'), files=status['files']))
+            except base.WorkflowError:
+                path = Path(job['workdir'])/'status.json'
+                state = json.loads(path.read_text()).get('state', 'pending') if path.exists() else 'pending'
+                if state == 'success':
+                    state = 'stale'
+            counts[job['kind']+':'+state] += 1
     for key, value in sorted(counts.items()):
         print('[STATUS]', key, value)
     destination = Path(batch)/'inference_summary.json'

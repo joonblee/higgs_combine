@@ -1195,3 +1195,45 @@ The original defaultCrossing comparison snapshot still used minimiser tolerance
 1e-4 and strategy 2. To replace it, remove only its exact Condor JobBatchName
 and submit a fresh directory (for example suffix `_defaultMinimizer_v2`).
 Updating the checkout does not change existing Condor source snapshots.
+
+## Nuisance-level repair DAG and lighter diagnostic output
+
+`full_spectrum_impact_repair_dag.py` replaces serial ordinary nuisance repairs
+with independent Condor nodes. Submission first validates completed parents and
+collects their ROOT scans to identify missing/invalid intervals (no new fit in
+this planning phase). Each invalid ordinary nuisance gets its own job; each
+case's final audit/plot waits only for that case's repair jobs. Failed scans
+alone escalate through strategies 1/2/0. Completed task outputs are hashed and
+can be reused after a DAG rescue; an exclusive worker lock prevents concurrent
+writers. Final collection refuses to silently run ordinary missing scans in
+serial. Existing specialised boundary/tiny-QCD profiles and all interval,
+context/injection and completeness checks are retained.
+
+```bash
+python3 full_spectrum_impact_repair_dag.py \
+  --source-batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_inference \
+  --batch full_spectrum_outputs/condor/M12_M30_M70_impact_parallelNP_v3 \
+  --indices 2221,2983,4524
+python3 full_spectrum_impact_repair_dag.py --stage collect \
+  --batch full_spectrum_outputs/condor/M12_M30_M70_impact_parallelNP_v3
+```
+
+The source batch is read-only. Completed original scans are linked for baseline
+collection, not copied repeatedly; validated repaired scans are copied into the
+new final work directory. Only ordinary invalid scans are recomputed. Updating
+the checkout does not modify any already submitted source snapshot or job.
+The earlier serial-final repair entry point remains available for comparisons.
+
+Status/collect and final-impact collection now use a scoped validation cache:
+a successful dependency check and card/workspace digest are reused within that
+operation only. Watched file size/mtime/inode are checked before accepting the
+operation; concurrent input changes abort validation. No persistent cache or
+weaker acceptance criterion is introduced.
+
+For a new fit-only batch that only needs background scales and constraints,
+add `--fit-output norms` to `full_spectrum_fit.py`. RooFitResult, covariance and
+normalisation extraction/audits remain enabled; `--saveShapes` and
+`--saveWithUncertainties` are omitted. The default `--fit-output full` preserves
+existing output. Shape plots require full output. This option does not change
+the model signature, likelihood or nuisances. Use a new batch directory when
+changing diagnostic output; do not overwrite active results.

@@ -88,6 +88,8 @@ def make_parser():
                    help='Also compute blinded expected limits from each workspace; no impacts or toys. Condor writes limit/normalisation CSV tables automatically.')
     p.add_argument('--fit-components', choices=('both','b-only','s-only'), default='both',
                    help='Select both diagnostic fits, B-only or S+B-only; no nuisance/model change.')
+    p.add_argument('--fit-output', choices=('full','norms'), default='full',
+                   help='norms: save fit/covariance/normalisations without shapes or sampled shape uncertainties.')
     p.add_argument('--fit-strategy', type=int, choices=(0,1,2), default=1)
     p.add_argument('--fit-robust-hesse', action='store_true',
                    help='Opt-in covariance audit: robustHesse, with no parameter removal and a positive-definite full covariance required.')
@@ -280,7 +282,7 @@ def dy_study_tag(opt):
 
 def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base', 'expected_limits',
-               'fit_strategy', 'fit_tolerance', 'fit_max_calls', 'fit_verbosity', 'fit_components', 'fit_robust_hesse',
+               'fit_strategy', 'fit_tolerance', 'fit_max_calls', 'fit_verbosity', 'fit_components', 'fit_robust_hesse', 'fit_output',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
                'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal', 'signal_counting_version'}
@@ -418,8 +420,10 @@ def fit_commands(opt, mass, directory, fit_kind=None):
         ['combine', '-M', 'FitDiagnostics', str(fit_dir/'workspace.root'), '-m', str(mass),
          '-t', '-1', '--expectSignal', str(opt.inject_r), '--rMin', '0', '--rMax', str(opt.r_max),
          '--robustFit', '1', '--cminDefaultMinimizerStrategy', str(getattr(opt,'fit_strategy',1)),
-         '--saveShapes', '--saveWithUncertainties', '--saveNormalizations', '-n', '.FullSpectrum'],
+         '--saveNormalizations', '-n', '.FullSpectrum'],
     ]
+    if getattr(opt,'fit_output','full') == 'full':
+        commands[1] += ['--saveShapes','--saveWithUncertainties']
     if getattr(opt,'fit_strategy',1) != 1:
         commands[1] += ['--setRobustFitStrategy',str(opt.fit_strategy)]
     if getattr(opt,'fit_tolerance',None) is not None:
@@ -572,7 +576,8 @@ def extract_summary(model, directory, opt, fit_kind=None):
             by_name = {str(p.GetName()):p for p in parameters}
             indices = {str(p.GetName()):i for i,p in enumerate(parameters)}
             info = dict(status=int(fit.status()), covQual=int(fit.covQual()), edm=float(fit.edm()),
-                        minNll=float(fit.minNll()), normalisations={}, normalisation_correlations={})
+                        minNll=float(fit.minNll()), saved_output=getattr(opt,'fit_output','full'),
+                        normalisations={}, normalisation_correlations={})
             if not math.isfinite(info['edm']) or not math.isfinite(info['minNll']):
                 raise ValueError('Nonfinite fit diagnostics.')
             result['fits'][key] = info

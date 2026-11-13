@@ -206,6 +206,8 @@ from __future__ import annotations
 
 
 import argparse
+from contextlib import contextmanager
+from contextvars import ContextVar
 import csv
 import ctypes
 import glob
@@ -4659,6 +4661,8 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
         # Each subsequent pass scans ONLY parameters still missing or invalid.
         # Keep only invalid scans for the next strategy; doImpact may still
         # print a row when a conditional minimisation fails.
+        if pending and getattr(args, "impact_repair_no_scans", False):
+            raise WorkflowError(f"Distributed repair still has invalid scans: {pending}")
         for pass_index, strategy in enumerate((1, 2, 0), 1):
             if not pending:
                 break
@@ -5410,7 +5414,64 @@ def load_condor_manifest(path: Path) -> Tuple[Dict[str, Any], argparse.Namespace
     return payload, args
 
 
+_validation_scope = ContextVar("nps_validation_scope", default=None)
+
+
+def _validation_stamp(path):
+    st = Path(path).stat()
+    return (st.st_size, st.st_mtime_ns, st.st_ino)
+
+
+def _watch_validation_file(path):
+    cache = _validation_scope.get()
+    if cache is not None:
+        key = str(Path(path).resolve())
+        cache['stamps'].setdefault(key, _validation_stamp(key))
+
+
+@contextmanager
+def validation_cache():
+    """Successful checks are reused within one operation; mutations abort it."""
+    if _validation_scope.get() is not None:
+        yield
+        return
+    cache = dict(jobs={}, digests={}, stamps={})
+    token = _validation_scope.set(cache)
+    try:
+        yield
+        for path, stamp in cache['stamps'].items():
+            if not Path(path).is_file() or _validation_stamp(path) != stamp:
+                raise WorkflowError('Input changed during validation: '+path)
+    finally:
+        _validation_scope.reset(token)
+
+
+def validation_digest(path):
+    cache = _validation_scope.get()
+    key = str(Path(path).resolve())
+    if cache is not None and key in cache['digests']:
+        return cache['digests'][key]
+    _watch_validation_file(path)
+    value = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    if cache is not None:
+        cache['digests'][key] = value
+    return value
+
+
 def completed_condor_job(payload, args, job):
+    cache = _validation_scope.get()
+    key = (id(payload), job['index'], args.mode)
+    if cache is not None and key in cache['jobs']:
+        return cache['jobs'][key]
+    result = _completed_condor_job(payload, args, job)
+    if cache is not None:
+        for path in [Path(job['workdir'])/'status.json', *result.get('files',[])]:
+            _watch_validation_file(path)
+        cache['jobs'][key] = result
+    return result
+
+
+def _completed_condor_job(payload, args, job):
     path = Path(job["workdir"]) / "status.json"
     status = json.loads(path.read_text()) if path.is_file() else {}
     expected = {"batch_id": payload["batch_id"], "index": job["index"],
@@ -5423,7 +5484,7 @@ def completed_condor_job(payload, args, job):
         raise WorkflowError(f"job {job['index']} {job['target']} {job.get('kind', 'limits')}: "
                             f"{status.get('state', 'pending')}{error}")
     card = Path(job["card"])
-    if hashlib.sha256(card.read_bytes()).hexdigest() != job["card_sha256"]:
+    if validation_digest(card) != job["card_sha256"]:
         raise WorkflowError(f"Submitted datacard changed: {card}")
     files = status.get("files", [status.get("observed"), status.get("expected")])
     if not files or any(not p or not Path(p).is_file() or Path(p).stat().st_size == 0 for p in files):
@@ -5447,7 +5508,7 @@ def condor_impact_context(payload, args, initial_index):
     if context["impact_run_id"] != status["impact_run_id"]:
         raise WorkflowError("Impact context belongs to a different initial fit")
     for key in ("workspace", "initial_file"):
-        if hashlib.sha256(Path(context[key]).read_bytes()).hexdigest() != context[key + "_sha256"]:
+        if validation_digest(context[key]) != context[key + "_sha256"]:
             raise WorkflowError(f"Impact {key} changed after the initial fit")
     return context
 
@@ -5509,6 +5570,11 @@ def run_condor_impact_nuisance(payload, args, job, card, label, mass, workdir):
 
 
 def run_condor_impact_final(payload, args, job, card, label, mass, workdir):
+    with validation_cache():
+        return _run_condor_impact_final(payload,args,job,card,label,mass,workdir)
+
+
+def _run_condor_impact_final(payload, args, job, card, label, mass, workdir):
     context = condor_impact_context(payload, args, job["initial"])
     target = job["target"]
     tag = tag_for(args, target)
@@ -5561,7 +5627,7 @@ def run_condor_worker(manifest: Path, index: int) -> None:
             status["kind"] = kind
         write_condor_status(status_path, status)
         try:
-            if hashlib.sha256(card.read_bytes()).hexdigest() != job["card_sha256"]:
+            if validation_digest(card) != job["card_sha256"]:
                 raise WorkflowError(f"Submitted datacard changed: {card}")
             require_command("combine")
             require_command("combineTool.py")
