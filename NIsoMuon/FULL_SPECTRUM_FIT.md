@@ -1076,7 +1076,8 @@ or existing default job graph. Use `--stage status --condor-dir <batch>` to
 check progress, and the existing resume mechanism for incomplete nodes.
 
 New full-spectrum DAG submissions request memory by stage: preparation,
-assembly, workspace compilation, summary collection and CSV tables use 2048 MB.
+assembly, summary collection and CSV tables use 2048 MB. Workspace compilation
+uses 4096 MB; a fine-binning compilation exceeded a 2048 MB cgroup limit.
 Fits and expected limits retain 16000 MB (`--condor-memory`). Override the light
 stages with `--condor-light-memory`, or compilation independently with
 `--condor-workspace-memory`. Reservations are not measurements of actual use.
@@ -1095,3 +1096,13 @@ manifest, source snapshots, calculations and completed results are unchanged.
 The original source snapshot continues to execute. `--condor-dry-run` previews
 edits. A subsequent DAG retry uses the updated submit expression automatically.
 Updating the checkout alone does not change existing queued jobs.
+
+For an active inference DAG, `full_spectrum_inference.py --stage set-memory
+--batch <inference-batch> --dag-id <DAGMan-cluster>` sets idle nuisance fits to
+4096 MB and limit plotting to 2048 MB, and updates the submit expression for
+future jobs. Initial impacts, final collection/repair fits and limits retain
+16000 MB. `--impact-memory`, `--plot-memory` and `--condor-memory` override these
+values. Running jobs, manifests and source snapshots are unchanged. This is
+an explicit administrative update; fresh inference submissions still use their
+existing uniform request until this command is invoked. A held job is excluded:
+raise its request explicitly and release only that job after checking HoldReason.

@@ -109,21 +109,21 @@ class StageMemoryTests(unittest.TestCase):
             with patch.object(condor.subprocess,'check_output',return_value=json.dumps(ads)), \
                  patch.object(condor.base,'run_command') as run:
                 condor.set_memory(opt,payload)
-            self.assertEqual(run.call_args_list[0].args[0][-1],'2048')
+            self.assertEqual(run.call_args_list[0].args[0][-1],'4096')
             self.assertEqual(run.call_args_list[1].args[0][-1],'16000')
             self.assertIn('JobStatus == 1',run.call_args_list[0].args[0][2])
             expression=submit.read_text()
             self.assertIn('$(jobindex) == 2',expression)
             self.assertIn('$(jobindex) == 3',expression)
             self.assertIn('$(jobindex) == 4',expression)
-            self.assertNotIn('$(jobindex) == 1',expression)
+            self.assertIn('$(jobindex) == 1',expression)
             self.assertEqual((directory/'submit.jds.before_stage_memory').read_text(),'request_memory = 16000MB\nqueue 1\n')
 
     def test_light_and_workspace_memory_preserve_fit_resources(self):
         options=vars(fs.make_parser().parse_args([]))
         for kind in ('prepare','assemble','summarize','tables'):
             self.assertEqual(condor.memory_for_job(options,kind),2048)
-        self.assertEqual(condor.memory_for_job(options,'workspace'),2048)
+        self.assertEqual(condor.memory_for_job(options,'workspace'),4096)
         for kind in ('fit_b','fit_s','limits','fit'):
             self.assertEqual(condor.memory_for_job(options,kind),16000)
         for kind in ('prepare','workspace','fit_b'):

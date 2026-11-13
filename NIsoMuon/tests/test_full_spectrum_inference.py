@@ -145,6 +145,25 @@ class InferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'provenance mismatch'):
             inf.input_case(path)
 
+    def test_impact_memory_update_excludes_initial_fits_and_preserves_manifest(self):
+        payload=self.prepare()
+        manifest=(self.batch/'manifest.json').read_bytes()
+        kinds=('impact_nuisance','impact_initial','limit_plot')
+        jobs=[next(j for j in payload['jobs'] if j['kind']==kind) for kind in kinds]
+        ads=[dict(ClusterId=100+i,ProcId=0,DAGNodeName='J'+str(j['index']),Iwd=str(self.batch))
+             for i,j in enumerate(jobs)]
+        with patch.object(inf.subprocess,'check_output',return_value=json.dumps(ads)), \
+             patch.object(inf.base,'run_command') as run:
+            inf.main(['--stage','set-memory','--batch',str(self.batch),'--dag-id','19457414'])
+        self.assertEqual(run.call_count,2)
+        calls=[c.args[0] for c in run.call_args_list]
+        self.assertEqual({c[-1] for c in calls},{'2048','4096'})
+        self.assertFalse(any('ClusterId == 101' in c[2] for c in calls))
+        self.assertTrue(all('JobStatus == 1' in c[2] for c in calls))
+        self.assertEqual(manifest,(self.batch/'manifest.json').read_bytes())
+        self.assertIn('ifThenElse',(self.batch/'submit.jds').read_text())
+        self.assertTrue((self.batch/'submit.jds.before_impact_memory').exists())
+
     def test_modified_manifest_and_snapshot_rejected(self):
         self.prepare('limits')
         path = self.batch/'source/limit_workflow.py'

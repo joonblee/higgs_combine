@@ -99,8 +99,8 @@ def make_parser():
     batch.add_argument('--condor-memory', type=int, default=16000, help='Memory in MB for fits and limits (default: 16000).')
     batch.add_argument('--condor-light-memory', type=int, default=2048,
                        help='Memory in MB for preparation, assembly and table jobs (default: 2048).')
-    batch.add_argument('--condor-workspace-memory', type=int, default=2048,
-                       help='Memory in MB for workspace compilation (default: 2048).')
+    batch.add_argument('--condor-workspace-memory', type=int, default=4096,
+                       help='Memory in MB for workspace compilation (default: 4096).')
     batch.add_argument('--condor-retries', type=int, default=2)
     batch.add_argument('--condor-requirements', default='')
     batch.add_argument('--condor-filesystem-domain', default=None,

@@ -11,6 +11,8 @@ import fcntl
 import hashlib
 import json
 import math
+import re
+import subprocess
 from pathlib import Path
 import shlex
 import shutil
@@ -344,15 +346,83 @@ def report(batch):
     return payload
 
 
+def index_condition(indices, variable):
+    indices = sorted(set(indices))
+    ranges = []
+    for index in indices:
+        if ranges and index == ranges[-1][1]+1:
+            ranges[-1][1] = index
+        else:
+            ranges.append([index,index])
+    return ' || '.join(f'{variable} == {a}' if a == b else
+                      f'({variable} >= {a} && {variable} <= {b})' for a,b in ranges) or 'false'
+
+
+def set_memory(opt):
+    """Re-size only nuisance fits and plots; do not change active fits or inputs."""
+    if opt.dag_id is None or min(opt.impact_memory, opt.plot_memory, opt.condor_memory) < 1:
+        raise ValueError('set-memory requires --dag-id and positive memory values.')
+    batch = Path(opt.batch).resolve()
+    payload = read_manifest(batch)
+    nuisance = [j['index'] for j in payload['jobs'] if j['kind']=='impact_nuisance']
+    plots = [j['index'] for j in payload['jobs'] if j['kind']=='limit_plot']
+    expression = (f'ifThenElse(({index_condition(nuisance,"$(jobindex)")}), {opt.impact_memory}, '
+        f'ifThenElse(({index_condition(plots,"$(jobindex)")}), {opt.plot_memory}, {opt.condor_memory}))')
+    submit = batch/'submit.jds'
+    text, count = re.subn(r'^request_memory\s*=.*$', 'request_memory = '+expression,
+                         submit.read_text(), flags=re.MULTILINE)
+    if count != 1:
+        raise ValueError('Expected exactly one request_memory in submit.jds.')
+    ads = json.loads(subprocess.check_output(['condor_q','-constraint',
+        f'DAGManJobId == {opt.dag_id} && JobStatus == 1',
+        '-attributes','ClusterId,ProcId,DAGNodeName,Iwd','-json'], text=True))
+    selected = {**{i:opt.impact_memory for i in nuisance}, **{i:opt.plot_memory for i in plots}}
+    ids = []
+    for ad in ads:
+        match = re.fullmatch(r'J(\d+)',str(ad.get('DAGNodeName','')))
+        if not match or int(match.group(1)) not in selected:
+            continue
+        if ad.get('Iwd') and Path(ad['Iwd']).resolve() != batch:
+            raise ValueError('DAG ID does not match the requested batch directory.')
+        ids.append((int(ad['ClusterId']),int(ad['ProcId']),selected[int(match.group(1))]))
+    edits = []
+    for memory in sorted({opt.impact_memory,opt.plot_memory}):
+        subset = [(c,p) for c,p,m in ids if m==memory]
+        if not subset:
+            continue
+        # Bound command size even for a newly submitted large impact DAG.
+        for start in range(0,len(subset),500):
+            condition = ' || '.join(f'(ClusterId == {c} && ProcId == {p})' for c,p in subset[start:start+500])
+            edits.append(['condor_qedit','-constraint',f'JobStatus == 1 && ({condition})',
+                          'RequestMemory',str(memory)])
+    if opt.dry_run:
+        print('[MEMORY] would update',len(ids),'idle jobs and future submit requests.')
+        return
+    backup = submit.with_name('submit.jds.before_impact_memory')
+    if not backup.exists():
+        shutil.copy2(submit,backup)
+    temporary = submit.with_name('submit.jds.'+uuid4().hex+'.tmp')
+    temporary.write_text(text)
+    temporary.replace(submit)
+    for command in edits:
+        base.run_command(command,batch)
+    print('[MEMORY] Updated',len(ids),'idle jobs and future submissions; running jobs unchanged.')
+    print('[MEMORY] nuisance=',opt.impact_memory,'plot=',opt.plot_memory,
+          'initial/final/limits=',opt.condor_memory,'MB')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--results', nargs='+')
     parser.add_argument('--batch', required=True)
-    parser.add_argument('--stage', choices=('submit', 'status', 'collect', 'resume'), default='submit')
+    parser.add_argument('--stage', choices=('submit', 'status', 'collect', 'resume', 'set-memory'), default='submit')
     parser.add_argument('--task', choices=('limits', 'impacts', 'all'), default='all')
     parser.add_argument('--impact-injections', type=base.parse_float_list, default=[0., 1.])
     parser.add_argument('--r-max', type=float, default=100.)
     parser.add_argument('--condor-memory', type=int, default=16000)
+    parser.add_argument('--impact-memory', type=int, default=4096)
+    parser.add_argument('--plot-memory', type=int, default=2048)
+    parser.add_argument('--dag-id', type=int)
     parser.add_argument('--max-jobs', type=int, default=0, help='DAG concurrency cap; 0 means pool scheduling only')
     parser.add_argument('--condor-cmssw-base')
     parser.add_argument('--condor-scram-arch')
@@ -361,6 +431,8 @@ def main(argv=None):
     opt = parser.parse_args(argv)
     if opt.worker is not None:
         worker(opt.batch, opt.worker)
+    elif opt.stage == 'set-memory':
+        set_memory(opt)
     elif opt.stage == 'submit':
         submit(opt)
     else:
