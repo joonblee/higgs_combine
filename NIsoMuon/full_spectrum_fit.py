@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 import sys
 
@@ -85,9 +86,11 @@ def make_parser():
     p.add_argument('--r-max', type=shared.finite_positive, default=100.)
     p.add_argument('--expected-limits', action='store_true',
                    help='Also compute blinded expected limits from each workspace; no impacts or toys. Condor writes limit/normalisation CSV tables automatically.')
-    p.add_argument('--fit-components', choices=('both','b-only'), default='both',
-                   help='Select both diagnostic fits or B-only; no nuisance/model change.')
+    p.add_argument('--fit-components', choices=('both','b-only','s-only'), default='both',
+                   help='Select both diagnostic fits, B-only or S+B-only; no nuisance/model change.')
     p.add_argument('--fit-strategy', type=int, choices=(0,1,2), default=1)
+    p.add_argument('--fit-robust-hesse', action='store_true',
+                   help='Opt-in covariance audit: robustHesse, with no parameter removal and a positive-definite full covariance required.')
     p.add_argument('--fit-tolerance', type=shared.finite_positive)
     p.add_argument('--fit-max-calls', type=int)
     p.add_argument('--fit-verbosity', type=int, choices=(0,1,2,3))
@@ -277,7 +280,7 @@ def dy_study_tag(opt):
 
 def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base', 'expected_limits',
-               'fit_strategy', 'fit_tolerance', 'fit_max_calls', 'fit_verbosity', 'fit_components',
+               'fit_strategy', 'fit_tolerance', 'fit_max_calls', 'fit_verbosity', 'fit_components', 'fit_robust_hesse',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
                'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal', 'signal_counting_version'}
@@ -402,7 +405,7 @@ def decorate_model(model, opt, windows):
 
 
 def selected_fits(opt):
-    return ('fit_b',) if getattr(opt,'fit_components','both') == 'b-only' else ('fit_b','fit_s')
+    return {'b-only':('fit_b',), 's-only':('fit_s',), 'both':('fit_b','fit_s')}[getattr(opt,'fit_components','both')]
 
 
 def fit_commands(opt, mass, directory, fit_kind=None):
@@ -426,8 +429,12 @@ def fit_commands(opt, mass, directory, fit_kind=None):
         commands[1] += ['--X-rtd','MINIMIZER_MaxCalls='+str(opt.fit_max_calls)]
     if getattr(opt,'fit_verbosity',None) is not None:
         commands[1] += ['-v',str(opt.fit_verbosity)]
+    if getattr(opt,'fit_robust_hesse',False):
+        commands[1] += ['--robustHesse','1']
     if fit_kind is None and selected_fits(opt) == ('fit_b',):
         commands[1].append('--skipSBFit')
+    if fit_kind is None and selected_fits(opt) == ('fit_s',):
+        commands[1].append('--skipBOnlyFit')
     if fit_kind:
         commands[1].append('--skipSBFit' if fit_kind == 'fit_b' else '--skipBOnlyFit')
     return commands
@@ -502,6 +509,42 @@ def normalisation_diagnostics(parameter, specification, covariance_error=None):
         constraint=error, interval_method='transformed symmetric Hessian error; not a profile interval')
 
 
+def fit_quality_ok(info):
+    audit = info.get('covariance_audit', {})
+    return info['status'] == 0 and (info['covQual'] == 3 or
+        (info['covQual'] == -1 and audit.get('method') == 'robustHesse'
+         and audit.get('validated') is True))
+
+
+def audit_robust_covariance(fit, workspace, log_path):
+    """Reject repaired/dropped Hessian directions, incomplete fits and invalid matrices."""
+    text = Path(log_path).read_text(errors='replace')
+    iterations = re.findall(r'Verifying eigenvalues are all positive \(iteration (\d+)\)', text)
+    if not iterations or any(int(i) != 0 for i in iterations) or \
+            text.count('All eigenvalues are positive') != len(iterations):
+        raise ValueError('robustHesse did not validate every Hessian at iteration 0; inspect parameter removal in step1.log.')
+    config = workspace.obj('ModelConfig')
+    if not config:
+        raise ValueError('Missing ModelConfig for covariance audit.')
+    expected = {str(p.GetName()) for p in config.GetNuisanceParameters() if not p.isConstant()}
+    expected.update(str(p.GetName()) for p in config.GetParametersOfInterest()
+                    if fit.floatParsFinal().find(p.GetName()))
+    actual = [str(p.GetName()) for p in fit.floatParsFinal()]
+    if set(actual) != expected:
+        raise ValueError('Floating parameter set differs from the full workspace nuisance/POI set.')
+    cov = fit.covarianceMatrix()
+    matrix = np.array([[float(cov[i][j]) for j in range(len(actual))] for i in range(len(actual))])
+    if not np.isfinite(matrix).all() or not np.allclose(matrix, matrix.T, rtol=1e-10, atol=1e-12):
+        raise ValueError('Nonfinite or asymmetric robust covariance.')
+    try:
+        np.linalg.cholesky(matrix)
+    except np.linalg.LinAlgError as exc:
+        raise ValueError('Full robust covariance is not positive definite.') from exc
+    return dict(method='robustHesse', validated=True, parameter_removal=False,
+                floating_parameters=len(actual), minimum_eigenvalue=float(np.linalg.eigvalsh(matrix)[0]),
+                log_sha256=hashlib.sha256(Path(log_path).read_bytes()).hexdigest())
+
+
 def extract_summary(model, directory, opt, fit_kind=None):
     """Report both fits, all norm pulls/constraints and their correlations."""
     import ROOT
@@ -533,7 +576,9 @@ def extract_summary(model, directory, opt, fit_kind=None):
             if not math.isfinite(info['edm']) or not math.isfinite(info['minNll']):
                 raise ValueError('Nonfinite fit diagnostics.')
             result['fits'][key] = info
-            if info['status'] != 0 or info['covQual'] != 3:
+            if getattr(opt,'fit_robust_hesse',False) and info['status'] == 0:
+                info['covariance_audit'] = audit_robust_covariance(fit, workspace, fit_dir/'step1.log')
+            if not fit_quality_ok(info):
                 (fit_dir/'fit_failure.json').write_text(json.dumps(result, indent=2, allow_nan=False)+'\n')
                 raise ValueError(f'{key} failed fit quality checks: status={info["status"]}, covQual={info["covQual"]}; see fit_failure.json.')
             for name, specification in model['normalisations'].items():
@@ -752,7 +797,7 @@ def combine_fit_summaries(model, directory, opt):
         if any(part.get(k) != v for k,v in expected.items()) or set(part.get('fits', {})) != {kind}:
             raise ValueError('Incompatible fit summary: '+kind)
         info = part['fits'][kind]
-        if info['status'] != 0 or info['covQual'] != 3:
+        if not fit_quality_ok(info):
             raise ValueError('Failed fit quality in '+kind)
         if result is None:
             result = dict(expected, fits={}, fit_outputs={})

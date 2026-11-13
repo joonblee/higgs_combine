@@ -123,7 +123,7 @@ def result_tables(payload, opt):
         limits.append(dict(mass=mass, target=summary['target'],
             **{key.replace('+','plus').replace('-','minus'):limit['alpha'][key] for key in base.EXPECTED_LIMIT_KEYS}))
         for kind, fit in summary['fits'].items():
-            if fit['status'] != 0 or fit['covQual'] != 3:
+            if not fs.fit_quality_ok(fit):
                 raise ValueError('Failed normalisation fit quality.')
             for value in fit['normalisations'].values():
                 if value['process'] in ('QCD', 'DY'):

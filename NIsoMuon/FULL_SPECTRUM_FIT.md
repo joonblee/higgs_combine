@@ -1134,3 +1134,21 @@ retains the original graph and output. Hypothesis selection is an execution
 option and does not change card signatures. For the fine covariance check,
 select 12,30,70 and the original fine batch results as input, then use a new
 Condor directory, strategy 2, tolerance 1e-4, five million calls and verbosity 2.
+# Optional robustHesse covariance audit
+
+`--fit-robust-hesse` is opt-in and leaves the saved card/model unchanged.
+Use a new `--stage fit` batch, pointing `--output-base` at the existing
+batch's `results`; workspace and fit outputs are written into the new batch.
+Do not resume or modify a running batch to change minimiser options.
+
+For externally provided covariance (`covQual=-1`), summaries require final
+fit status zero, finite diagnostics, robustHesse eigenvalue validation at
+iteration zero (no dropped directions), the full workspace nuisance/POI
+parameter set, and a finite symmetric positive-definite covariance matrix.
+The summary records `covariance_audit`; `covQual=-1` alone is never accepted.
+These are covariance diagnostics, not a replacement for profile/coverage tests.
+Other inference/toy workflows retain their existing quality checks.
+
+Use `--fit-components b-only` or `--fit-components s-only` to rerun only one
+failed hypothesis. Each mass then has workspace, selected fit and summary
+nodes; no template preparation, limits or impacts are repeated.
