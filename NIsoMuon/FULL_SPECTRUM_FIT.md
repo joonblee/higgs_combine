@@ -918,3 +918,63 @@ mass hypotheses using the current resolution-coefficient JSON. It gives both
 analytic +/-5 sigma limits (clipped to 11--80) and boundaries snapped outward
 to a 0.02 GeV native grid. Actual model.json `eras[ERA].signal_window` is the
 authoritative boundary when using a different resolution map or input grid.
+
+### Expected limits and impacts alongside toys
+
+Completed `fit_r0` results can feed limits and impacts immediately. There is no
+DAG dependency on the bias-toy batch. The driver copies the validated
+`fit_r0/workspace.root`, FAKE-shape fit card, model and fit summary into a separate
+batch. It never rebuilds estimates, changes nuisance prescriptions, reads
+observed search-region data, or modifies the completed fit batch.
+
+```bash
+python3 full_spectrum_inference.py \
+    --results full_spectrum_outputs/condor/M12_M30_M70_countingSignal_r0/results \
+    --batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_inference \
+    --task all --impact-injections 0,1
+```
+
+Run in the initialised Combine CMSSW environment on the same shared storage as
+the original Condor workflow. Limits for all saved masses and independent impact
+initial fits for `r=0` and `r=1` Asimov datasets start together. Once an initial
+impact interval passes validation, one Condor job per nuisance performs its
+conditional fits. Every nuisance is fitted; the impact PDF displays the largest
+30. Final jobs collect, validate/repair and plot automatically. Limit plotting
+waits only for limit jobs, not impacts or toys. `r=1` uses the saved model's signal
+reference (25 SR events across eras for window layout), including the original
+sideband signal leakage.
+
+Limits retain `r >= 0` and use `AsymptoticLimits --run blind`. The five expected
+quantiles are checked, with adaptive upper-range expansion up to `--r-max`
+(default 100). Impacts use signed `r` for profile intervals around zero; their
+negative range is limited by the nominal per-channel Poisson means and checked
+before nuisance jobs start. This diagnostic range does not change the physical
+domain used for limits. The positive profile error, rather than the bounded
+RooRealVar symmetric error, sets the initial impact range. Every initial and
+nuisance command, including repairs, preserves the same injected signal strength.
+
+Physical limit and impact coordinates use the saved `alpha_internal_unit`;
+internal-coordinate JSON outputs are retained. A three-mass limit plot contains
+only those calculated hypotheses. Source, workspace, card and manifest hashes
+prevent mixing models. Interpretation still requires reviewing the independently
+running validation studies.
+
+```bash
+# Status and completed plot locations; also writes inference_summary.json
+python3 full_spectrum_inference.py --stage status \
+    --batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_inference
+
+# Retry incomplete/stale jobs after the current DAG has stopped
+python3 full_spectrum_inference.py --stage resume \
+    --batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_inference
+```
+
+Plot products live under `jobs/job_*/` in this batch. `inference_summary.json`
+lists their exact paths, masses, targets and impact injections. `--stage collect`
+also updates this index. Limits and each impact scenario finish independently.
+Inspect failed-node stdout/stderr under `jobs/`; failed/missing intervals are
+reported rather than substituted. Successful jobs are retained on resume, with
+dependency completion IDs rejecting stale children. Use `--dry-run` to prepare
+without submitting, `--task limits` or `--task impacts` to select one calculation,
+and optionally `--max-jobs 100` to cap simultaneous DAG nodes. Default memory
+is 16000 MB per job. Do not submit a resume DAG while the original DAG is active.

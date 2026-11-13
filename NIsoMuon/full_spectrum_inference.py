@@ -1,0 +1,380 @@
+#!/usr/bin/env python3
+"""Expected limits and distributed r=0/1 impacts from completed blinded models.
+
+Reuse the validated FAKE-shape workspace without rebuilding input estimates.
+The DAG has no toy dependency. All nuisance fits are included; only the plotted
+ranking is limited to the largest 30 impacts. Shared-storage Condor backend.
+"""
+import argparse
+from collections import Counter
+import fcntl
+import hashlib
+import json
+import math
+from pathlib import Path
+import shlex
+import shutil
+import sys
+from uuid import uuid4
+
+import limit_workflow as base
+
+SOURCES = ('full_spectrum_inference.py', 'limit_workflow.py',
+           'python/plotLimits.py', 'python/plotting.py')
+SCHEMA = 'NPS26009_full_spectrum_inference_v1'
+
+
+def digest(path):
+    value = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for block in iter(lambda: stream.read(1024*1024), b''):
+            value.update(block)
+    return value.hexdigest()
+
+
+def manifest_digest(payload):
+    return hashlib.sha256(json.dumps({k: v for k, v in payload.items()
+        if k != 'manifest_sha256'}, sort_keys=True, allow_nan=False).encode()).hexdigest()
+
+
+def read_manifest(batch):
+    batch = Path(batch).resolve()
+    payload = json.loads((batch/'manifest.json').read_text())
+    if payload.get('schema') != SCHEMA or payload.get('manifest_sha256') != manifest_digest(payload):
+        raise ValueError('Invalid or modified inference manifest.')
+    for name, expected in payload['source_hashes'].items():
+        if digest(batch/name) != expected:
+            raise ValueError('Submitted source changed: '+name)
+    checked = set()
+    for job in payload['jobs']:
+        for key in ('card', 'workspace'):
+            if job[key] not in checked:
+                if digest(job[key]) != job[key+'_sha256']:
+                    raise ValueError('Submitted card/workspace changed: '+job[key])
+                checked.add(job[key])
+    return payload
+
+
+def options(payload, job=None):
+    args = base.build_parser().parse_args([])
+    vars(args).update(payload['config'])
+    if job:
+        args.impact_expect_signal = job.get('injected_r', 0.)
+        args.r_min = job.get('r_min', 0.)
+    return args
+
+
+def input_case(path):
+    summary = json.loads(path.read_text())
+    model_path = path.parent.parent/'model.json'
+    model = json.loads(model_path.read_text())
+    card = path.parent/'datacard.txt'
+    original = path.parent.parent/'datacard.txt'
+    workspace = path.parent/'workspace.root'
+    if (summary.get('blind') is not True or model.get('blind') is not True
+            or summary.get('inject_r') != 0 or model.get('test_only')
+            or summary.get('test_only')):
+        raise ValueError('Require completed, non-test background-only Asimov results: '+str(path))
+    if (summary['mass'] != model['mass'] or summary['target'] != model['target']
+            or summary['card_sha256'] != model['card_sha256']
+            or digest(original) != model['card_sha256']
+            or digest(card) != summary['fit_card_sha256']):
+        raise ValueError('Summary, model and card provenance mismatch: '+str(path))
+    if 'shapes * * FAKE' not in card.read_text().splitlines():
+        raise ValueError('Require the validated compiled-fit card with FAKE shapes.')
+    if not workspace.is_file():
+        raise ValueError('Missing saved workspace: '+str(workspace))
+    for kind in ('fit_b', 'fit_s'):
+        fit = summary['fits'][kind]
+        if fit['status'] != 0 or fit['covQual'] != 3:
+            raise ValueError('Failed Asimov fit quality: '+str(path))
+    # The raw bounded RooRealVar error is deliberately never used as sensitivity.
+    reference = summary['fits']['fit_s'].get('r_profile_error_high')
+    if reference is None:
+        import ROOT
+        source = ROOT.TFile.Open(str(path.parent/'fit_s/fitDiagnostics.FullSpectrum.root'))
+        try:
+            fit = source.Get('fit_s') if source and not source.IsZombie() else None
+            parameter = fit.floatParsFinal().find('r') if fit else None
+            reference = float(parameter.getAsymErrorHi()) if parameter and parameter.hasAsymError() else None
+        finally:
+            if source:
+                source.Close()
+    if reference is None or not math.isfinite(reference) or reference <= 0:
+        raise ValueError('Missing positive profile error in completed Asimov fit.')
+    safe = min(row['asimov']/row['rates']['sig'] for row in model['rows'] if row['rates']['sig'] > 0)
+    unit = base.alpha_unit_from_card(card)
+    if (not math.isfinite(safe) or safe <= 0
+            or not math.isclose(unit, model['alpha_internal_unit'], rel_tol=1e-12)
+            or not math.isclose(unit, summary['alpha_internal_unit'], rel_tol=1e-12)):
+        raise ValueError('Invalid nominal Poisson means or signal unit.')
+    return model, card, workspace, reference, -.9*safe
+
+
+def initial_job(payload, args, job, directory):
+    """Check the signed POI range before releasing any nuisance jobs."""
+    card, workspace = Path(job['card']), Path(job['workspace'])
+    mass, label = job['mass'], base.mass_label(job['mass'])
+    name = f'.Impacts_{base.tag_for(args, job["target"])}_M{label}'
+    initial = directory/f'higgsCombine_initialFit_{name}.MultiDimFit.mH{base.format_mass_for_combine(mass)}.root'
+    rmin, rmax = job['r_min'], args.r_max
+    for attempt in range(args.impact_range_retries+1):
+        initial.unlink(missing_ok=True)
+        command = base.impact_common_command(args, card, job['target'], label, mass, workspace, rmin, rmax)
+        base.run_command([*command, '--doInitialFit'], directory)
+        poi = {'POIs': [{'name': 'r', 'fit': base.read_impact_initial_poi(initial)}]}
+        centre = poi['POIs'][0]['fit'][1]
+        if not math.isfinite(centre) or not math.isclose(centre, args.impact_expect_signal,
+                rel_tol=1e-3, abs_tol=1e-3*job['reference_positive_profile_error']):
+            raise ValueError('Impact Asimov best fit does not recover the requested injection.')
+        boundary, _ = base.impact_fit_reaches_lower_boundary(poi, rmin)
+        if boundary:
+            expanded = base.expanded_impact_rmin(rmin, job['safe_r_min'])
+            if attempt < args.impact_range_retries and expanded < rmin-1e-9:
+                rmin = expanded
+                continue
+            raise ValueError('Impact lower interval reaches the nominal-safe POI boundary; see initial job log.')
+        base.repair_impact_initial_poi(args, card, job['target'], label, mass, directory,
+            workspace, directory/'initial_poi.json', poi, rmin, rmax)
+        context = dict(impact_run_id=uuid4().hex, rmin=rmin, rmax=rmax,
+            workspace=str(workspace), workspace_sha256=job['workspace_sha256'],
+            initial_file=str(initial), initial_file_sha256=digest(initial))
+        context_path = directory/'impact_context.json'
+        base.write_condor_status(context_path, context)
+        return dict(impact_run_id=context['impact_run_id'], files=[str(initial), str(context_path)])
+    raise ValueError('Impact initial range retries exhausted.')
+
+
+def worker(batch, index):
+    payload = read_manifest(batch)
+    job = payload['jobs'][index]
+    args = options(payload, job)
+    directory = Path(job['workdir'])
+    with (directory/'worker.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            base.completed_condor_job(payload, args, job)
+            print('[REUSE]', index)
+            return
+        except base.WorkflowError:
+            pass
+        status = dict(batch_id=payload['batch_id'], index=index, target=job['target'], mode='blind',
+            kind=job['kind'], card_sha256=job['card_sha256'], state='running')
+        status_path = directory/'status.json'
+        base.write_condor_status(status_path, status)
+        try:
+            if digest(job['card']) != job['card_sha256'] or digest(job['workspace']) != job['workspace_sha256']:
+                raise ValueError('Submitted card/workspace changed.')
+            parents = {str(i): base.completed_condor_job(payload, args, payload['jobs'][i])['completion_id']
+                       for i in job['dependencies']}
+            card = Path(job['card'])
+            mass, label = job['mass'], base.mass_label(job['mass'])
+            if job['kind'] == 'limits':
+                result = base.run_asymptotic(args, Path(job['workspace']), job['target'], label, mass, directory)
+                products = dict(expected=str(result.expected), files=[str(result.expected)])
+            elif job['kind'] == 'impact_initial':
+                products = initial_job(payload, args, job, directory)
+            elif job['kind'] == 'impact_nuisance':
+                products = base.run_condor_impact_nuisance(payload, args, job, card, label, mass, directory)
+            elif job['kind'] == 'impact_final':
+                products = base.run_condor_impact_final(payload, args, job, card, label, mass, directory)
+            elif job['kind'] == 'limit_plot':
+                rows = [payload['jobs'][i] for i in job['dependencies']]
+                outputs = [Path(base.completed_condor_job(payload, args, j)['expected']) for j in rows]
+                base.collect_and_plot_limits(args, job['target'], [Path(j['card']) for j in rows],
+                    outputs, outputs, directory)
+                prefix = directory/f'limits_{job["target"]}_alpha'
+                products = dict(files=[str(prefix.with_suffix(s)) for s in ('.json', '.pdf', '.png')])
+            else:
+                raise ValueError('Unknown job kind.')
+            if any(not Path(p).is_file() or Path(p).stat().st_size == 0 for p in products['files']):
+                raise ValueError('Missing/empty inference output.')
+            status.update(products, state='success', completion_id=uuid4().hex, dependency_completions=parents)
+        except Exception as error:
+            status.update(state='failed', error=str(error))
+            base.write_condor_status(status_path, status)
+            raise
+        base.write_condor_status(status_path, status)
+        print('[DONE]', job['kind'], job['target'], mass, job.get('injected_r'))
+
+
+def write_dag(batch, payload, resume=False):
+    lines = []
+    for job in payload['jobs']:
+        done = False
+        if resume:
+            try:
+                base.completed_condor_job(payload, options(payload, job), job)
+                done = True
+            except base.WorkflowError:
+                pass
+        node = f'J{job["index"]}'
+        lines += [f'JOB {node} submit.jds'+(' DONE' if done else ''),
+                  f'VARS {node} jobindex="{job["index"]}"']
+        if job['dependencies']:
+            lines += ['PARENT '+' '.join(f'J{i}' for i in job['dependencies'])+' CHILD '+node]
+    name = 'resume_'+uuid4().hex[:8]+'.dag' if resume else 'workflow.dag'
+    (batch/name).write_text('\n'.join(lines)+'\n')
+    return name
+
+
+def submit(opt):
+    if (not math.isfinite(opt.r_max) or opt.r_max <= 0 or opt.condor_memory <= 0
+            or opt.max_jobs < 0 or not opt.impact_injections
+            or any(not math.isfinite(x) or x < 0 or x >= opt.r_max for x in opt.impact_injections)):
+        raise ValueError('Invalid POI range, injection, memory or concurrency.')
+    batch = Path(opt.batch).resolve()
+    if batch.exists() or any(c.isspace() or c in '$"' for c in str(batch)):
+        raise ValueError('Choose a new batch path without whitespace, quotes or dollar signs.')
+    paths = set()
+    for root in opt.results or []:
+        root = Path(root).resolve()
+        if not root.exists():
+            raise ValueError('Missing input result path: '+str(root))
+        paths.update([root] if root.is_file() else root.rglob('fit_r0/fit_summary.json'))
+    if not paths:
+        raise ValueError('Supply --results with completed fit_r0 results.')
+    cases = [input_case(path) for path in sorted(paths)]
+    keys = [(m['target'], m['mass']) for m, *_ in cases]
+    if len(set(keys)) != len(keys):
+        raise ValueError('More than one model for the same target/mass; select one results batch.')
+    cmssw, arch = base.condor_environment(opt)
+    batch.mkdir(parents=True)
+    source_hashes = {}
+    for name in SOURCES:
+        destination = batch/'source'/name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(Path(__file__).parent/name, destination)
+        source_hashes[str(destination.relative_to(batch))] = digest(destination)
+    jobs, limits = [], {}
+    for model, source_card, source_workspace, reference, safe in cases:
+        target, mass = model['target'], model['mass']
+        label = base.mass_label(mass)
+        directory = batch/'input'/target/f'M{label}'
+        directory.mkdir(parents=True)
+        card = directory/f'datacard_M-{label}_{target}.txt'
+        workspace = directory/'workspace.root'
+        shutil.copy2(source_card, card)
+        shutil.copy2(source_workspace, workspace)
+        shutil.copy2(source_card.parent.parent/'model.json', directory/'model.json')
+        shutil.copy2(source_card.parent/'fit_summary.json', directory/'fit_summary.json')
+        common = dict(target=target, mass=mass, card=str(card), card_sha256=digest(card),
+            workspace=str(workspace), workspace_sha256=digest(workspace),
+            original_workspace=str(source_workspace.resolve()), reference_positive_profile_error=reference,
+            original_card_sha256=model['card_sha256'], alpha_internal_unit=model['alpha_internal_unit'])
+        def add(kind, dependencies=(), **extra):
+            index = len(jobs)
+            work = batch/'jobs'/f'job_{index:05d}'
+            work.mkdir(parents=True)
+            job = dict(common, index=index, kind=kind, dependencies=list(dependencies), workdir=str(work), **extra)
+            jobs.append(job)
+            return job
+        if opt.task in ('limits', 'all'):
+            limits.setdefault(target, []).append(add('limits')['index'])
+        if opt.task in ('impacts', 'all'):
+            nuisances = sorted(base.impact_workspace_parameters(workspace))
+            if not nuisances:
+                raise ValueError('No floating nuisance parameters in saved workspace.')
+            for injection in dict.fromkeys(opt.impact_injections):
+                rmin = max(safe, -5*reference)
+                initial = add('impact_initial', injected_r=injection, r_min=rmin, safe_r_min=safe)
+                scans = [add('impact_nuisance', [initial['index']], initial=initial['index'],
+                    nuisance=n, injected_r=injection, r_min=rmin) for n in nuisances]
+                add('impact_final', [initial['index'], *[s['index'] for s in scans]],
+                    initial=initial['index'], nuisance_jobs=[s['index'] for s in scans],
+                    injected_r=injection, r_min=rmin)
+    # Plot limits as soon as limit jobs finish, independently of all impacts.
+    for target, indices in limits.items():
+        job = dict(jobs[indices[0]], index=len(jobs), kind='limit_plot', dependencies=indices,
+            workdir=str(batch/'jobs'/f'job_{len(jobs):05d}'))
+        Path(job['workdir']).mkdir()
+        jobs.append(job)
+    payload = dict(schema=SCHEMA, batch_id=uuid4().hex, blind=True, jobs=jobs, source_hashes=source_hashes,
+        config=dict(mode='blind', parameter='alpha', strict=True, r_max=opt.r_max,
+                    allow_negative_r=True, impact_parallel=1, jobs=1,
+                    plot_limits_py=str(batch/'source/python/plotLimits.py')))
+    payload['manifest_sha256'] = manifest_digest(payload)
+    (batch/'manifest.json').write_text(json.dumps(payload, indent=2, allow_nan=False)+'\n')
+    wrapper = batch/'run_job.sh'
+    wrapper.write_text('\n'.join(['#!/bin/bash', 'set -eo pipefail', 'ulimit -s unlimited',
+        'source /cvmfs/cms.cern.ch/cmsset_default.sh', 'export SCRAM_ARCH='+shlex.quote(arch),
+        'cd '+shlex.quote(str(cmssw/'src')), 'eval "$(scram runtime -sh)"',
+        'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1',
+        'exec python3 -u '+shlex.quote(str(batch/'source/full_spectrum_inference.py'))+
+        ' --batch '+shlex.quote(str(batch))+' --worker "$1"', '']))
+    wrapper.chmod(0o755)
+    (batch/'submit.jds').write_text('\n'.join(['universe = vanilla', f'executable = {wrapper}',
+        f'initialdir = {batch}', 'arguments = $(jobindex)', 'should_transfer_files = NO',
+        'getenv = True', 'request_cpus = 1', f'request_memory = {opt.condor_memory}MB',
+        'output = jobs/job_$(jobindex).out', 'error = jobs/job_$(jobindex).err',
+        'log = condor.log', 'queue 1', '']))
+    dag = write_dag(batch, payload)
+    command = ['condor_submit_dag']+(['-maxjobs', str(opt.max_jobs)] if opt.max_jobs else [])+[dag]
+    print('[PLAN]', dict(Counter(j['kind'] for j in jobs)))
+    print('[BATCH]', batch)
+    if not opt.dry_run:
+        base.run_command(command, batch, stdout_path=batch/'submit.log')
+    else:
+        print('[SUBMIT]', shlex.join(command))
+    print('[STATUS] python3 full_spectrum_inference.py --stage status --batch '+str(batch))
+
+
+def report(batch):
+    payload = read_manifest(batch)
+    counts, products = Counter(), []
+    for job in payload['jobs']:
+        try:
+            status = base.completed_condor_job(payload, options(payload, job), job)
+            state = 'success'
+            if job['kind'] in ('limit_plot', 'impact_final'):
+                products.append(dict(kind=job['kind'], target=job['target'], mass=job['mass'],
+                    injected_r=job.get('injected_r'), files=status['files']))
+        except base.WorkflowError:
+            path = Path(job['workdir'])/'status.json'
+            state = json.loads(path.read_text()).get('state', 'pending') if path.exists() else 'pending'
+            if state == 'success':
+                state = 'stale'
+        counts[job['kind']+':'+state] += 1
+    for key, value in sorted(counts.items()):
+        print('[STATUS]', key, value)
+    destination = Path(batch)/'inference_summary.json'
+    destination.write_text(json.dumps(dict(blind=True, counts=dict(counts), products=products), indent=2)+'\n')
+    for product in products:
+        print('[PLOT]', product['kind'], 'r='+str(product['injected_r']), *product['files'])
+    return payload
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--results', nargs='+')
+    parser.add_argument('--batch', required=True)
+    parser.add_argument('--stage', choices=('submit', 'status', 'collect', 'resume'), default='submit')
+    parser.add_argument('--task', choices=('limits', 'impacts', 'all'), default='all')
+    parser.add_argument('--impact-injections', type=base.parse_float_list, default=[0., 1.])
+    parser.add_argument('--r-max', type=float, default=100.)
+    parser.add_argument('--condor-memory', type=int, default=16000)
+    parser.add_argument('--max-jobs', type=int, default=0, help='DAG concurrency cap; 0 means pool scheduling only')
+    parser.add_argument('--condor-cmssw-base')
+    parser.add_argument('--condor-scram-arch')
+    parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--worker', type=int, help=argparse.SUPPRESS)
+    opt = parser.parse_args(argv)
+    if opt.worker is not None:
+        worker(opt.batch, opt.worker)
+    elif opt.stage == 'submit':
+        submit(opt)
+    else:
+        payload = report(opt.batch)
+        if opt.stage == 'resume':
+            dag = write_dag(Path(opt.batch).resolve(), payload, resume=True)
+            command = ['condor_submit_dag']+(['-maxjobs', str(opt.max_jobs)] if opt.max_jobs else [])+[dag]
+            if not opt.dry_run:
+                base.run_command(command, Path(opt.batch).resolve())
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (ValueError, OSError, base.WorkflowError) as error:
+        print('ERROR:', error, file=sys.stderr)
+        raise SystemExit(1)

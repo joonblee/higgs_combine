@@ -4735,17 +4735,20 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
 
 
 def impact_common_command(args, card, target, label, mass, workspace, rmin, rmax):
+    injection = float(getattr(args, "impact_expect_signal", 0.0))
+    if not math.isfinite(injection) or injection < 0:
+        raise WorkflowError("Impact Asimov injection must be finite and nonnegative")
     command = [
         "combineTool.py", "-M", "Impacts", "-d", str(workspace),
         "-m", format_mass_for_combine(mass),
         "--robustFit", "1", "--setCrossingTolerance", "1e-8",
         "--cminDefaultMinimizerStrategy", "1", "--cminDefaultMinimizerTolerance", "1e-4",
         "--setRobustFitStrategy", "1", "--setRobustFitTolerance", "1e-4",
-        "--setParameters", "r=0", *explicit_range_args(rmin, rmax, card),
+        "--setParameters", f"r={injection:.12g}", *explicit_range_args(rmin, rmax, card),
         "-n", f".Impacts_{tag_for(args, target)}_M{label}",
     ]
     if args.mode == "blind":
-        command.extend(["-t", "-1", "--expectSignal", "0"])
+        command.extend(["-t", "-1", "--expectSignal", f"{injection:.12g}"])
     return command
 
 
