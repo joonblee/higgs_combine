@@ -1124,3 +1124,13 @@ Inspect both fit summaries and compare minima/normalisations with the original
 fit before using a recovered covariance. Verbose logs identify remaining HESSE
 warnings; do not repeatedly resubmit unchanged settings or accept covariance
 quality two by relaxing the validator.
+
+Use `--fit-components b-only` for a B-only numerical retry without duplicating
+S+B jobs that are already running or validated. With `--stage fit`, each mass
+has only workspace, B-only fit and summary nodes. The diagnostic summary has
+only a `fit_b` entry; this is intentionally not a substitute for the complete
+B/S+B summary required by the separate inference/toy drivers. Default `both`
+retains the original graph and output. Hypothesis selection is an execution
+option and does not change card signatures. For the fine covariance check,
+select 12,30,70 and the original fine batch results as input, then use a new
+Condor directory, strategy 2, tolerance 1e-4, five million calls and verbosity 2.

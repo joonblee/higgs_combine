@@ -85,6 +85,8 @@ def make_parser():
     p.add_argument('--r-max', type=shared.finite_positive, default=100.)
     p.add_argument('--expected-limits', action='store_true',
                    help='Also compute blinded expected limits from each workspace; no impacts or toys. Condor writes limit/normalisation CSV tables automatically.')
+    p.add_argument('--fit-components', choices=('both','b-only'), default='both',
+                   help='Select both diagnostic fits or B-only; no nuisance/model change.')
     p.add_argument('--fit-strategy', type=int, choices=(0,1,2), default=1)
     p.add_argument('--fit-tolerance', type=shared.finite_positive)
     p.add_argument('--fit-max-calls', type=int)
@@ -275,7 +277,7 @@ def dy_study_tag(opt):
 
 def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base', 'expected_limits',
-               'fit_strategy', 'fit_tolerance', 'fit_max_calls', 'fit_verbosity',
+               'fit_strategy', 'fit_tolerance', 'fit_max_calls', 'fit_verbosity', 'fit_components',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
                'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal', 'signal_counting_version'}
@@ -399,6 +401,10 @@ def decorate_model(model, opt, windows):
     return model
 
 
+def selected_fits(opt):
+    return ('fit_b',) if getattr(opt,'fit_components','both') == 'b-only' else ('fit_b','fit_s')
+
+
 def fit_commands(opt, mass, directory, fit_kind=None):
     if fit_kind not in (None, 'fit_b', 'fit_s'):
         raise ValueError('Unknown fit kind.')
@@ -420,6 +426,8 @@ def fit_commands(opt, mass, directory, fit_kind=None):
         commands[1] += ['--X-rtd','MINIMIZER_MaxCalls='+str(opt.fit_max_calls)]
     if getattr(opt,'fit_verbosity',None) is not None:
         commands[1] += ['-v',str(opt.fit_verbosity)]
+    if fit_kind is None and selected_fits(opt) == ('fit_b',):
+        commands[1].append('--skipSBFit')
     if fit_kind:
         commands[1].append('--skipSBFit' if fit_kind == 'fit_b' else '--skipBOnlyFit')
     return commands
@@ -513,7 +521,7 @@ def extract_summary(model, directory, opt, fit_kind=None):
                       card_sha256=model['card_sha256'],
                       fit_card_sha256=hashlib.sha256((root_dir/'datacard.txt').read_bytes()).hexdigest(),
                       fits={})
-        for key in ((fit_kind,) if fit_kind else ('fit_b', 'fit_s')):
+        for key in ((fit_kind,) if fit_kind else selected_fits(opt)):
             fit = handle.Get(key)
             if not fit:
                 raise ValueError('Missing '+key)
@@ -739,7 +747,7 @@ def combine_fit_summaries(model, directory, opt):
                     test_only=model.get('test_only', False), inject_r=opt.inject_r,
                     alpha_internal_unit=model['alpha_internal_unit'], card_sha256=model['card_sha256'],
                     fit_card_sha256=fit_card_hash)
-    for kind in ('fit_b', 'fit_s'):
+    for kind in selected_fits(opt):
         part = json.loads((root_dir/kind/'fit_summary.json').read_text())
         if any(part.get(k) != v for k,v in expected.items()) or set(part.get('fits', {})) != {kind}:
             raise ValueError('Incompatible fit summary: '+kind)

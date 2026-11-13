@@ -102,7 +102,7 @@ def make_jobs(opt, windows):
             parents = [add('assemble', mass, parents)]
         if opt.stage in ('fit', 'all'):
             workspace = add('workspace', mass, parents)
-            fits = [add(kind, mass, [workspace]) for kind in ('fit_b', 'fit_s')]
+            fits = [add(kind, mass, [workspace]) for kind in fs.selected_fits(opt)]
             final.append(add('summarize', mass, fits))
             if getattr(opt, 'expected_limits', False):
                 final.append(add('limits', mass, [workspace]))

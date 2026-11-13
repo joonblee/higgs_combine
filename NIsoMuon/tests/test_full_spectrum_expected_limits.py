@@ -94,6 +94,22 @@ class ExpectedLimitTests(unittest.TestCase):
                 condor.result_tables(dict(batch=tmp),opt)
 
 
+class BOnlyTests(unittest.TestCase):
+    def test_bonly_plans_no_sb_fit_and_preserves_card_signature(self):
+        default=fs.make_parser().parse_args(['--stage','fit','--masses','12,30,70'])
+        opt=fs.make_parser().parse_args(['--stage','fit','--masses','12,30,70','--fit-components','b-only'])
+        self.assertEqual(fs.signature(default),fs.signature(opt))
+        jobs=condor.make_jobs(opt,{})
+        self.assertEqual(len(jobs),9)
+        self.assertEqual([j['kind'] for j in jobs].count('fit_b'),3)
+        self.assertNotIn('fit_s',[j['kind'] for j in jobs])
+        self.assertIn('--skipSBFit',fs.fit_commands(opt,30,Path('/tmp/example'))[1])
+        self.assertEqual(fs.selected_fits(opt),('fit_b',))
+        for job in jobs:
+            if job['kind']=='summarize':
+                self.assertEqual([jobs[i]['kind'] for i in job['dependencies']],['fit_b'])
+
+
 class FitNumericsTests(unittest.TestCase):
     def test_retry_changes_only_numerics_and_keeps_all_parameters(self):
         old=fs.make_parser().parse_args(['--fit-layout','window'])
