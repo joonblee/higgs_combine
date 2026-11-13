@@ -105,7 +105,9 @@ class CondorTests(unittest.TestCase):
                 test_only=model.get('test_only',False), inject_r=opt.inject_r,
                 alpha_internal_unit=model['alpha_internal_unit'], card_sha256=model['card_sha256'],
                 fit_card_sha256=batch.file_hash(root/'datacard.txt'),
-                fits={fit_kind:dict(status=0,covQual=3)})
+                fits={fit_kind:dict(status=0,covQual=3,normalisations={
+                    name:dict(specification,scale=1.,scale_low=.8,scale_high=1.2,constraint=.5)
+                    for name,specification in model['normalisations'].items()})})
             batch.write_json(root/fit_kind/'fit_summary.json',result)
         with patch.object(base,'run_command',side_effect=command), patch.object(fs,'extract_summary',side_effect=summary):
             self.workers(payload,'workspace')
@@ -113,6 +115,31 @@ class CondorTests(unittest.TestCase):
             self.workers(payload,'fit_s')
             self.workers(payload,'fit_b')
             self.workers(payload,'summarize')
+
+    def test_expected_limits_run_in_same_dag_and_tables_wait_for_all_results(self):
+        opt,args,payload=self.make_batch(extra=('--expected-limits',))
+        self.workers(payload,'prepare')
+        self.workers(payload,'assemble')
+        self.run_fits(payload)
+        with self.assertRaisesRegex(ValueError,'Dependency job'):
+            self.workers(payload,'tables')
+        def limit(model,directory,options):
+            work=directory/'fit_r0/limits'
+            work.mkdir()
+            path=work/'expected_limits.json'
+            root=work/'limits.root'
+            root.write_text('synthetic ROOT')
+            path.write_text(json.dumps(dict(card_sha256=model['card_sha256'],
+                fit_card_sha256=batch.file_hash(directory/'fit_r0/datacard.txt'),
+                alpha={key:.1 for key in base.EXPECTED_LIMIT_KEYS})))
+            return [path,root]
+        with patch.object(fs,'run_expected_limits',side_effect=limit):
+            self.workers(payload,'limits')
+        self.workers(payload,'tables')
+        final=next(j for j in payload['jobs'] if j['kind']=='tables')
+        self.assertTrue(batch.completed(payload,final))
+        for name in ('expected_limits.csv','normalisations.csv'):
+            self.assertTrue((Path(payload['batch'])/name).is_file())
 
     def test_raw_shards_assemble_to_identical_local_card_and_one_joint_fit(self):
         opt,args,payload = self.make_batch()

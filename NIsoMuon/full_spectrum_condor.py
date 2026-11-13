@@ -5,6 +5,7 @@ fit bins separately. Changing job grouping cannot change the likelihood.
 """
 import argparse
 import ast
+import csv
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -84,6 +85,7 @@ def make_jobs(opt, windows):
     if opt.bins_per_job < 1:
         raise ValueError('--bins-per-job must be at least 1.')
     jobs = []
+    final = []
     def add(kind, mass, dependencies=(), **fields):
         job = dict(index=len(jobs), kind=kind, mass=mass,
                    dependencies=list(dependencies), **fields)
@@ -101,8 +103,42 @@ def make_jobs(opt, windows):
         if opt.stage in ('fit', 'all'):
             workspace = add('workspace', mass, parents)
             fits = [add(kind, mass, [workspace]) for kind in ('fit_b', 'fit_s')]
-            add('summarize', mass, fits)
+            final.append(add('summarize', mass, fits))
+            if getattr(opt, 'expected_limits', False):
+                final.append(add('limits', mass, [workspace]))
+    if getattr(opt, 'expected_limits', False) and final:
+        add('tables', opt.masses[0], final)
     return jobs
+
+
+def result_tables(payload, opt):
+    """Export requested QCD/DY scales and the five expected limit quantiles."""
+    limits, normalisations = [], []
+    for mass in opt.masses:
+        directory = fs.model_directory(opt, mass)/'fit_r0'
+        summary = json.loads((directory/'fit_summary.json').read_text())
+        limit = json.loads((directory/'limits/expected_limits.json').read_text())
+        if summary['card_sha256'] != limit['card_sha256'] or summary['fit_card_sha256'] != limit['fit_card_sha256']:
+            raise ValueError('Limit and normalisation summaries use different cards.')
+        limits.append(dict(mass=mass, target=summary['target'],
+            **{key.replace('+','plus').replace('-','minus'):limit['alpha'][key] for key in base.EXPECTED_LIMIT_KEYS}))
+        for kind, fit in summary['fits'].items():
+            if fit['status'] != 0 or fit['covQual'] != 3:
+                raise ValueError('Failed normalisation fit quality.')
+            for value in fit['normalisations'].values():
+                if value['process'] in ('QCD', 'DY'):
+                    normalisations.append(dict(mass=mass, fit=kind,
+                        **{key:value.get(key) for key in ('era','process','scale','scale_low','scale_high','constraint')}))
+    paths = []
+    for name, rows in (('expected_limits.csv', limits), ('normalisations.csv', normalisations)):
+        path = Path(payload['batch'])/name
+        with path.open('w', newline='') as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+        paths.append(path)
+        print('[TABLE]', path)
+    return paths
 
 
 def workdir(payload, job):
@@ -254,7 +290,9 @@ def run_worker(manifest, index):
                     reader.close()
             elif job['kind'] == 'assemble':
                 products = assemble(payload, job, opt, args)
-            elif job['kind'] in ('workspace', 'fit_b', 'fit_s', 'summarize', 'fit'):
+            elif job['kind'] == 'tables':
+                products = result_tables(payload, opt)
+            elif job['kind'] in ('workspace', 'fit_b', 'fit_s', 'summarize', 'fit', 'limits'):
                 model_dir = fs.model_directory(opt, job['mass'])
                 model = fs.load_model(model_dir, opt)
                 check_inputs(model.get('batch_inputs', {}))
@@ -271,6 +309,8 @@ def run_worker(manifest, index):
                 elif job['kind'] == 'summarize':
                     fs.combine_fit_summaries(model, model_dir, opt)
                     products = [fit_dir/'fit_summary.json']
+                elif job['kind'] == 'limits':
+                    products = fs.run_expected_limits(model, model_dir, opt)
                 else:  # Legacy manifests keep their original sequential fit job.
                     fs.run_fit(model, model_dir, opt)
                     products = [fit_dir/name for name in

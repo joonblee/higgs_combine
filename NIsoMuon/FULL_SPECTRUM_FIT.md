@@ -1029,3 +1029,48 @@ but the negative mean bias persists, more independent toys can reduce its
 sampling uncertainty; they cannot by themselves remove estimator bias. Check
 profile-interval coverage before interpreting a stable shift as a limit bias.
 There is no automatic subtraction of the measured bias from limits.
+
+### Binning comparison: expected limits and QCD/DY normalisations only
+
+For fresh verycoarse/central/fine models, `--expected-limits` attaches one limit
+node per mass to the existing preparation/workspace/FitDiagnostics DAG. These
+nodes reuse each compiled workspace and run in parallel with the B-only/S+B
+normalisation fits. A final table node waits for all fit summaries and limits.
+No impact, toy or plotting jobs are created by this option.
+
+```bash
+for binning in verycoarse central fine; do
+    python3 full_spectrum_fit.py \
+        --masses 12,30,70 --target full \
+        --fit-layout window --sideband-binning "${binning}" \
+        --norm-prior 1.5 --dy-shape-model linear \
+        --expected-limits --bins-per-job 4 \
+        --condor-dir "full_spectrum_outputs/condor/M12_M30_M70_${binning}_limits_norm_r0"
+done
+```
+
+Preparation groups four bins per job without changing any bin edges or the likelihood.
+The three DAGs are submitted independently, retaining the same signal treatment,
+normalisation priors and DY shape model as the completed coarse study. Only the
+sideband reference binning changes. Asimov injection remains zero. The existing
+QCD/DY/tt likelihood is unchanged; CSV publication selects QCD and DY only.
+
+Each batch automatically produces:
+
+* `expected_limits.csv`: mass, target and five physical alpha quantiles;
+  `exp0` is the median, `expminus1`/`expplus1` and `expminus2`/`expplus2`
+  delimit the one/two-sigma expected bands.
+* `normalisations.csv`: mass, `fit_b`/`fit_s`, era, QCD/DY, relative scale,
+  transformed Hessian lower/upper interval and nuisance constraint ratio.
+
+The CSV scale multiplies the existing nominal background estimate, rather than
+replacing the nominal DY transfer factor itself. Background-only Asimov central
+scales should be close to one; the fitted intervals/constraints and expected
+limits quantify sensitivity to binning. Complete ROOT/JSON results remain below
+`results/.../M*/fit_r0/`; limit JSON is `limits/expected_limits.json`. The limit
+quantiles are validated and converted with the saved per-model signal unit.
+Fit summaries must pass status zero and covariance quality three before the
+final CSV node can run. Investigate any failure rather than substituting a
+missing comparison point. The optional flag does not alter the card signature
+or existing default job graph. Use `--stage status --condor-dir <batch>` to
+check progress, and the existing resume mechanism for incomplete nodes.

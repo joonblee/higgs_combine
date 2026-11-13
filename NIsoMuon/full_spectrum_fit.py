@@ -83,6 +83,8 @@ def make_parser():
                    help='Upper numerical bound of a free DY scale; not a prior.')
     p.add_argument('--inject-r', type=float, default=0., help='Asimov signal strength, e.g. 0 or 1.')
     p.add_argument('--r-max', type=shared.finite_positive, default=100.)
+    p.add_argument('--expected-limits', action='store_true',
+                   help='Also compute blinded expected limits from each workspace; no impacts or toys. Condor writes limit/normalisation CSV tables automatically.')
     p.add_argument('--output-base', default='full_spectrum_outputs')
     p.add_argument('--overwrite', action='store_true', help='Rebuild an existing mass directory and invalidate its old fits.')
     p.add_argument('--dry-run', action='store_true', help='Print planned commands without ROOT, template reads or fitting.')
@@ -107,6 +109,8 @@ def make_parser():
 
 
 def configuration(opt):
+    if getattr(opt, 'expected_limits', False) and (opt.stage == 'cards' or opt.inject_r != 0 or getattr(opt, 'fast_mode', False)):
+        raise ValueError('--expected-limits requires stage all/fit, inject-r 0 and a non-test model.')
     if getattr(opt, 'fit_layout', 'spectrum') == 'window':
         validate_sideband_options(opt)
         if getattr(opt, 'fast_mode', False) or opt.bin_sigma != 1.:
@@ -260,7 +264,7 @@ def dy_study_tag(opt):
 
 
 def signature(opt):
-    ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base',
+    ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base', 'expected_limits',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
                'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal', 'signal_counting_version'}
@@ -741,6 +745,39 @@ def run_fit(model, directory, opt):
     extract_summary(model, directory, opt)
 
 
+def run_expected_limits(model, directory, opt):
+    """Reuse the audited workspace, keeping physical limits separate from diagnostics."""
+    if model.get('blind') is not True or model.get('test_only') or opt.inject_r != 0:
+        raise ValueError('Expected limits require a non-test background-only Asimov model.')
+    fit_dir = Path(directory)/'fit_r0'
+    card = fit_dir/'datacard.txt'
+    expected_card = fit_card_text((Path(directory)/'datacard.txt').read_text())
+    if card.read_text() != expected_card:
+        raise ValueError('Compiled fit card differs from the saved model.')
+    work = fit_dir/'limits'
+    work.mkdir(exist_ok=True)
+    destination = work/'expected_limits.json'
+    destination.unlink(missing_ok=True)
+    args = base.build_parser().parse_args([])
+    vars(args).update(mode='blind', parameter='alpha', r_min=0., r_max=opt.r_max, strict=True, jobs=1)
+    mass, target = model['mass'], model['target']
+    label = base.mass_label(mass)
+    result = base.run_asymptotic(args, fit_dir/'workspace.root', target, label, mass, work)
+    values = base._read_single_limit_json(result.expected, work, 'full_spectrum_final')
+    invalid, reason = base._limit_range_status(values, opt.r_max, .98, True)
+    if invalid:
+        raise ValueError('Invalid expected limits: '+reason)
+    values = {key:float(values[key]) for key in base.EXPECTED_LIMIT_KEYS}
+    unit = model['alpha_internal_unit']
+    payload = dict(blind=True, mass=mass, target=target, card_sha256=model['card_sha256'],
+        fit_card_sha256=hashlib.sha256(card.read_bytes()).hexdigest(),
+        workspace_sha256=hashlib.sha256((fit_dir/'workspace.root').read_bytes()).hexdigest(),
+        alpha_internal_unit=unit, r=values, alpha={key:value*unit for key,value in values.items()})
+    destination.write_text(json.dumps(payload, indent=2, allow_nan=False)+'\n')
+    print(f'[LIMIT] M{mass:g}: median alpha={payload["alpha"]["exp0"]:.6g}')
+    return [destination, result.expected]
+
+
 def main(argv=None):
     opt = make_parser().parse_args(argv)
     if opt.condor_worker:
@@ -795,6 +832,8 @@ def main(argv=None):
             (fit_dir/'commands.json').write_text(json.dumps(commands, indent=2)+'\n')
             if opt.stage in ('fit', 'all'):
                 run_fit(model, directory, opt)
+                if getattr(opt, 'expected_limits', False):
+                    run_expected_limits(model, directory, opt)
             print('[SAVED]', directory)
         return 0
     finally:
