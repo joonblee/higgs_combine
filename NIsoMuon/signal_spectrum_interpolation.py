@@ -93,17 +93,27 @@ class NativeCountingReader:
 
 class SpectrumSignalReader:
     """Route signal counts only; all backgrounds delegate to the original reader."""
-    def __init__(self,reader,args,signals,mass,era):
+    def __init__(self,reader,args,signals,mass,era,preflight_cache=None):
         self.reader,self.args,self.mass,self.era=reader,args,mass,era
         self.signals={float(m):files for m,files in signals.items()}
-        self.reference=base.SignalInterpolator(NativeCountingReader(self),args,self.signals,[era])
+        # This cache belongs to one preflight invocation only. Anchor yields,
+        # geometry and input checks do not depend on the intermediate mass.
+        self.preflight_cache=preflight_cache if preflight_cache is not None else {}
+        references=self.preflight_cache.setdefault('references',{})
+        if era not in references:
+            references[era]=base.SignalInterpolator(NativeCountingReader(self),args,self.signals,[era])
+        self.reference=references[era]
         self.low,self.high=self.reference.bracket(era,mass)
         self.histograms={};self.region_cache={}
         self.edges={};self.anchor_windows={}
+        geometry_cache=self.preflight_cache.setdefault('geometry',{})
         for anchor in (self.low,self.high):
-            hist=self._hist('nominal',anchor,base.hist_path(args.region))
-            self.edges[anchor]=[float(hist.GetXaxis().GetBinLowEdge(i)) for i in range(1,hist.GetNbinsX()+2)]
-            self.anchor_windows[anchor]=base.whole_bin_window(hist,*base.mass_window(args,era,anchor))
+            key=(era,anchor)
+            if key not in geometry_cache:
+                hist=self._hist('nominal',anchor,base.hist_path(args.region))
+                axis=[float(hist.GetXaxis().GetBinLowEdge(i)) for i in range(1,hist.GetNbinsX()+2)]
+                geometry_cache[key]=(axis,base.whole_bin_window(hist,*base.mass_window(args,era,anchor)))
+            self.edges[anchor],self.anchor_windows[anchor]=geometry_cache[key]
         geometry=getattr(args,'signal_counting_windows',{}).get(base.mass_label(mass),{}).get(era,[])
         sr=next((row for row in geometry if row['region']=='SR'),None)
         self.target_window=((sr['low'],sr['high']) if sr else base.whole_bin_window(
@@ -125,13 +135,17 @@ class SpectrumSignalReader:
         return self.histograms[key]
 
     def preflight(self):
+        validated=self.preflight_cache.setdefault('validated',set())
         for source,path in base.signal_template_requests(self.args,self.era):
             for anchor in (self.low,self.high):
+                key=(self.era,anchor,source,path)
+                if key in validated: continue
                 hist=self._hist(source,anchor,path)
                 axis=[float(hist.GetXaxis().GetBinLowEdge(i)) for i in range(1,hist.GetNbinsX()+2)]
                 if len(axis)!=len(self.edges[anchor]) or any(abs(a-b)>1e-8 for a,b in zip(axis,self.edges[anchor])):
                     raise base.WorkflowError('Signal systematic anchor has incompatible native binning')
                 self.reference.native(self.era,anchor,source,path)
+                validated.add(key)
         return self.reference.evaluate(self.era,self.mass,'nominal',base.hist_path(self.args.region))
 
     def integral(self,filename,path,low,high):
@@ -157,16 +171,19 @@ class SpectrumSignalReader:
 
 
 def preflight(reader,args,signals,masses,eras):
-    records=[]
-    for mass in masses:
+    records=[];cache={}
+    print(f'[SIGNAL] Interpolation preflight: {len(masses)} masses, {len(eras)} eras; checking each required anchor once',flush=True)
+    for index,mass in enumerate(masses,1):
         files=requested_files(signals,mass,eras,True)
         for era in eras:
             if not Path(files[era]).name.startswith(PREFIX): continue
-            wrapped=SpectrumSignalReader(reader,args,signals,mass,era)
+            wrapped=SpectrumSignalReader(reader,args,signals,mass,era,preflight_cache=cache)
             nominal=wrapped.preflight()
             records.append(dict(mass=mass,era=era,anchors=[wrapped.low,wrapped.high],method=METHOD,
                 resolution=args.resolution_coefficients[era],window=list(wrapped.target_window),
                 raw_sr_yield=nominal.value,raw_sr_mc_error=nominal.error,
                 sidebands='corresponding whole-bin regions; no fractional native-bin splitting',
                 nonpositive_tail_interpolation='signed linear; SR requires positive anchors'))
+        if index==1 or index%20==0 or index==len(masses):
+            print(f'[SIGNAL] Preflight {index}/{len(masses)} masses; {len(records)} interpolated mass/era yields',flush=True)
     return records

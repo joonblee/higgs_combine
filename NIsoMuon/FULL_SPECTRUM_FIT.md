@@ -876,7 +876,10 @@ Old manifests, without the new counting-version field, retain their original
 paths and reference convention for status/collection. New-method production
 requires fresh preparation, not reuse of old prepared shards.
 
-Condor preflight checks required anchor counts and histograms. Manifests retain
+Condor preflight checks required anchor counts and histograms once per anchor
+and era within each submission, sharing native yields and bin geometry across
+intermediate masses. It prints `[SIGNAL]` progress before DAG submission. This
+is an input check, not a new signal fit or physics closure test. Manifests retain
 the anchor map, target window geometry, resolution coefficients, counting
 method and input fingerprints; models retain raw interpolated SR yields and
 errors. Tests compare SR yields/errors and all variations with the original

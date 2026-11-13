@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+from collections import Counter
+from unittest import mock
 from types import SimpleNamespace
 sys.path.insert(0,str(Path(__file__).parents[1]))
 import limit_workflow as base
@@ -15,6 +17,45 @@ import limit_workflow_sideband_fit as shared
 
 
 class CountingSignalTests(unittest.TestCase):
+    def test_dense_preflight_checks_anchors_once_and_rechecks_new_invocations(self):
+        args=fs.configuration(fs.make_parser().parse_args(['--target','2018']))
+        args.resolution_coefficients={'2018':(0.,.01)}
+        files={20.:{'2018':'left.root'},40.:{'2018':'right.root'}}
+        masses=[28.,30.,32.]
+        args.signal_counting_windows={base.mass_label(m):{'2018':[
+            dict(region='SR',low=m-1.,high=m+1.)]} for m in masses}
+        nominal=base.hist_path(args.region)
+        requests=[('nominal',nominal),('experimental','variation')]
+        class Histogram:
+            def GetNbinsX(self): return 2
+            def GetXaxis(self): return self
+            def GetBinLowEdge(self,index): return (11.,40.,80.)[index-1]
+        class Reader:
+            def __init__(self): self.reads=Counter();self.missing=False
+            def _file(self,filename):
+                def get(path):
+                    self.reads[(filename,path)]+=1
+                    return None if self.missing and path=='variation' else Histogram()
+                return SimpleNamespace(Get=get)
+            def integral(self,filename,path,low,high):
+                value=100. if filename=='left.root' else 400.
+                return base.YieldResult(value,value*.1,1,2)
+        reader=Reader()
+        with mock.patch.object(base,'file_for_process',side_effect=lambda args,era,process,name,source:name), \
+             mock.patch.object(base,'whole_bin_window',side_effect=lambda hist,low,high:(low,high)), \
+             mock.patch.object(base,'signal_template_requests',return_value=requests):
+            expected=[signal.SpectrumSignalReader(reader,args,files,m,'2018').preflight() for m in masses]
+            reader.reads.clear()
+            records=signal.preflight(reader,args,files,masses,['2018'])
+            self.assertEqual([r['raw_sr_yield'] for r in records],[v.value for v in expected])
+            self.assertEqual([r['raw_sr_mc_error'] for r in records],[v.error for v in expected])
+            for name in ('left.root','right.root'):
+                self.assertEqual(reader.reads[(name,'variation')],2) # axis check + count read
+                self.assertEqual(reader.reads[(name,nominal)],2) # shared geometry/axis + count
+            reader.missing=True
+            with self.assertRaisesRegex(base.WorkflowError,'Missing counting anchor histogram'):
+                signal.preflight(reader,args,files,[30.],['2018'])
+
     def test_same_positive_yield_and_sumw2_interpolation(self):
         left,right=base.YieldResult(100.,10.,1,5),base.YieldResult(400.,40.,1,7)
         old=base.interpolate_signal_yield(30.,20.,left,40.,right)
@@ -152,6 +193,32 @@ with tempfile.TemporaryDirectory() as directory:
  # The new sidebands retain signal counts, instead of dropping them.
  virtual=b.file_for_process(args,'2018','sig',signal.PREFIX+'30.root','nominal')
  assert sum(new.integral(virtual,b.hist_path(args.region),r['low'],r['high']).value for r in windows if r['region']!='SR')>0.
+ # Dense preflight must reuse anchor checks without changing SR yields/errors.
+ masses=[28.,30.,32.]
+ expected={}
+ for mass in masses:
+  args.signal_counting_windows[b.mass_label(mass)]={'2018':fs.window_bins(
+   [11.+i*.02 for i in range(3451)],*b.mass_window(args,'2018',mass),reference=fs.SIDEBAND_PRESETS['coarse'])}
+  expected[mass]=signal.SpectrumSignalReader(blinded,args,files,mass,'2018').preflight()
+ original=signal.SpectrumSignalReader._hist
+ reads={}
+ def tracked(owner,source,anchor,path):
+  key=(anchor,source,path);reads[key]=reads.get(key,0)+1
+  return original(owner,source,anchor,path)
+ signal.SpectrumSignalReader._hist=tracked
+ try:
+  records=signal.preflight(blinded,args,files,masses,['2018'])
+ finally:
+  signal.SpectrumSignalReader._hist=original
+ for record in records:
+  wanted=expected[record['mass']]
+  assert record['raw_sr_yield']==wanted.value
+  assert record['raw_sr_mc_error']==wanted.error
+ for anchor in (20.,40.):
+  for source,path in requests:
+   assert reads[(anchor,source,path)]==(2 if source=='nominal' else 1),(anchor,source,path,reads)
+ # A new preflight must check inputs again rather than keeping a global cache.
+ signal.preflight(blinded,args,files,[30.],['2018'])
  legacy_reader.close();blinded.close()
 '''
         result=subprocess.run([sys.executable,'-c',script],cwd=Path(__file__).parents[1],capture_output=True,text=True)
