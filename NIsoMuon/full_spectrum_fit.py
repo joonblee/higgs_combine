@@ -8,11 +8,12 @@ Existing counting/sideband production commands and results are unchanged.
 --dy-shape-model linear adds the common AN linear DY closure shape with an
 exact per-era nominal-yield normaliser for every nuisance value. It retains
 lnN 1.5 normalisation and source statistics; regenerated DYAux inputs required.
---interpolate-signal optionally morphs bracketed intermediate masses: align
-anchor peaks/resolutions, interpolate unit-area shapes linearly and full-axis
-yields log-linearly. Includes systematic histograms and independent anchor
-Sumw2, with provenance/preflight checks in local and Condor execution. No mass
-extrapolation; no additional interpolation modelling uncertainty is invented.
+--interpolate-signal uses the counting-yield interpolation from limit_workflow.py,
+including SR systematic variations and anchor Sumw2. Sideband/spectrum channels
+use corresponding whole-bin anchor-region counts; no whole-histogram signal
+morph or fitted signal PDF is constructed. Window layout uses the same SR-only
+25-event internal normalisation as the original counting cards, preserving
+signal leakage in sidebands. Spectrum layout keeps its full-domain reference.
 """
 import argparse
 import hashlib
@@ -40,8 +41,10 @@ SIDEBAND_PRESETS = {
 
 def make_parser():
     p = argparse.ArgumentParser(description=__doc__)
+    # Stored in fresh manifests; absent in old batches, which keep their paths/reference.
+    p.set_defaults(signal_counting_version=2)
     p.add_argument('--interpolate-signal', action='store_true',
-                   help='Morph full signal spectra between adjacent simulated masses, including systematic templates; no extrapolation')
+                   help='Use limit_workflow counting-yield interpolation for bracketed masses, with corresponding sideband counts; no extrapolation')
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
     p.add_argument('--target', type=shared.single_target, default='Run2Run3')
     p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'recover', 'set-domain', 'collect'), default='all')
@@ -238,7 +241,7 @@ def model_directory(opt, mass):
         geometry = [sideband_reference(opt),opt.sideband_refine,opt.sideband_fragment_fraction]
         code = hashlib.sha256(json.dumps(geometry).encode()).hexdigest()[:10]
         tag = f'{opt.target}_window{base.mass_label(opt.sr_nsigma)}sigma_sb{code}_lnN{base.mass_label(opt.norm_prior)}'
-        return Path(opt.output_base).resolve()/(tag+dy_study_tag(opt))/f'M{base.mass_label(mass)}'
+        return Path(opt.output_base).resolve()/(tag+('_signalSR25_v1' if getattr(opt,'signal_counting_version',1)>=2 else '')+dy_study_tag(opt))/f'M{base.mass_label(mass)}'
     tag = f'{opt.target}_binsigma{base.mass_label(effective_bin_sigma(opt))}_lnN{base.mass_label(opt.norm_prior)}'
     if getattr(opt, 'fast_mode', False):
         tag += '_fast'
@@ -251,6 +254,8 @@ def dy_study_tag(opt):
         tag += '_DYshape'+base.mass_label(opt.dy_shape_uncertainty)
     if getattr(opt, 'dy_normalisation', 'prior') == 'free':
         tag += '_DYfree'+base.mass_label(opt.dy_norm_max)
+    if getattr(opt,'interpolate_signal',False) and getattr(opt,'signal_counting_version',1)>=2:
+        tag += '_signalCounting_v2'
     return tag
 
 
@@ -258,10 +263,12 @@ def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
-               'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal'}
+               'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal', 'signal_counting_version'}
     result = {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
     if getattr(opt, 'interpolate_signal', False):
         result['interpolate_signal'] = True
+        if getattr(opt,'signal_counting_version',1)>=2:
+            result['signal_interpolation_method'] = 'counting_v2'
     # Preserve compatibility with existing full-resolution saved models.
     if getattr(opt, 'fast_mode', False):
         result['fast_mode'] = True
@@ -269,6 +276,8 @@ def signature(opt):
         for name in ('fit_layout','sr_nsigma','sideband_edges','sideband_refine','sideband_fragment_fraction'):
             result[name] = getattr(opt,name)
         result['sideband_edges'] = sideband_reference(opt)
+        if getattr(opt,'signal_counting_version',1)>=2:
+            result['signal_normalisation_reference'] = 'SR'
     if getattr(opt, 'dy_shape_uncertainty', 0.):
         result['dy_shape_uncertainty'] = opt.dy_shape_uncertainty
     if getattr(opt, 'dy_normalisation', 'prior') == 'free':
@@ -290,7 +299,10 @@ def decorate_model(model, opt, windows):
     model.update(schema_version=SCHEMA, fit_kind='full_spectrum', settings=vars(opt),
                  test_only=bool(getattr(opt, 'fast_mode', False)),
                  effective_bin_sigma=effective_bin_sigma(opt),
-                 signal_normalisation_domain=list(DOMAIN),
+                 signal_normalisation_domain=({era:[next(w['low'] for w in windows[era] if w['region']=='SR'),
+                                                    next(w['high'] for w in windows[era] if w['region']=='SR')]
+                                               for era in model['eras']}
+                     if getattr(opt,'fit_layout','spectrum')=='window' and getattr(opt,'signal_counting_version',1)>=2 else list(DOMAIN)),
                  uncertainty_model=('Step 1: broad QCD/DY/tt normalisations; inherited template '
                     'responses, SS covariance and envelope, DY source and MC statistics. '
                     'Additional DY closure/QCD transport shape studies remain separate.'))
@@ -598,6 +610,7 @@ def prepare_inputs(reader, args, opt):
             print(f'[BINS] {era}: {len(windows[era])} bins over 11--80 GeV', flush=True)
     if getattr(opt, 'interpolate_signal', False):
         import signal_spectrum_interpolation as interpolation
+        args.signal_counting_windows = windows if is_window else {}
         args.signal_interpolation_anchors = signals
         args.signal_interpolation_audit = interpolation.preflight(
             reader,args,signals,opt.masses,base.target_years(opt.target))

@@ -1,6 +1,9 @@
 
 Full-spectrum review additions: `full_spectrum_fit.py --interpolate-signal`
-now supports bracketed intermediate signal masses in local and Condor mode.
+supports bracketed intermediate masses using the original counting-yield
+interpolator in local and Condor mode. Fresh window-layout models normalise
+r=1 to 25 events in the combined SR windows, retaining sideband leakage with
+the same scale. No whole-histogram signal morph is used.
 `full_spectrum_component_uncertainties.py M30/model.json` makes separate
 QCD/DY/tt prefit relative-uncertainty plots from the compiled likelihood,
 retaining era correlations. See `FULL_SPECTRUM_FIT.md` for executable commands,

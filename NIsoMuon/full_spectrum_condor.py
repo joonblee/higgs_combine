@@ -163,6 +163,7 @@ def worker_options(payload):
     args = fs.configuration(opt)
     args.base_dir = payload['input_base_dir']
     args.resolution_coefficients = payload['resolution_coefficients']
+    args.signal_counting_windows = payload.get('windows',{}) if getattr(opt,'fit_layout','spectrum')=='window' else {}
     args.signal_interpolation_anchors = payload.get('signal_interpolation_anchors', {})
     args.signal_interpolation_audit = payload.get('signal_interpolation_audit', [])
     return opt, args
@@ -346,6 +347,7 @@ def submit(opt, args, prepared_plan=None):
         check_inputs(preflight)
         signals = {mass:prepared_plan['signal_files'][base.mass_label(mass)] for mass in opt.masses}
         args.resolution_coefficients = prepared_plan['resolution_coefficients']
+        args.signal_counting_windows = prepared_plan['windows'] if getattr(opt,'fit_layout','spectrum')=='window' else {}
         args.signal_interpolation_anchors = prepared_plan.get('signal_interpolation_anchors', {})
         args.signal_interpolation_audit = prepared_plan.get('signal_interpolation_audit', [])
     elif opt.stage in ('cards', 'all'):

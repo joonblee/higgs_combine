@@ -165,7 +165,8 @@ class CondorTests(unittest.TestCase):
                              shared.card_text(local,normalisation_kappa=1.5,prefix='FS'))
             # Signal leakage into the sidebands remains in the model.
             self.assertTrue(any(r['rates']['sig']>0 for r in saved['rows'] if r['region']!='SR'))
-            self.assertAlmostEqual(sum(r['rates']['sig'] for r in saved['rows']),25.)
+            self.assertAlmostEqual(sum(r['rates']['sig'] for r in saved['rows'] if r['region']=='SR'),25.)
+            self.assertGreater(sum(r['rates']['sig'] for r in saved['rows']),25.)
 
     def test_grouping_preserves_card_and_configuration_signature(self):
         cards=[]

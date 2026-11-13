@@ -298,8 +298,11 @@ def assemble_model(args, opt, mass, parts, full_spectrum=False):
                             signal_sb_over_sr=signal_sb/signal_sr if signal_sr else None)
         if not full_spectrum:
             print(f'[REGIONS] {era} M{mass:g}: sigma={sigma:.5g}, {era_info[era]["sidebands"]}, {len(selected)-1} SB bins, S_SB/S_SR={era_info[era]["signal_sb_over_sr"]}')
+    counting_reference = (getattr(opt,'fit_layout','spectrum')=='window'
+                          and getattr(opt,'signal_counting_version',1)>=2)
+    spectrum_reference = full_spectrum and not counting_reference
     raw_sr = sum(r['rates']['sig'] for r in rows
-                 if full_spectrum or r['region'] == 'SR')
+                 if spectrum_reference or r['region'] == 'SR')
     if raw_sr <= 0:
         raise ValueError('No signal in the combined signal window.')
     alpha_unit = args.alpha_card_yield/raw_sr
@@ -317,6 +320,8 @@ def assemble_model(args, opt, mass, parts, full_spectrum=False):
         raise ValueError(f'QCD/DY not separately identifiable: {diagnostics}. Widen sidebands or reconsider the model; no automatic regularisation.')
     return dict(schema_version=SCHEMA, blind=True, observation='nominal_background_Asimov',
                 target=opt.target, mass=mass, alpha_internal_unit=alpha_unit,
+                signal_normalisation_reference='11--80 GeV' if spectrum_reference else 'SR',
+                raw_reference_signal_yield=raw_sr,
                 settings=vars(opt), domain=list(DOMAIN), eras=era_info, rows=rows,
                 separation=diagnostics, input_audits=audits,
                 signal_interpolation=[record for record in getattr(args,'signal_interpolation_audit',[])
@@ -360,7 +365,7 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
              '# Model-based closure is not a test of background modelling bias.',
              '# alpha_internal_unit = '+f(model['alpha_internal_unit']),
              '# alpha_internal_signal_yield = '+f(sum(r['rates']['sig'] for r in rows
-                 if normalisation_kappa is not None or r['region'] == 'SR'))]
+                 if model.get('signal_normalisation_reference','11--80 GeV' if normalisation_kappa is not None else 'SR') != 'SR' or r['region'] == 'SR'))]
     lnn = {}
     for index, (row, process) in enumerate(columns):
         for local, values in row['nuisances'].items():

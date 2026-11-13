@@ -77,13 +77,19 @@ The planning geometry is mass-specific, including in multi-mass Condor DAGs.
 Yields, signed DY sources, template variations and statistical/covariance
 responses are integrated afresh over each region from the original inputs.
 Existing fine-bin error bars or nuisance values are not averaged. Signal
-leakage into sidebands is included. The internal r=1 convention still means
-25 signal events over the complete 11--80 domain, not 25 inside the SR.
+leakage into sidebands is included. Fresh window-layout models use the same
+internal convention as `limit_workflow.py`: **r=1 gives 25 signal events summed
+over the selected eras' SR windows**. Apply the resulting common scale to all
+signal regions, including sidebands. The full-domain signal sum can therefore
+exceed 25. This is a change of internal parameterisation; `alpha_internal_unit`
+records the physical conversion. Spectrum layout retains its full-domain
+25-event reference. The counting-version field in new manifests distinguishes
+this convention from previous batches; old snapshots keep their original paths.
 Broad lnN 1.5 priors and all currently implemented uncertainty/correlation
 prescriptions are retained. No new independent 30% DY modelling nuisance is
 introduced by this binning change; that remains a separate modelling task.
 
-Output model tags include `_window5sigma_sb<geometry hash>_lnN1p5`. Different
+Fresh output model tags include `_window5sigma_sb<geometry hash>_lnN1p5_signalSR25_v1`. Different
 edges, refinement or fragment thresholds have separate paths and protected
 model signatures. `model.json` stores the snapped per-era edges, signal
 window and proposed sideband settings. Fine-binned saved cards cannot be
@@ -227,7 +233,8 @@ No native histogram bin is split or used twice. Actual edges are saved in JSON.
 The bin width is a configurable initial choice, to be checked for stability.
 
 Signal templates are taken from the current generated-mass ROOT inputs, keeping
-the full signal spectrum. Intermediate-mass interpolation is not enabled here.
+the full signal spectrum. Optional intermediate-mass counting-yield interpolation
+is described below.
 For numerical conditioning, internal r=1 means **25 signal events over the full
 11--80 GeV domain, summed over the selected eras**. This differs from the old
 single-window convention. `alpha_internal_unit` records the conversion back to
@@ -525,9 +532,11 @@ python3 full_spectrum_fit.py --masses 30 --target full --stage fit \
 The second command creates a separate fit-only batch; the existing r=0 results
 are preserved. With the same input options, `fit_s` should recover the injected
 r=1 within numerical precision. `fit_b` fixes r=0 and can shift background
-parameters to accommodate the injected signal. Internal r=1 is 25 signal
-events summed over all eras and the entire 11--80 GeV domain, including
-sidebands. This same-model Asimov check does not measure toy bias or validate
+parameters to accommodate the injected signal. In fresh window-layout models,
+internal r=1 means 25 signal events summed over the eras' SR windows, plus
+the retained sideband leakage. Previous batches used 25 over the full domain;
+use their frozen snapshots to reproduce them, or prepare a fresh batch for
+the updated counting convention. This same-model Asimov check does not measure toy bias or validate
 background modelling.
 
 Complete the binning comparison using normalisation correlations and total SR
@@ -838,25 +847,42 @@ python3 full_spectrum_fit.py --masses 12,13,14,15,30,32.5,70 \
   --condor-dir full_spectrum_outputs/condor/intermediate_DYlinear
 ```
 
-The opt-in interpolation supports both local and Condor preparation, including
-recovery manifests. Exact simulated points bypass morphing. Intermediate
-points require bracketing samples for every selected era; mass extrapolation
-is forbidden. Align each anchor's mass and nominal resolution with the target,
-linearly interpolate the resulting unit-area histogram shapes, and log-linearly
-interpolate full native-axis yields. Every detector/theory histogram follows
-the same mapping. Fractional native-bin overlap assumes constant density in
-each native bin. The independent anchor Sumw2 propagation includes covariance
-between each partial integral and the anchor normalisation. It does not invent
-an interpolation modelling uncertainty. Keep the existing final combined
-signal normalisation convention (25 expected events for r=1).
+The opt-in interpolation supports local and Condor preparation. Exact
+simulated masses retain their original histogram counts. For an intermediate
+mass the SR yield, all detector/theory variations and anchor Sumw2 errors
+come from **`limit_workflow.SignalInterpolator`**, using log-linear yields
+in each anchor's own +/-5 sigma window. Resolution and boundaries still use
+`sigfit_inputs`; no signal fit-function integral or whole-histogram shape
+morph is introduced. Original ROOT inputs are needed to create counts, while
+Combine receives the resulting per-channel yields in the counting datacard.
 
-Condor preflight checks all required bracketing histograms. The source snapshot
-includes `signal_spectrum_interpolation.py`; manifests retain the anchor map,
-resolution coefficients, interpolation method and input fingerprints. Models
-record interpolated mass/era brackets. Enabling this option changes the study
-signature so old models cannot be reused silently. Before claiming validated
-coverage at intermediate masses, perform signal-template leave-one-out closure
-and the usual injection/bias checks; algorithm tests are not that physics study.
+The SR-only legacy driver has no sideband signal model. Here, retain leakage
+by mapping the target SR/left/right regions onto the corresponding anchor
+regions, keeping outer 11/80 GeV endpoints fixed where the respective
+sideband exists. Map the shared channel edges piecewise linearly and snap to
+nearest native edges; integrate whole native bins without overlap. Interpolate
+positive region counts with the same log-linear counting helper. Empty or
+signed tail counts use explicit signed linear interpolation with independent
+Sumw2 errors; nonpositive SR anchors remain errors. A clipped target SR can
+have no sideband on one side, so the corresponding anchor tail is not added.
+No mass extrapolation or interpolation modelling nuisance is invented.
+
+Fresh window layout normalises the combined **SR** count to 25 at r=1, matching
+the original counting cards. Sidebands get the same scale and remain nonzero.
+Spectrum layout retains its full-domain normalisation. Output tags
+`_signalSR25_v1` and `_signalCounting_v2`, with versioned signatures, prevent
+reuse of the old whole-spectrum morph or 25-full-domain window models.
+Old manifests, without the new counting-version field, retain their original
+paths and reference convention for status/collection. New-method production
+requires fresh preparation, not reuse of old prepared shards.
+
+Condor preflight checks required anchor counts and histograms. Manifests retain
+the anchor map, target window geometry, resolution coefficients, counting
+method and input fingerprints; models retain raw interpolated SR yields and
+errors. Tests compare SR yields/errors and all variations with the original
+counting driver and check whole-bin partitioning and nonzero sideband leakage.
+Physics leave-one-out closure and injection/bias studies remain distinct from
+these implementation checks.
 
 ## Component-relative prefit uncertainty plots
 
