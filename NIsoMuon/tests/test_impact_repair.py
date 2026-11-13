@@ -182,7 +182,7 @@ class ImpactRepairTests(unittest.TestCase):
                     strategy = command[command.index("--cminDefaultMinimizerStrategy") + 1]
                     attempts.append(strategy)
                     self.assertEqual(command[command.index("--setRobustFitStrategy") + 1], strategy)
-                    self.assertEqual(command.count("--cminFallbackAlgo"), 2)
+                    self.assertEqual(command.count("--cminFallbackAlgo"), 0)
                     self.assertEqual(command[command.index("-v") + 1], "2")
                     scans["prefiring"].write_bytes(b"good" if strategy == "1" else b"incomplete")
                 else:
@@ -194,7 +194,7 @@ class ImpactRepairTests(unittest.TestCase):
                     patch.object(w, "run_command", side_effect=fake_run):
                 result = w.repair_impact_payload(args, out / "card", "Run2", "70", 70.,
                                                 out, workspace, internal, payload, -2., 10.)
-            self.assertEqual(attempts, ["2", "1"])
+            self.assertEqual(attempts, ["1"])
             self.assertEqual(len(result["params"]), 4)
             for n in names[:3]:
                 self.assertEqual(scans[n].read_bytes(), b"good")
@@ -348,17 +348,19 @@ class BoundaryProfileRetryTests(unittest.TestCase):
                     self.assertEqual(w.run_boundary_impact_profile(command, directory, "qcd", "25", -2., 10.), (.3, .1))
                     validation = json.loads((directory/"profile_validation.json").read_text())
                     self.assertTrue(validation["passed"])
-                    self.assertEqual(validation["strategy"], 1 if len(calls) == 2 else 2)
+                    self.assertEqual(validation["strategy"], 2 if len(calls) == 2 else 1)
                 else:
                     with self.assertRaisesRegex(w.WorkflowError, "No endpoint accepted"):
                         w.run_boundary_impact_profile(command, directory, "qcd", "25", -2., 10.)
                     self.assertFalse((directory/"profile_validation.json").exists())
+            self.assertEqual([c[c.index("--cminDefaultMinimizerStrategy")+1] for c in calls],
+                             ["1","2","0"][:len(calls)])
             histories = list(directory.glob("attempts_*"))
             self.assertEqual(len(histories), 1)
             self.assertTrue((histories[0]/"previous.root").exists())
             self.assertEqual(len(list(histories[0].glob("attempt*.root"))), len(calls))
             for call in calls:
-                self.assertIn("--cminFallbackAlgo", call)
+                self.assertNotIn("--cminFallbackAlgo", call)
                 self.assertEqual(call[call.index("--fixedPointPOIs")+1], "qcd=0")
                 self.assertEqual(call[call.index("--setParameters")+1], "r=0.2")
             return len(calls)

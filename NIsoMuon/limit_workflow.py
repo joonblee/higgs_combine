@@ -122,7 +122,7 @@ python3 -u limit_workflow.py \
    INTERNAL r is explicit, including M12 in every target; --impact-parallel 40
    runs at most 40 nuisance fits for the current mass/target, not 40 targets.
    The driver uses -t -1 --expectSignal 0, robustFit 1, strategy 1, tolerance
-   1e-4 and crossing tolerance 1e-4, then validates/repairs nuisance intervals
+   0.1 and crossing tolerance 1e-4, then validates/repairs nuisance intervals
    and the POI interval. Nominal yield safety can clip the requested lower
    bound, and lower-bound checks can trigger an automatic full-range retry.
 
@@ -3888,11 +3888,11 @@ def repair_impact_initial_poi(args, card, target, label, mass, outdir,
             candidate.unlink()
         command = ["combineTool.py", "-M", "Impacts", "-d", str(workspace),
                    "-m", mass_arg, "-n", name, "--doInitialFit", "--robustFit", "1",
-                   "--cminDefaultMinimizerStrategy", "2",
-                   "--cminDefaultMinimizerTolerance", "1e-4",
-                   "--setRobustFitStrategy", "2", "--setRobustFitTolerance", "1e-4",
+                   "--cminDefaultMinimizerStrategy", "1",
+                   "--cminDefaultMinimizerTolerance", "0.1",
+                   "--setRobustFitStrategy", "1", "--setRobustFitTolerance", "0.1",
                    *impact_scan_options(args),
-                   "--cminFallbackAlgo", "Minuit2,Migrad,1:1e-4",
+                   "--cminFallbackAlgo", "Minuit2,Migrad,2:0.1",
                    *explicit_range_args(rmin, upper, card)]
         if args.mode == "blind":
             command.extend(["-t", "-1", "--expectSignal", f"{injection:.12g}",
@@ -4424,13 +4424,12 @@ def run_boundary_impact_profile(command, directory, nuisance, mass_arg, rmin, rm
         shutil.copy2(validation, history / "previous_validation.json")
         validation.unlink()
     failures = []
-    for attempt, strategy in enumerate((2, 1, 0), 1):
+    for attempt, strategy in enumerate((1, 2, 0), 1):
         if output.exists():
             output.unlink()
         trial = list(command)
         trial[trial.index("--cminDefaultMinimizerStrategy") + 1] = str(strategy)
-        trial.extend(["--cminFallbackAlgo", "Minuit2,Migrad,1:1e-4",
-                      "--cminFallbackAlgo", "Minuit2,Migrad,0:1e-4"])
+        # Outer attempts provide validated fallback without nested retries.
         log = directory / "fit.log"
         code = run_command(trial, directory, allow_failure=True, stdout_path=log)
         archived_log = history / f"attempt{attempt}_strategy{strategy}.log"
@@ -4452,7 +4451,7 @@ def run_boundary_impact_profile(command, directory, nuisance, mass_arg, rmin, rm
             "history": str(history),
         }, indent=2) + "\n")
         return rvalue, delta
-    raise WorkflowError(f"Boundary profile failed for {nuisance} after strategies 2/1/0. "
+    raise WorkflowError(f"Boundary profile failed for {nuisance} after strategies 1/2/0. "
                         "No endpoint accepted.\n  " + "\n  ".join(failures))
 
 
@@ -4575,9 +4574,9 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
     repair_dir.mkdir(parents=True, exist_ok=True)
     common = ["combineTool.py", "-M", "Impacts", "-d", str(workspace),
               "-m", mass_arg, "-n", name, "--robustFit", "1",
-              "--cminDefaultMinimizerStrategy", "2",
-              "--cminDefaultMinimizerTolerance", "1e-4",
-              "--setRobustFitStrategy", "2", "--setRobustFitTolerance", "1e-4",
+              "--cminDefaultMinimizerStrategy", "1",
+              "--cminDefaultMinimizerTolerance", "0.1",
+              "--setRobustFitStrategy", "1", "--setRobustFitTolerance", "0.1",
               *impact_scan_options(args),
               *explicit_range_args(rmin, rmax, card)]
     # Review S+B impacts use the same repair logic with their original injected
@@ -4658,9 +4657,9 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
         print(f"[IMPACT RESUME] {target} M{label}: reuse={len(accepted)}, "
               f"remaining={len(pending)}", flush=True)
         # Each subsequent pass scans ONLY parameters still missing or invalid.
-        # Cascade fallbacks apply to the conditional fits as well as the initial
-        # fit; doImpact prints a row even when a conditional minimisation fails.
-        for pass_index, strategy in enumerate((2, 1, 0), 1):
+        # Keep only invalid scans for the next strategy; doImpact may still
+        # print a row when a conditional minimisation fails.
+        for pass_index, strategy in enumerate((1, 2, 0), 1):
             if not pending:
                 break
             for nuisance in pending:
@@ -4670,8 +4669,8 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
             retry_common = list(common)
             for option in ("--cminDefaultMinimizerStrategy", "--setRobustFitStrategy"):
                 retry_common[retry_common.index(option) + 1] = str(strategy)
-            retry_common.extend(["--cminFallbackAlgo", "Minuit2,Migrad,1:1e-4",
-                                 "--cminFallbackAlgo", "Minuit2,Migrad,0:1e-4", "-v", "2"])
+            # Escalation is handled by the outer loop only for invalid scans.
+            retry_common.extend(["-v", "2"])
             log = repair_dir / f"retry_pass{pass_index}_strategy{strategy}.log"
             print(f"[IMPACT RETRY] {target} M{label}: strategy={strategy}, "
                   f"nuisances={','.join(pending)}; log={log}", flush=True)
@@ -4699,8 +4698,8 @@ def repair_impact_payload(args, card, target, label, mass, outdir,
         command = ["combine", "-M", "MultiDimFit", str(workspace), "-m", mass_arg,
                    "--algo", "fixed", "-P", nuisance, "--floatOtherPOIs", "1",
                    "--saveInactivePOI", "1", "--fixedPointPOIs", f"{nuisance}=0",
-                   "--cminDefaultMinimizerStrategy", "2",
-                   "--cminDefaultMinimizerTolerance", "1e-4",
+                   "--cminDefaultMinimizerStrategy", "1",
+                   "--cminDefaultMinimizerTolerance", "0.1",
                    *explicit_range_args(rmin, rmax, card), *start, *blind,
                    "-n", ".Boundary", "-v", "1"]
         jobs.append((nuisance, directory, command))
@@ -4750,8 +4749,8 @@ def impact_common_command(args, card, target, label, mass, workspace, rmin, rmax
         "combineTool.py", "-M", "Impacts", "-d", str(workspace),
         "-m", format_mass_for_combine(mass),
         "--robustFit", "1", *impact_scan_options(args),
-        "--cminDefaultMinimizerStrategy", "1", "--cminDefaultMinimizerTolerance", "1e-4",
-        "--setRobustFitStrategy", "1", "--setRobustFitTolerance", "1e-4",
+        "--cminDefaultMinimizerStrategy", "1", "--cminDefaultMinimizerTolerance", "0.1",
+        "--setRobustFitStrategy", "1", "--setRobustFitTolerance", "0.1",
         "--setParameters", f"r={injection:.12g}", *explicit_range_args(rmin, rmax, card),
         "-n", f".Impacts_{tag_for(args, target)}_M{label}",
     ]

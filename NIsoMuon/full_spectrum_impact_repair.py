@@ -115,6 +115,7 @@ def main(argv=None):
         shutil.copy2(Path(__file__).parent/name, dest)
     write(batch/'plan.json', dict(source_batch=str(source), indices=indices,
         step_size=opt.step_size, crossing_tolerance=opt.crossing_tolerance,
+        minimizer_tolerance=0.1, first_strategy=1, repair_strategies=[1,2,0],
         manifest_sha256=inference.digest(batch/'source_manifest.json'),
         source_hashes={'source/'+n:inference.digest(batch/'source'/n) for n in names}))
     wrapper = batch/'run.sh'

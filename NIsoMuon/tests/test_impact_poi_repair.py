@@ -79,7 +79,7 @@ class InitialPOIRepairTests(unittest.TestCase):
             self.assertEqual(p['POIs'][0]['fit'],[-.384,0.,.359])
             self.assertEqual(json.loads(internal.read_text())['POIs'][0]['fit'],[-.4,0.,100.])
             self.assertEqual(len(calls),1);self.assertIn('--doInitialFit',calls[0]);self.assertNotIn('--doFits',calls[0])
-            self.assertEqual(calls[0][calls[0].index('--setRobustFitStrategy')+1],'2')
+            self.assertEqual(calls[0][calls[0].index('--setRobustFitStrategy')+1],'1')
             self.assertIn('--expectSignal',calls[0])
 
     def test_second_attempt_uses_smaller_range_only_after_failed_crossing(self):

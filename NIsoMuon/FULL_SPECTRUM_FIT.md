@@ -1156,8 +1156,12 @@ nodes; no template preparation, limits or impacts are repeated.
 ## Impact crossing defaults and isolated comparison
 
 Impact scans now default to Combine's `--stepSize 0.1` and
-`--setCrossingTolerance 1e-4`; minimiser strategy/tolerance and interval audits
-are unchanged. `limit_workflow.py` exposes `--impact-step-size` and
+`--setCrossingTolerance 1e-4`. Ordinary impact minimisation uses tolerance
+`0.1` and starts at strategy `1`, matching Combine defaults (robust profiling
+uses the same inherited strategy). Only invalid scans escalate to strategy 2
+and then 0; nested repair fallback loops are avoided. Interval audits remain
+unchanged. The specialised tiny absolute QCD-stat conditional profiles retain
+their existing stricter minimisation because those address known collapsed scans. `limit_workflow.py` exposes `--impact-step-size` and
 `--impact-crossing-tolerance` for explicit numerical studies. Existing source
 snapshots and running commands do not change when the checkout is updated.
 
@@ -1186,3 +1190,8 @@ python3 full_spectrum_impact_repair.py --stage collect \
 
 Fine M70 FitDiagnostics covariance audits are separate and should remain
 running; this impact crossing study is not a speed fix for those jobs.
+
+The original defaultCrossing comparison snapshot still used minimiser tolerance
+1e-4 and strategy 2. To replace it, remove only its exact Condor JobBatchName
+and submit a fresh directory (for example suffix `_defaultMinimizer_v2`).
+Updating the checkout does not change existing Condor source snapshots.

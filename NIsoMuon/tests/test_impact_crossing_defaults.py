@@ -18,6 +18,11 @@ class CrossingTest(unittest.TestCase):
         args=base.build_parser().parse_args([])
         self.assertEqual(base.impact_scan_options(args),
             ['--stepSize','0.1','--setCrossingTolerance','0.0001'])
+        args.mode='blind'
+        command=base.impact_common_command(args,Path('/tmp/card'),'Run2Run3','30',30.,Path('/tmp/workspace'),-10.,100.)
+        for flag in ('--cminDefaultMinimizerTolerance','--setRobustFitTolerance'):
+            self.assertEqual(command[command.index(flag)+1],'0.1')
+        self.assertEqual(command[command.index('--cminDefaultMinimizerStrategy')+1],'1')
         args.impact_step_size=.02
         args.impact_crossing_tolerance=1e-8
         self.assertEqual(base.impact_scan_options(args)[1::2],['0.02','1e-08'])
