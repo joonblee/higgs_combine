@@ -1106,3 +1106,21 @@ values. Running jobs, manifests and source snapshots are unchanged. This is
 an explicit administrative update; fresh inference submissions still use their
 existing uniform request until this command is invoked. A held job is excluded:
 raise its request explicitly and release only that job after checking HoldReason.
+
+### Independent numerical retry of a failed covariance
+
+A zero minimiser status with `covQual=2` does not pass the covariance validation.
+Keep the original results and run a separate fit-only batch from the same saved
+cards, using e.g. `--fit-strategy 2 --fit-tolerance 0.0001 --fit-max-calls 5000000
+--fit-verbosity 2`. Set `--output-base` to the original batch's `results` directory,
+choose the original layout/binning/prior/DY flags and select just the affected
+masses. `--stage fit` copies saved cards/models into a new Condor batch; it does
+not repeat raw-bin preparation or background estimation. The usual workspace,
+B-only, S+B and summary jobs run independently per mass, with the covariance
+quality requirement unchanged. This is a diagnostic retry, not a guarantee of
+convergence. No nuisance is frozen, removed, or assigned a manually edited error.
+The numerical options do not change the saved-card signature or model paths.
+Inspect both fit summaries and compare minima/normalisations with the original
+fit before using a recovered covariance. Verbose logs identify remaining HESSE
+warnings; do not repeatedly resubmit unchanged settings or accept covariance
+quality two by relaxing the validator.

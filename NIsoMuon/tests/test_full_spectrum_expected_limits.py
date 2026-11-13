@@ -94,6 +94,27 @@ class ExpectedLimitTests(unittest.TestCase):
                 condor.result_tables(dict(batch=tmp),opt)
 
 
+class FitNumericsTests(unittest.TestCase):
+    def test_retry_changes_only_numerics_and_keeps_all_parameters(self):
+        old=fs.make_parser().parse_args(['--fit-layout','window'])
+        new=fs.make_parser().parse_args(['--fit-layout','window','--fit-strategy','2',
+            '--fit-tolerance','0.0001','--fit-max-calls','5000000','--fit-verbosity','2'])
+        for name in ('fit_strategy','fit_tolerance','fit_max_calls','fit_verbosity'):
+            delattr(old,name)
+        self.assertEqual(fs.signature(old),fs.signature(new))
+        self.assertEqual(fs.model_directory(old,30),fs.model_directory(new,30))
+        cmd=fs.fit_commands(new,30,Path('/tmp/example'),'fit_b')[1]
+        self.assertEqual(cmd[cmd.index('--cminDefaultMinimizerStrategy')+1],'2')
+        self.assertIn('MINIMIZER_MaxCalls=5000000',cmd)
+        self.assertIn('--skipSBFit',cmd)
+        self.assertNotIn('--freezeParameters',cmd)
+        self.assertNotIn('--robustHesse',cmd)
+        self.assertEqual(cmd[cmd.index('--setRobustFitTolerance')+1],'0.0001')
+        bad=fs.make_parser().parse_args(['--fit-max-calls','0'])
+        with self.assertRaisesRegex(ValueError,'positive'):
+            fs.configuration(bad)
+
+
 class StageMemoryTests(unittest.TestCase):
     def test_active_batch_update_keeps_heavy_jobs_and_snapshots_intact(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -85,6 +85,10 @@ def make_parser():
     p.add_argument('--r-max', type=shared.finite_positive, default=100.)
     p.add_argument('--expected-limits', action='store_true',
                    help='Also compute blinded expected limits from each workspace; no impacts or toys. Condor writes limit/normalisation CSV tables automatically.')
+    p.add_argument('--fit-strategy', type=int, choices=(0,1,2), default=1)
+    p.add_argument('--fit-tolerance', type=shared.finite_positive)
+    p.add_argument('--fit-max-calls', type=int)
+    p.add_argument('--fit-verbosity', type=int, choices=(0,1,2,3))
     p.add_argument('--output-base', default='full_spectrum_outputs')
     p.add_argument('--overwrite', action='store_true', help='Rebuild an existing mass directory and invalidate its old fits.')
     p.add_argument('--dry-run', action='store_true', help='Print planned commands without ROOT, template reads or fitting.')
@@ -113,6 +117,8 @@ def make_parser():
 
 
 def configuration(opt):
+    if getattr(opt,'fit_max_calls',None) is not None and opt.fit_max_calls < 1:
+        raise ValueError('--fit-max-calls must be positive.')
     if getattr(opt, 'expected_limits', False) and (opt.stage == 'cards' or opt.inject_r != 0 or getattr(opt, 'fast_mode', False)):
         raise ValueError('--expected-limits requires stage all/fit, inject-r 0 and a non-test model.')
     if getattr(opt, 'fit_layout', 'spectrum') == 'window':
@@ -269,6 +275,7 @@ def dy_study_tag(opt):
 
 def signature(opt):
     ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base', 'expected_limits',
+               'fit_strategy', 'fit_tolerance', 'fit_max_calls', 'fit_verbosity',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
                'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal', 'signal_counting_version'}
@@ -401,9 +408,18 @@ def fit_commands(opt, mass, directory, fit_kind=None):
         ['text2workspace.py', str(fit_dir/'datacard.txt'), '-m', str(mass), '-o', str(fit_dir/'workspace.root')],
         ['combine', '-M', 'FitDiagnostics', str(fit_dir/'workspace.root'), '-m', str(mass),
          '-t', '-1', '--expectSignal', str(opt.inject_r), '--rMin', '0', '--rMax', str(opt.r_max),
-         '--robustFit', '1', '--cminDefaultMinimizerStrategy', '1',
+         '--robustFit', '1', '--cminDefaultMinimizerStrategy', str(getattr(opt,'fit_strategy',1)),
          '--saveShapes', '--saveWithUncertainties', '--saveNormalizations', '-n', '.FullSpectrum'],
     ]
+    if getattr(opt,'fit_strategy',1) != 1:
+        commands[1] += ['--setRobustFitStrategy',str(opt.fit_strategy)]
+    if getattr(opt,'fit_tolerance',None) is not None:
+        commands[1] += ['--cminDefaultMinimizerTolerance',str(opt.fit_tolerance),
+                        '--setRobustFitTolerance',str(opt.fit_tolerance)]
+    if getattr(opt,'fit_max_calls',None) is not None:
+        commands[1] += ['--X-rtd','MINIMIZER_MaxCalls='+str(opt.fit_max_calls)]
+    if getattr(opt,'fit_verbosity',None) is not None:
+        commands[1] += ['-v',str(opt.fit_verbosity)]
     if fit_kind:
         commands[1].append('--skipSBFit' if fit_kind == 'fit_b' else '--skipBOnlyFit')
     return commands
