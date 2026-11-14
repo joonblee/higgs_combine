@@ -146,7 +146,7 @@ class StageMemoryTests(unittest.TestCase):
             with patch.object(condor.subprocess,'check_output',return_value=json.dumps(ads)), \
                  patch.object(condor.base,'run_command') as run:
                 condor.set_memory(opt,payload)
-            self.assertEqual(run.call_args_list[0].args[0][-1],'4096')
+            self.assertEqual(run.call_args_list[0].args[0][-1],'2048')
             self.assertEqual(run.call_args_list[1].args[0][-1],'1024')
             self.assertIn('JobStatus == 1',run.call_args_list[0].args[0][2])
             expression=submit.read_text()
@@ -157,7 +157,7 @@ class StageMemoryTests(unittest.TestCase):
         options=vars(fs.make_parser().parse_args([]))
         for kind in ('prepare','assemble','summarize','tables'):
             self.assertEqual(condor.memory_for_job(options,kind),1024)
-        self.assertEqual(condor.memory_for_job(options,'workspace'),4096)
+        self.assertEqual(condor.memory_for_job(options,'workspace'),2048)
         for kind in ('fit_b','fit_s','limits','fit'):
             self.assertEqual(condor.memory_for_job(options,kind),1024)
         for kind in ('prepare','workspace','fit_b'):

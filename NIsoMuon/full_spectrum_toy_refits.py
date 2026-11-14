@@ -229,7 +229,7 @@ def _prepare(opt):
         'when_to_transfer_output = ON_EXIT', 'transfer_input_files = '+','.join(transfer)+',$(fitfile),$(toyfile)',
         'transfer_output_files = result.tar.gz', 'transfer_output_remaps = "result.tar.gz=$(destination)"',
         'output = jobs/job_$(taskid).out', 'error = jobs/job_$(taskid).err', 'log = condor.log',
-        *memory_policy.retry_lines(str(max(opt.condor_memory,2048))), 'queue taskid,fitfile,toyfile,destination from tasks.txt', '']))
+        *memory_policy.retry_lines(str(max(opt.condor_memory,8192))), 'queue taskid,fitfile,toyfile,destination from tasks.txt', '']))
     (batch/'tasks.txt').write_text('\n'.join(f'{t["index"]} {batch/t["workspace"]} {batch/t["dataset"]} '
         f'{batch}/jobs/job_{t["index"]:05d}/result.tar.gz' for t in tasks)+'\n')
     print(f'[PLAN] {len(tasks)} chunks; {sum(t["original_task"]["count"] for t in tasks)} saved-toy refits; no generation.')

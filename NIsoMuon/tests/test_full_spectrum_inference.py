@@ -22,7 +22,7 @@ class InferenceTests(unittest.TestCase):
             self.prepare('impacts')
         submit=(self.batch/'submit.jds').read_text()
         self.assertIn('request_memory = 1024MB',submit)
-        self.assertIn('retry_request_memory_max = 2048MB',submit)
+        self.assertIn('retry_request_memory_max = 8192MB',submit)
 
     def test_audited_covariance_seeds_range_when_profile_errors_are_missing(self):
         for path in self.results.glob('*/fit_r0/fit_summary.json'):

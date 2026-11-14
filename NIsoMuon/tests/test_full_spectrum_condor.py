@@ -59,9 +59,9 @@ class CondorTests(unittest.TestCase):
         dag=(directory/'workflow.dag').read_text()
         for job in payload['jobs']:
             line=next(s for s in dag.splitlines() if s.startswith(f'VARS J{job["index"]} '))
-            memory=4096 if job['kind']=='workspace' else 1024
+            memory=2048 if job['kind']=='workspace' else 1024
             self.assertIn(f'memory="{memory}"',line)
-            self.assertIn(f'retrymemory="{max(memory,2048)}"',line)
+            self.assertIn(f'retrymemory="{max(memory,8192)}"',line)
 
     def test_observed_condor_preparation_and_workspace_preserve_data_counts(self):
         opt,args,payload=self.make_batch(extra=('--mode','unblind'))

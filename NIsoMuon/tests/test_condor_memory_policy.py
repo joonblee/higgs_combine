@@ -31,9 +31,15 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertIn('HoldReasonCode == 34',commands[1][-1])
         self.assertIn('RequestMemory == 2048',commands[1][-1])
         for changed in (dict(JobStatus=2),dict(JobStatus=1),dict(HoldReasonCode=1),
-                        dict(HoldReasonCode=12),dict(RequestMemory=2048),
-                        dict(RequestMemory=4096),dict(JobUniverse=7)):
+                        dict(HoldReasonCode=12),dict(RequestMemory=8192),
+                        dict(RequestMemory=16384),dict(JobUniverse=7)):
             self.assertEqual(policy.recovery_commands(dict(row,**changed)),[])
+
+    def test_repeated_oom_doubles_until_cap(self):
+        for before,after in ((1024,2048),(2048,4096),(4096,8192)):
+            row=dict(ClusterId=1,ProcId=0,JobUniverse=5,JobStatus=5,
+                     HoldReasonCode=34,RequestMemory=before)
+            self.assertEqual(policy.recovery_commands(row)[0][-1],str(after))
 
     def test_queue_update_keeps_workspace_and_active_or_retried_jobs(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -58,7 +64,7 @@ class MemoryPolicyTests(unittest.TestCase):
             combined=' '.join(' '.join(c) for c in commands)
             for untouched in (102,103,105):
                 self.assertNotIn('ClusterId == '+str(untouched),combined)
-            self.assertIn('4096',(batch/'submit.jds').read_text())
+            self.assertIn('2048',(batch/'submit.jds').read_text())
             self.assertIn('1024',(batch/'submit.jds').read_text())
             self.assertEqual((batch/'manifest.json').read_text(),manifest)
             self.assertEqual((batch/'submit.jds.before_1gb_memory').read_text(),

@@ -273,7 +273,7 @@ def _submit(opt):
         'transfer_output_files = result.tar.gz','transfer_output_remaps = "result.tar.gz=$(destination)"',
         'output = jobs/job_$(taskid).out','error = jobs/job_$(taskid).err','log = condor.log',
         'request_memory = '+str(opt.condor_memory),
-        *memory_policy.retry_lines(str(max(opt.condor_memory,2048))),
+        *memory_policy.retry_lines(str(max(opt.condor_memory,8192))),
         'queue taskid,fitfile,truthfile,destination from tasks.txt','']))
     task_lines=[]
     for task in tasks:

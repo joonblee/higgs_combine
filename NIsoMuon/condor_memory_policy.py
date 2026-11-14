@@ -20,29 +20,31 @@ def native_retry_supported():
     return bool(match and tuple(map(int, match.groups())) >= (25, 2, 1))
 
 
-def retry_lines(maximum='2048'):
+def retry_lines(maximum='8192'):
     """25.2.1 introduced native memory retries; older submitters must not ignore them."""
     if native_retry_supported():
-        return [f'retry_request_memory_max = {maximum}MB']
+        return ['retry_request_memory_increase = RequestMemory',
+                f'retry_request_memory_max = {maximum}MB']
     print('[MEMORY] Native memory retry unavailable. For OOM-held jobs use '
           'condor_memory_policy.py --retry-held with --batch or --dag-id; '
           'add --watch for automatic recovery.')
     return []
 
 
-def recovery_commands(ad, ceiling=2048):
-    """Retry only memory-limit holds, once at the ceiling; never generic fit failures."""
+def recovery_commands(ad, ceiling=8192):
+    """Retry only memory-limit holds, by doubling up to the ceiling; never generic fit failures."""
     request = ad.get('RequestMemory')
     if (ad.get('JobUniverse') != 5 or ad.get('JobStatus') != 5
             or ad.get('HoldReasonCode') != 34
             or not isinstance(request, (float, int)) or not 0 < request < ceiling):
         return []
+    next_memory = min(ceiling,max(2048,int(request*2)))
     selection = (f'ClusterId == {int(ad["ClusterId"])} && ProcId == {int(ad["ProcId"])} '
-                 f'&& JobStatus == 5 && HoldReasonCode == 34 && RequestMemory < {ceiling}')
+                 f'&& JobStatus == 5 && HoldReasonCode == 34 && RequestMemory == {request}')
     return [
-        ['condor_qedit', '-constraint', selection, 'RequestMemory', str(ceiling)],
+        ['condor_qedit', '-constraint', selection, 'RequestMemory', str(next_memory)],
         ['condor_release', '-constraint', selection.replace(
-            f'RequestMemory < {ceiling}', f'RequestMemory == {ceiling}')],
+            f'RequestMemory == {request}', f'RequestMemory == {next_memory}')],
     ]
 
 
@@ -53,7 +55,7 @@ def initial_memory(ad, payload, default=1024):
         if not 0 <= index < len(payload['jobs']):
             raise ValueError('Unknown DAG node: '+node.group(0))
         if payload['jobs'][index]['kind'] == 'workspace':
-            return max(default, 4096)
+            return max(default, 2048)
     return default
 
 
@@ -65,7 +67,7 @@ def patch_submit(batch, payload, default):
     original = path.read_text()
     indices = [str(j['index']) for j in payload.get('jobs', []) if j['kind']=='workspace']
     condition = ' || '.join('$(jobindex) == '+i for i in indices)
-    expression = (f'ifThenElse(({condition}), {max(default,4096)}, {default})'
+    expression = (f'ifThenElse(({condition}), {max(default,2048)}, {default})'
                   if condition else str(default))
     updated, count = re.subn(r'^request_memory\s*=.*$', 'request_memory = '+expression,
                             original, flags=re.MULTILINE)
@@ -89,7 +91,7 @@ def main(argv=None):
     parser.add_argument('--set-idle', action='store_true', help='Also lower idle/future requests; running jobs unchanged.')
     parser.add_argument('--retry-held', action='store_true', help='Release only memory-limit holds below the retry ceiling.')
     parser.add_argument('--memory', type=int, default=1024)
-    parser.add_argument('--retry-memory', type=int, default=2048)
+    parser.add_argument('--retry-memory', type=int, default=8192)
     parser.add_argument('--watch', action='store_true', help='Repeat queue-only checks every 30 seconds; stop with Ctrl+C.')
     parser.add_argument('--dry-run', action='store_true')
     opt = parser.parse_args(argv)
@@ -113,7 +115,7 @@ def main(argv=None):
             payload = manifests[batch]
             if opt.set_idle and batch not in patched:
                 if not opt.dry_run:patch_submit(batch,payload,opt.memory)
-                print('[MEMORY] Future requests:',batch,'workspace >=4096 MB, others',opt.memory,'MB')
+                print('[MEMORY] Future requests:',batch,'workspace >=2048 MB, others',opt.memory,'MB')
                 patched.add(batch)
             commands = []
             if opt.set_idle and ad['JobStatus']==1 and ad.get('NumJobStarts',0)==0:

@@ -368,7 +368,7 @@ def submit(opt):
         f'initialdir = {batch}', 'arguments = $(jobindex)', 'should_transfer_files = NO',
         'getenv = True', 'request_cpus = 1', f'request_memory = {opt.condor_memory}MB',
         'output = jobs/job_$(jobindex).out', 'error = jobs/job_$(jobindex).err',
-        'log = condor.log', *memory_policy.retry_lines(str(max(opt.condor_memory,2048))), 'queue 1', '']))
+        'log = condor.log', *memory_policy.retry_lines(str(max(opt.condor_memory,8192))), 'queue 1', '']))
     dag = write_dag(batch, payload)
     command = ['condor_submit_dag']+(['-maxjobs', str(opt.max_jobs)] if opt.max_jobs else [])+[dag]
     print('[PLAN]', dict(Counter(j['kind'] for j in jobs)))

@@ -371,7 +371,7 @@ def write_dag(payload, indices, path):
     for index in indices:
         job = payload['jobs'][index]
         memory = memory_for_job(payload['options'], job['kind'])
-        lines += [f'JOB J{index} submit.jds', f'VARS J{index} jobindex="{index}" memory="{memory}" retrymemory="{max(memory,2048)}"',
+        lines += [f'JOB J{index} submit.jds', f'VARS J{index} jobindex="{index}" memory="{memory}" retrymemory="{max(memory,8192)}"',
                   f'RETRY J{index} {payload["options"]["condor_retries"]}']
         parents = [i for i in job['dependencies'] if i in selected]
         if parents:

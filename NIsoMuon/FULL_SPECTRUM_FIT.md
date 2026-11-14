@@ -6,8 +6,8 @@ there is no new SKPlotMaker production command for this step.
 
 Execution defaults to **Condor**, with **no submission cap added by the
 workflow** (`--condor-maxjobs 0`). Jobs start at **1024 MB** (`--condor-memory 1024`), except workspace
-compilation, which retains **4096 MB**. Memory-limit failures can retry at
-**2048 MB**; see the memory-recovery section below. The default preparation grouping is one
+compilation, which retains **2048 MB**. Memory-limit failures can retry at
+**2048, 4096 and 8192 MB**; see the memory-recovery section below. The default preparation grouping is one
 spectrum bin per job (`--bins-per-job 1`). Use `--backend local` for foreground
 execution. Condor results are isolated under each batch's `results/` directory.
 
@@ -1081,7 +1081,7 @@ check progress, and the existing resume mechanism for incomplete nodes.
 
 New full-spectrum DAG submissions request memory by stage: preparation,
 assembly, summary collection and CSV tables start at 1024 MB. Workspace compilation
-uses 4096 MB; a fine-binning compilation exceeded a 2048 MB cgroup limit.
+starts at 2048 MB; individual fine compilations that exceed this allocation retry at 4096 MB.
 Fits and limits start at 1024 MB (`--condor-memory`). Override the light
 stages with `--condor-light-memory`, or compilation independently with
 `--condor-workspace-memory`. Reservations are not measurements of actual use.
@@ -1109,12 +1109,12 @@ values. Running jobs, manifests and source snapshots are unchanged. This is
 an explicit administrative update. A held job is excluded; the bounded
 OOM-recovery command below handles memory-limit holds separately.
 
-### Memory-limit recovery (1024 to 2048 MB)
+### Memory-limit recovery (1024 to 8192 MB)
 
 The small request is a starting allocation, not a claim that every fit fits in
 1 GiB. Fresh Condor submissions start at 1024 MB except for workspace compilation
-(4096 MB). HTCondor 25.2.1 or newer receives `retry_request_memory_max`, allowing
-an OOM retry at 2048 MB. On older submitters this directive is omitted with a
+(2048 MB). HTCondor 25.2.1 or newer receives `retry_request_memory_max`, allowing
+OOM retries doubling up to 8192 MB. On older submitters this directive is omitted with a
 message; use the queue-only recovery helper instead. No history scan is needed.
 
 For an existing DAG, lower never-started idle jobs and future submissions, then
@@ -1127,11 +1127,11 @@ python3 condor_memory_policy.py --dag-id 19501530 \
 
 Alternatively use `--batch <batch-directory>`, including non-DAG toy batches.
 Without `--watch`, this makes one queue pass. `--dry-run` previews edits.
-The helper keeps workspaces at least 4096 MB, leaves running/completed jobs and
+The helper keeps workspaces at least 2048 MB, leaves running/completed jobs and
 previously started idle jobs alone, and does not edit manifests or source
 snapshots. It groups idle edits rather than launching a command per queued job.
-Only a vanilla job held with `HoldReasonCode == 34` and a request below 2048 MB
-is raised to 2048 MB and released. A second OOM at 2048 MB remains held; other
+Only a vanilla job held with `HoldReasonCode == 34` and a request below 8192 MB
+is given twice its current request (up to 8192 MB) and released. An OOM at the ceiling remains held; other
 hold reasons and numerical fit failures are never automatically released.
 Stopping the monitor with Ctrl+C does not stop Condor jobs, but disables this
 helper's subsequent automatic recovery on older HTCondor versions.
@@ -1408,3 +1408,12 @@ not a bias-validation result: the nine ensemble means and paired numerical
 changes must still be assessed. A larger failure count in the strict retry
 does not establish its cause; its status distribution and individual logs
 remain necessary for diagnosis.
+
+### Incremental memory recovery update
+
+Current defaults supersede the earlier fixed 2 GiB retry policy: ordinary jobs
+start at 1024 MB and workspaces at 2048 MB. OOM-only retries double the request
+through 2048, 4096 and 8192 MB; the default ceiling is 8192 MB. The queue monitor
+accepts `--retry-memory` to change this ceiling. Running jobs remain unchanged.
+A workspace starts at 2048 MB because only some fine compilations exceeded that
+allocation; those individual jobs retry at 4096 MB instead of reserving it for all.
