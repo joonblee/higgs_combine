@@ -21,6 +21,7 @@ class ComponentTests(unittest.TestCase):
         priors,free=component.nuisance_priors('s lnN 1.1\nf param 0 2\nn rateParam x DY 1 [0,10]\nx rateParam y DY (@0) n')
         self.assertEqual(priors,dict(s=(0.,1.),f=(0.,2.)));self.assertEqual(free,{'n'})
         self.assertEqual(component.category('FS_QCDFitMode1_2018',{}),'Statistics')
+        self.assertEqual(component.category('CMS_NPS26009_QCDStat_mode4_2018',{}),'Statistics')
         self.assertEqual(component.category('CMS_NPS26009_DYClosureLinearShape',{}),'Modelling')
 
     @unittest.skipUnless(importlib.util.find_spec("ROOT"),"PyROOT unavailable")

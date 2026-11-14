@@ -345,8 +345,17 @@ def build_model(reader, args, opt, mass, files, windows_by_era=None):
     return assemble_model(args, opt, mass, parts, full_spectrum=windows_by_era is not None)
 
 
+def normalisation_name(process, era):
+    return f'CMS_NPS26009_Norm_{process}_BJetOS_{era}'
+
+
 def card_text(model, normalisation_kappa=None, prefix='SB'):
     """Serialize bins; optionally use broad QCD/DY/tt lnN priors for step 1."""
+    # Old saved models refer to their workspace parameters by their original names.
+    legacy_norms = any(n.startswith('CMS_NPS26009_inSituNorm_') for n in model.get('normalisations', {}))
+    canonical = prefix == 'FS' and not legacy_norms
+    parameter_prefix = 'CMS_NPS26009' if canonical else prefix
+    stat_mode = 'QCDStat_mode' if canonical else 'QCDFitMode'
     rows, opt = model['rows'], model['settings']
     columns = [(r, p) for r in rows for p in base.PROCESSES]
     f = lambda x: format(float(x), '.17g')
@@ -383,7 +392,9 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
             raise ValueError('Normalisation lnN kappa must exceed one.')
         for era in sorted({r['era'] for r in rows}):
             for process in ('QCD', 'DY', 'tt'):
-                name = f'CMS_NPS26009_inSituNorm_{process}_BJetOS_{era}'
+                name = normalisation_name(process, era)
+                if legacy_norms:
+                    name = name.replace('_Norm_', '_inSituNorm_', 1)
                 specification = model.get('normalisations', {}).get(name, {})
                 if specification.get('kind') == 'rateParam':
                     lo, hi = specification['bounds']
@@ -401,19 +412,19 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
             for process in ('QCD', 'DY'):
                 name = norm_name(process, era, opt['norm_scope'])
                 lines.append(f'{name} rateParam {channel} {process} 1 [0,{f(opt["norm_max"])}]')
-        shape = f'{prefix}_QCDShape_{era}'
-        names = [shape] + [f'{prefix}_QCDFitMode{k}_{era}' for k in range(len(row['qcd_modes']))]
+        shape = f'{parameter_prefix}_QCDShape_{era}'
+        names = [shape] + [f'{parameter_prefix}_{stat_mode}{k}_{era}' for k in range(len(row['qcd_modes']))]
         for name in names:
             if name not in params:
                 lines.append(f'{name} param 0 1')
                 params.add(name)
         terms = [f(row['rates']['QCD']), f(row['qcd_shape'])+'*@0']
         terms += [f(v)+f'*@{k+1}' for k, v in enumerate(row['qcd_modes'])]
-        lines.append(f'{prefix}_QCDYield_{channel} rateParam {channel} QCD max(0.,'+ '+'.join(terms)+') '+','.join(names))
+        lines.append(f'{parameter_prefix}_QCDYield_{channel} rateParam {channel} QCD max(0.,'+ '+'.join(terms)+') '+','.join(names))
         if row['rates']['DY'] == 0 and row['dy_stat'] > 0:
-            name = f'{prefix}_DYStat_{channel}'
+            name = f'{parameter_prefix}_DYStat_{channel}'
             lines += [f'{name} param 0 1',
-                      f'{prefix}_DYYield_{channel} rateParam {channel} DY max(0.,{f(row["dy_stat"])}*@0) {name}']
+                      f'{parameter_prefix}_DYYield_{channel} rateParam {channel} DY max(0.,{f(row["dy_stat"])}*@0) {name}']
     if model.get('dy_linear_shape'):
         import dy_closure_shape
         lines.append(dy_closure_shape.NUISANCE+' param 0 1')

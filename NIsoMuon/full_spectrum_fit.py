@@ -26,6 +26,7 @@ import sys
 import numpy as np
 import limit_workflow as base
 import limit_workflow_sideband_fit as shared
+from limit_workflow_sideband_fit import normalisation_name
 
 DOMAIN = (11., 80.)
 SCHEMA = 'NPS26009_full_spectrum_step1_v1'
@@ -223,10 +224,6 @@ def resolution_bins(edges, resolution, bin_sigma=1.):
     if len(cuts) > 2 and cuts[-1]-cuts[-2] < .5*bin_sigma*resolution((cuts[-1]+cuts[-2])/2):
         del cuts[-2]
     return [dict(region=f'B{i:04d}', low=a, high=b) for i, (a,b) in enumerate(zip(cuts, cuts[1:]))]
-
-
-def normalisation_name(process, era):
-    return f'CMS_NPS26009_inSituNorm_{process}_BJetOS_{era}'
 
 
 def validate_sideband_options(opt):

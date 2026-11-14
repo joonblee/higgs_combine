@@ -319,17 +319,20 @@ class CardTests(unittest.TestCase):
         for row in model['rows']:
             self.assertAlmostEqual(predictions[row['channel']],row['asimov'])
         lines=[line.split() for line in text.splitlines()]
-        norms=[line for line in lines if line and 'inSituNorm' in line[0]]
+        norms=[line for line in lines if line and line[0].startswith('CMS_NPS26009_Norm_')]
         self.assertEqual(len(norms),6)
         for line in norms:
             spec=model['normalisations'][line[0]]
             for (row,p),value in zip(columns,line[2:]):
                 self.assertEqual(value,'1.5' if p==spec['process'] and row['era']==spec['era'] else '-')
+        self.assertNotIn('FS_',text)
+        self.assertNotIn('inSituNorm',text)
+        self.assertIn('CMS_NPS26009_QCDShape_2018 param 0 1',text)
         self.assertNotIn('beta_',text)
         self.assertNotIn('NFModel',text)
         self.assertNotIn('bckgNorm_QCD',text)
         self.assertEqual(text.count('QCDscale_ren_ttbar lnN'),1)
-        self.assertEqual(text.count('FS_QCDFitMode0_2018 param'),1)
+        self.assertEqual(text.count('CMS_NPS26009_QCDStat_mode0_2018 param'),1)
         self.assertEqual(text.count('MCstat_ttbar_BJetOS_2018_B000'),4)
         self.assertIn('# alpha_internal_signal_yield = 25',text)
 
@@ -340,7 +343,7 @@ class CardTests(unittest.TestCase):
         row['rates']['DY']=0.
         row['nuisances']['DY_LightJetStat']['DY']='-'
         text=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
-        self.assertIn('FS_DYYield_bin_2018_B0000 rateParam',text)
+        self.assertIn('CMS_NPS26009_DYYield_bin_2018_B0000 rateParam',text)
         self.assertIn('max(0.,12*@0)',text)
         self.assertAlmostEqual(shared.nominal_predictions(text)[row['channel']],row['asimov'])
 

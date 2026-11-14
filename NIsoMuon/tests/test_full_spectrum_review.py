@@ -71,6 +71,20 @@ class ReviewTests(unittest.TestCase):
         regenerated=shared.card_text(transformed,normalisation_kappa=1.5,prefix='FS')
         self.assertCountEqual(regenerated.splitlines(),changed.splitlines())
 
+    def test_legacy_review_card_and_impact_labels(self):
+        model, text = window_example()
+        old = copy.deepcopy(model)
+        old['normalisations'] = {
+            name.replace('_Norm_', '_inSituNorm_'): spec
+            for name, spec in model['normalisations'].items()
+        }
+        legacy = shared.card_text(old, normalisation_kappa=1.5, prefix='FS')
+        self.assertIn('FS_QCDFitMode1_2018 param', legacy)
+        opt = fs.make_parser().parse_args(['--fit-layout', 'window'])
+        self.assertEqual(review.review_card(legacy, model, opt), text)
+        self.assertEqual(fs.base.spectrum_parameter_name('FS_QCDFitMode4_2018'),
+                         'CMS_NPS26009_QCDStat_mode4_2018')
+
     def test_preparation_reuses_saved_card_without_root_inputs(self):
         model,text=window_example()
         with tempfile.TemporaryDirectory() as directory:
@@ -93,7 +107,7 @@ class ReviewTests(unittest.TestCase):
         opt=fs.make_parser().parse_args(['--dy-shape-uncertainty','.3','--dy-normalisation','free'])
         fs.decorate_model(model,opt,{e:[r for r in model['rows'] if r['era']==e] for e in model['eras']})
         card=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
-        self.assertIn('FS_DYStat_'+row['channel']+' param 0 1',card)
+        self.assertIn('CMS_NPS26009_DYStat_'+row['channel']+' param 0 1',card)
         self.assertAlmostEqual(shared.nominal_predictions(card)[row['channel']],row['asimov'])
 
 

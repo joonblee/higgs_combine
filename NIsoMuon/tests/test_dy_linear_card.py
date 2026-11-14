@@ -41,7 +41,7 @@ class LinearCardTests(unittest.TestCase):
         row['rates']['DY']=0.;row['dy_stat']=2.;row['dy_closure_raw_up']=3.
         fs.decorate_model(model,fs.make_parser().parse_args(['--dy-shape-model','linear']),{e:[r for r in model['rows'] if r['era']==e] for e in model['eras']})
         card=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
-        self.assertIn('FS_DYStat_'+row['channel']+' param 0 1',card)
+        self.assertIn('CMS_NPS26009_DYStat_'+row['channel']+' param 0 1',card)
         self.assertNotIn('DYClosureBin_'+row['channel']+' rateParam',card)
         self.assertEqual(row['dy_closure_up'],0.)
 

@@ -2915,6 +2915,18 @@ def read_dy_closure_inputs(reader, filename):
     return reader.validated_input(filename, ('dy_closure',), dy_closure_shape.read_inputs)
 
 
+def spectrum_parameter_name(name: str) -> str:
+    """Map a legacy full-spectrum parameter to the analysis naming convention."""
+    if name.startswith("CMS_NPS26009_inSituNorm_"):
+        return name.replace("_inSituNorm_", "_Norm_", 1)
+    if name.startswith("FS_QCDFitMode"):
+        return name.replace("FS_QCDFitMode", "CMS_NPS26009_QCDStat_mode", 1)
+    for kind in ("QCDShape", "DYStat", "QCDYield", "DYYield"):
+        if name.startswith(f"FS_{kind}_"):
+            return "CMS_NPS26009_" + name[3:]
+    return name
+
+
 def nuisance_global_name(local: str, year: str) -> str:
     """Return the datacard nuisance name for the prescribed source correlation.
 
@@ -4957,7 +4969,13 @@ def finish_impacts(args, card, target, label, mass, outdir, workspace, internal_
         "yield": "N_{sig}",
         "xsec": "#sigma [pb]",
     }[args.parameter]
-    translation.write_text(json.dumps({"r": poi_label}, indent=2) + "\n")
+    labels = {"r": poi_label}
+    for parameter in payload_internal["params"]:
+        name = parameter["name"]
+        label_name = spectrum_parameter_name(name)
+        if name != label_name:
+            labels[name] = label_name
+    translation.write_text(json.dumps(labels, indent=2) + "\n")
     output = f"impacts_{tag}_M{label}"
 
     # The fit contains every nuisance. The figure intentionally displays only

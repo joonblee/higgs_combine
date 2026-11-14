@@ -11,16 +11,21 @@ import copy
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 import sys
 
 import background_shape_closure as closure
 import full_spectrum_fit as fs
+import limit_workflow as base
 import limit_workflow_sideband_fit as shared
 
 
 def review_card(text,model,opt):
     """Edit the audited source card, preserving every unrelated nuisance line."""
+    # A new review model may derive from a hash-verified card with the old names.
+    text = re.sub(r'\b(?:FS_|CMS_NPS26009_inSituNorm_)\w+',
+                  lambda match: base.spectrum_parameter_name(match.group()), text)
     lines=text.splitlines()
     tokenised=[line.split() for line in lines if line and not line.startswith('#')]
     channels=[line[1:] for line in tokenised if line[0]=='bin'][-1]
