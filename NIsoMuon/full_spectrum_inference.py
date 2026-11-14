@@ -86,6 +86,8 @@ def options(payload, job=None):
     if job:
         args.impact_expect_signal = job.get('injected_r', 0.)
         args.r_min = job.get('r_min', 0.)
+        if job['kind'] == 'impact_final':
+            args.impact_parallel = payload['config'].get('impact_repair_cpus', 1)
     return args
 
 
@@ -259,17 +261,19 @@ def write_dag(batch, payload, resume=False):
 
 def _write_dag(batch, payload, resume=False):
     lines = []
+    args = options(payload) if resume else None
     for job in payload['jobs']:
         done = False
         if resume:
             try:
-                base.completed_condor_job(payload, options(payload, job), job)
+                base.completed_condor_job(payload, args, job)
                 done = True
             except base.WorkflowError:
                 pass
+        cpus = payload['config'].get('impact_repair_cpus', 1) if job['kind'] == 'impact_final' else 1
         node = f'J{job["index"]}'
         lines += [f'JOB {node} submit.jds'+(' DONE' if done else ''),
-                  f'VARS {node} jobindex="{job["index"]}"']
+                  f'VARS {node} jobindex="{job["index"]}" nodecpus="{cpus}"']
         if job['dependencies']:
             lines += ['PARENT '+' '.join(f'J{i}' for i in job['dependencies'])+' CHILD '+node]
     name = 'resume_'+uuid4().hex[:8]+'.dag' if resume else 'workflow.dag'
@@ -279,7 +283,7 @@ def _write_dag(batch, payload, resume=False):
 
 def submit(opt):
     if (not math.isfinite(opt.r_max) or opt.r_max <= 0 or opt.condor_memory <= 0
-            or opt.max_jobs < 0 or not opt.impact_injections
+            or opt.impact_repair_cpus < 1 or opt.max_jobs < 0 or not opt.impact_injections
             or any(not math.isfinite(x) or x < 0 or x >= opt.r_max for x in opt.impact_injections)):
         raise ValueError('Invalid POI range, injection, memory or concurrency.')
     batch = Path(opt.batch).resolve()
@@ -333,14 +337,15 @@ def submit(opt):
         if opt.task in ('limits', 'all'):
             limits.setdefault(target, []).append(add('limits')['index'])
         if opt.task in ('impacts', 'all'):
-            nuisances = sorted(base.impact_workspace_parameters(workspace))
+            pois, bounds = base.impact_workspace_model(workspace)
+            nuisances = sorted(bounds)
             if not nuisances:
                 raise ValueError('No floating nuisance parameters in saved workspace.')
             for injection in dict.fromkeys(opt.impact_injections):
                 rmin = max(safe, -5*reference)
                 initial = add('impact_initial', injected_r=injection, r_min=rmin, safe_r_min=safe)
                 scans = [add('impact_nuisance', [initial['index']], initial=initial['index'],
-                    nuisance=n, injected_r=injection, r_min=rmin) for n in nuisances]
+                    nuisance=n, impact_pois=pois, injected_r=injection, r_min=rmin) for n in nuisances]
                 add('impact_final', [initial['index'], *[s['index'] for s in scans]],
                     initial=initial['index'], nuisance_jobs=[s['index'] for s in scans],
                     injected_r=injection, r_min=rmin)
@@ -352,7 +357,8 @@ def submit(opt):
         jobs.append(job)
     payload = dict(schema=SCHEMA, batch_id=uuid4().hex, blind=True, jobs=jobs, source_hashes=source_hashes,
         config=dict(mode='blind', parameter='alpha', strict=True, r_max=opt.r_max,
-                    allow_negative_r=True, impact_parallel=1, jobs=1,
+                    allow_negative_r=True, impact_profile_strategy=opt.impact_profile_strategy,
+                    impact_repair_cpus=opt.impact_repair_cpus, impact_parallel=1, jobs=1,
                     plot_limits_py=str(batch/'source/python/plotLimits.py')))
     payload['manifest_sha256'] = manifest_digest(payload)
     (batch/'manifest.json').write_text(json.dumps(payload, indent=2, allow_nan=False)+'\n')
@@ -364,11 +370,12 @@ def submit(opt):
         'exec python3 -u '+shlex.quote(str(batch/'source/full_spectrum_inference.py'))+
         ' --batch '+shlex.quote(str(batch))+' --worker "$1"', '']))
     wrapper.chmod(0o755)
+    memory = str(opt.condor_memory)+'MB' if opt.impact_repair_cpus == 1 else f'{opt.condor_memory} * $(nodecpus)'
     (batch/'submit.jds').write_text('\n'.join(['universe = vanilla', f'executable = {wrapper}',
         f'initialdir = {batch}', 'arguments = $(jobindex)', 'should_transfer_files = NO',
-        'getenv = True', 'request_cpus = 1', f'request_memory = {opt.condor_memory}MB',
+        'getenv = True', 'request_cpus = $(nodecpus)', f'request_memory = {memory}',
         'output = jobs/job_$(jobindex).out', 'error = jobs/job_$(jobindex).err',
-        'log = condor.log', *memory_policy.retry_lines(str(max(opt.condor_memory,8192))), 'queue 1', '']))
+        'log = condor.log', *memory_policy.retry_lines(str(max(opt.condor_memory * opt.impact_repair_cpus,8192))), 'queue 1', '']))
     dag = write_dag(batch, payload)
     command = ['condor_submit_dag']+(['-maxjobs', str(opt.max_jobs)] if opt.max_jobs else [])+[dag]
     print('[PLAN]', dict(Counter(j['kind'] for j in jobs)))
@@ -383,10 +390,11 @@ def submit(opt):
 def report(batch):
     with base.validation_cache():
         payload = read_manifest(batch)
+        args = options(payload)
         counts, products = Counter(), []
         for job in payload['jobs']:
             try:
-                status = base.completed_condor_job(payload, options(payload, job), job)
+                status = base.completed_condor_job(payload, args, job)
                 state = 'success'
                 if job['kind'] in ('limit_plot', 'impact_final'):
                     products.append(dict(kind=job['kind'], target=job['target'], mass=job['mass'],
@@ -428,6 +436,8 @@ def set_memory(opt):
     plots = [j['index'] for j in payload['jobs'] if j['kind']=='limit_plot']
     expression = (f'ifThenElse(({index_condition(nuisance,"$(jobindex)")}), {opt.impact_memory}, '
         f'ifThenElse(({index_condition(plots,"$(jobindex)")}), {opt.plot_memory}, {opt.condor_memory}))')
+    if payload['config'].get('impact_repair_cpus', 1) > 1:
+        expression = f'({expression}) * $(nodecpus)'
     submit = batch/'submit.jds'
     text, count = re.subn(r'^request_memory\s*=.*$', 'request_memory = '+expression,
                          submit.read_text(), flags=re.MULTILINE)
@@ -477,6 +487,10 @@ def main(argv=None):
     parser.add_argument('--batch', required=True)
     parser.add_argument('--stage', choices=('submit', 'status', 'collect', 'resume', 'set-memory'), default='submit')
     parser.add_argument('--task', choices=('limits', 'impacts', 'all'), default='all')
+    parser.add_argument('--impact-repair-cpus', type=int, default=1,
+                        help='CPUs for independent retries within each final impact job. Memory scales per CPU.')
+    parser.add_argument('--impact-profile-strategy', type=int, choices=(0,1,2), default=0,
+                        help='Nominal robust crossing strategy. Use 1 to reproduce the former setting.')
     parser.add_argument('--impact-injections', type=base.parse_float_list, default=[0., 1.])
     parser.add_argument('--r-max', type=float, default=100.)
     parser.add_argument('--condor-memory', type=int, default=1024)

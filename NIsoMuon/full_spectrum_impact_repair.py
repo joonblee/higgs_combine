@@ -33,7 +33,7 @@ def run_worker(batch, index):
     args = inference.options(payload, job)
     args.impact_step_size = plan['step_size']
     args.impact_crossing_tolerance = plan['crossing_tolerance']
-    args.impact_parallel = 1
+    args.impact_parallel = plan.get('parallel', 1)
     args.plot_limits_py = str(batch/'source/python/plotLimits.py')
     directory = batch/f'job_{index:05d}'
     directory.mkdir(exist_ok=False)
@@ -66,6 +66,7 @@ def main(argv=None):
     p.add_argument('--indices', default='2221,2983,4524')
     p.add_argument('--step-size', type=float, default=0.1)
     p.add_argument('--crossing-tolerance', type=float, default=1e-4)
+    p.add_argument('--parallel', type=int, default=1, help='CPUs per final job for independent nuisance repairs')
     p.add_argument('--memory', type=int, default=16000)
     p.add_argument('--stage', choices=('submit','collect'), default='submit')
     p.add_argument('--dry-run', action='store_true')
@@ -87,6 +88,8 @@ def main(argv=None):
         return
     base.impact_scan_options(argparse.Namespace(impact_step_size=opt.step_size,
         impact_crossing_tolerance=opt.crossing_tolerance))
+    if opt.parallel < 1:
+        raise ValueError('--parallel must be positive')
     if opt.memory <= 0:
         raise ValueError('Memory must be positive')
     if not opt.source_batch:
@@ -114,7 +117,7 @@ def main(argv=None):
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(Path(__file__).parent/name, dest)
     write(batch/'plan.json', dict(source_batch=str(source), indices=indices,
-        step_size=opt.step_size, crossing_tolerance=opt.crossing_tolerance,
+        step_size=opt.step_size, crossing_tolerance=opt.crossing_tolerance, parallel=opt.parallel,
         minimizer_tolerance=0.1, first_strategy=1, repair_strategies=[1,2,0],
         manifest_sha256=inference.digest(batch/'source_manifest.json'),
         source_hashes={'source/'+n:inference.digest(batch/'source'/n) for n in names}))
@@ -130,7 +133,7 @@ def main(argv=None):
     submit = batch/'submit.jds'
     submit.write_text('\n'.join(['universe = vanilla',f'executable = {wrapper}',
         f'initialdir = {batch}','arguments = $(index)',f'request_memory = {opt.memory}MB',
-        'request_cpus = 1','getenv = True','should_transfer_files = YES',
+        f'request_cpus = {opt.parallel}','getenv = True','should_transfer_files = YES',
         'when_to_transfer_output = ON_EXIT','transfer_output_files = ""',
         'output = repair_$(index).out','error = repair_$(index).err','log = condor.log',
         'jobbatchname = NPSImpactCrossing_'+batch.name,

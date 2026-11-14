@@ -24,6 +24,25 @@ class InferenceTests(unittest.TestCase):
         self.assertIn('request_memory = 1024MB',submit)
         self.assertIn('retry_request_memory_max = 8192MB',submit)
 
+    def test_only_final_workers_request_parallel_repair_resources(self):
+        inf.main(['--results', str(self.results), '--batch', str(self.batch), '--dry-run',
+            '--impact-repair-cpus', '3', '--condor-cmssw-base', str(self.root/'CMSSW'),
+            '--condor-scram-arch', 'test'])
+        payload = inf.read_manifest(self.batch)
+        for dag in ('workflow.dag', inf.write_dag(self.batch, payload, resume=True)):
+            lines = (self.batch/dag).read_text().splitlines()
+            for job in payload['jobs']:
+                cpus = 3 if job['kind'] == 'impact_final' else 1
+                index = job['index']
+                self.assertIn(f'VARS J{index} jobindex="{index}" nodecpus="{cpus}"', lines)
+                self.assertEqual(inf.options(payload,job).impact_parallel,cpus)
+                ad = dict(DAGNodeName=f'J{index}')
+                self.assertEqual(inf.memory_policy.initial_memory(ad,payload),1024*cpus)
+        submit = self.batch/'submit.jds'
+        self.assertIn('request_memory = 1024 * $(nodecpus)', submit.read_text())
+        inf.memory_policy.patch_submit(self.batch,payload,2048)
+        self.assertIn('request_memory = (2048) * $(nodecpus)', submit.read_text())
+
     def test_audited_covariance_seeds_range_when_profile_errors_are_missing(self):
         for path in self.results.glob('*/fit_r0/fit_summary.json'):
             record=json.loads(path.read_text())
@@ -108,7 +127,20 @@ class InferenceTests(unittest.TestCase):
         tool = tool.replace('else min(0., rmin+1.)', 'else injection-1.')
         tool = tool.replace('[low, 0., 1.]', '[low, injection, injection+1.]')
         tool = tool.replace('"r": [-.2, 0., .2]', '"r": [injection-.2, injection, injection+.2]')
-        for name, code in [('combine', FAKE_COMBINE), ('combineTool.py', tool),
+        scan_stub = """
+if a[a.index("-M")+1] == "MultiDimFit":
+    assert a[a.index("--algo")+1] == "impact"
+    p = a[a.index("-P")+1]
+    r = float(a[a.index("--expectSignal")+1])
+    assert a[a.index("--redefineSignalPOIs")+1] == "r"
+    assert all(a[a.index(flag)+1] == "1" for flag in ("--floatOtherPOIs","--saveInactivePOI"))
+    Path("higgsCombine"+name+".MultiDimFit.mH"+mass+".root").write_text(json.dumps(dict(
+        name=p, type="Gaussian", fit=[-1,0,1], prefit=[-1,0,1], r=[r-.2,r,r+.2], impact_r=.2)))
+    Path("fit_arguments.json").write_text(json.dumps(a))
+    raise SystemExit(0)
+"""
+        combine = FAKE_COMBINE.replace('blind =', scan_stub+'\nblind =', 1)
+        for name, code in [('combine', combine), ('combineTool.py', tool),
                            ('plotImpacts.py', PLOT_IMPACTS)]:
             path = self.bin/name
             path.write_text(code)
@@ -116,6 +148,8 @@ class InferenceTests(unittest.TestCase):
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.dict(os.environ, PATH=str(self.bin)+os.pathsep+os.environ['PATH']))
+        self.stack.enter_context(patch.object(inf.base, 'impact_workspace_model',
+            side_effect=lambda p: (['r'], json.loads(Path(p).read_text()))))
         self.stack.enter_context(patch.object(inf.base, 'impact_workspace_parameters',
             side_effect=lambda p: json.loads(Path(p).read_text())))
         self.stack.enter_context(patch.object(inf.base, 'read_impact_initial_poi',
@@ -172,7 +206,8 @@ class InferenceTests(unittest.TestCase):
                 command = json.loads((directory/'fit_arguments.json').read_text())
                 self.assertEqual(float(command[command.index('--expectSignal')+1]), job['injected_r'])
                 self.assertLess(float(command[command.index('--rMin')+1]), 0.)
-                self.assertEqual(command[command.index('--named')+1], job['nuisance'])
+                self.assertEqual(command[command.index('-P')+1], job['nuisance'])
+                self.assertFalse(list(directory.glob('higgsCombine_initialFit*.root')))
             elif job['kind'] == 'impact_final':
                 result = json.loads(
                     (directory/f'impacts_Run2Run3_alpha_M{int(job["mass"])}.json').read_text())
@@ -207,7 +242,7 @@ class InferenceTests(unittest.TestCase):
             inf.worker(self.batch, child['index'])
 
     def test_limits_only_never_enumerates_nuisances(self):
-        with patch.object(inf.base, 'impact_workspace_parameters', side_effect=AssertionError):
+        with patch.object(inf.base, 'impact_workspace_model', side_effect=AssertionError):
             payload = self.prepare('limits')
         self.assertEqual([j['kind'] for j in payload['jobs']], ['limits']*3+['limit_plot'])
 

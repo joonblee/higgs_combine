@@ -23,6 +23,7 @@ class CrossingTest(unittest.TestCase):
         for flag in ('--cminDefaultMinimizerTolerance','--setRobustFitTolerance'):
             self.assertEqual(command[command.index(flag)+1],'0.1')
         self.assertEqual(command[command.index('--cminDefaultMinimizerStrategy')+1],'1')
+        self.assertEqual(command[command.index('--setRobustFitStrategy')+1], '0')
         args.impact_step_size=.02
         args.impact_crossing_tolerance=1e-8
         self.assertEqual(base.impact_scan_options(args)[1::2],['0.02','1e-08'])
@@ -45,8 +46,10 @@ class CrossingTest(unittest.TestCase):
             batch=root/'new'
             with patch.dict(os.environ,CMSSW_BASE=str(cmssw),SCRAM_ARCH='test'):
                 repair.main(['--source-batch',str(source),'--batch',str(batch),
-                             '--indices','0','--dry-run'])
+                             '--indices','0','--parallel','3','--dry-run'])
+            self.assertIn('request_cpus = 3', (batch/'submit.jds').read_text())
             def finish(payload,args,newjob,card,label,mass,directory):
+                self.assertEqual(args.impact_parallel,3)
                 self.assertNotEqual(directory,source)
                 self.assertEqual(args.impact_expect_signal,1.)
                 self.assertEqual(args.impact_crossing_tolerance,1e-4)

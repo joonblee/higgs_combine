@@ -305,6 +305,21 @@ class CondorTests(unittest.TestCase):
             fs.combine_fit_summaries(model,fs.model_directory(worker,30),worker)
         self.assertFalse((root/'fit_summary.json').exists())
 
+    def test_quality_failure_exits_without_rerunning_identical_fit(self):
+        _, _, payload = self.make_batch()
+        retries = (Path(payload['batch'])/'workflow.dag').read_text().splitlines()
+        for job in payload['jobs']:
+            line = f'RETRY J{job["index"]} 2'
+            if job['kind'] in ('fit_b','fit_s'):
+                line += f' UNLESS-EXIT {batch.FIT_QUALITY_EXIT}'
+            self.assertIn(line, retries)
+        args = ['--condor-worker', 'manifest.json', '--condor-index', '0']
+        with patch.object(batch,'run_worker',side_effect=fs.FitQualityError('covQual=2')):
+            self.assertEqual(fs.main(args),batch.FIT_QUALITY_EXIT)
+        with patch.object(batch,'run_worker',side_effect=OSError('temporary storage failure')):
+            with self.assertRaises(OSError):
+                fs.main(args)
+
     def test_failed_worker_is_recorded_and_can_be_retried(self):
         opt,args,payload=self.make_batch()
         manifest=Path(payload['batch'])/'manifest.json'

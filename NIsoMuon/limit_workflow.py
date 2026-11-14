@@ -4405,7 +4405,7 @@ def apply_impact_boundary_endpoint(param, value, rvalue, delta_nll):
     }
 
 
-def impact_workspace_parameters(workspace):
+def impact_workspace_model(workspace):
     ROOT = RootReader().ROOT
     source = ROOT.TFile.Open(str(workspace))
     if not source or source.IsZombie():
@@ -4415,13 +4415,17 @@ def impact_workspace_parameters(workspace):
         config = w.obj("ModelConfig") if w else None
         if not config:
             raise WorkflowError(f"No ModelConfig in {workspace}")
-        pois = {v.GetName() for v in config.GetParametersOfInterest()}
+        pois = [v.GetName() for v in config.GetParametersOfInterest()]
         variables = config.GetPdf().getParameters(config.GetObservables())
-        return {v.GetName(): (float(v.getMin()), float(v.getMax()))
+        return pois, {v.GetName(): (float(v.getMin()), float(v.getMax()))
                 for v in variables if v.InheritsFrom("RooRealVar")
                 and not v.isConstant() and v.GetName() not in pois}
     finally:
         source.Close()
+
+
+def impact_workspace_parameters(workspace):
+    return impact_workspace_model(workspace)[1]
 
 
 def read_boundary_impact_result(path, nuisance, bound, rmin, rmax):
@@ -4784,19 +4788,31 @@ def impact_scan_options(args):
     return ["--stepSize", str(step), "--setCrossingTolerance", str(tolerance)]
 
 
-def impact_common_command(args, card, target, label, mass, workspace, rmin, rmax):
+def nominal_impact_options(args):
+    return ["--robustFit", "1", *impact_scan_options(args),
+            "--cminDefaultMinimizerStrategy", "1", "--cminDefaultMinimizerTolerance", "0.1",
+            "--setRobustFitStrategy", str(getattr(args, "impact_profile_strategy", 0)),
+            "--setRobustFitTolerance", "0.1"]
+
+
+def impact_common_command(args, card, target, label, mass, workspace, rmin, rmax, *, nuisance=None, pois=None):
     injection = float(getattr(args, "impact_expect_signal", 0.0))
     if not math.isfinite(injection) or injection < 0:
         raise WorkflowError("Impact Asimov injection must be finite and nonnegative")
-    command = [
-        "combineTool.py", "-M", "Impacts", "-d", str(workspace),
-        "-m", format_mass_for_combine(mass),
-        "--robustFit", "1", *impact_scan_options(args),
-        "--cminDefaultMinimizerStrategy", "1", "--cminDefaultMinimizerTolerance", "0.1",
-        "--setRobustFitStrategy", "1", "--setRobustFitTolerance", "0.1",
-        "--setParameters", f"r={injection:.12g}", *explicit_range_args(rmin, rmax, card),
-        "-n", f".Impacts_{tag_for(args, target)}_M{label}",
-    ]
+    name = f".Impacts_{tag_for(args, target)}_M{label}"
+    if nuisance is None:
+        command = ["combineTool.py", "-M", "Impacts", "-n", name]
+    else:
+        # This is the command emitted by v10.6.0 Impacts.py --doFits --named.
+        # The official collector still derives the prefit metadata for the plot.
+        if not pois:
+            raise WorkflowError("Missing workspace POIs for nuisance impact fit")
+        command = ["combine", "-M", "MultiDimFit", "-n", f"_paramFit_{name}_{nuisance}",
+                   "--algo", "impact", "--redefineSignalPOIs", ",".join(pois), "-P", nuisance,
+                   "--floatOtherPOIs", "1", "--saveInactivePOI", "1"]
+    command += ["-d", str(workspace), "-m", format_mass_for_combine(mass),
+                *nominal_impact_options(args), "--setParameters", f"r={injection:.12g}",
+                *explicit_range_args(rmin, rmax, card)]
     if args.mode == "blind":
         command.extend(["-t", "-1", "--expectSignal", f"{injection:.12g}"])
     return command
@@ -5603,15 +5619,19 @@ def run_condor_impact_initial(args, job, card, label, mass, workdir):
 
 def run_condor_impact_nuisance(payload, args, job, card, label, mass, workdir):
     context = condor_impact_context(payload, args, job["initial"])
-    initial = Path(context["initial_file"])
-    shutil.copy2(initial, workdir / initial.name)
     name = f".Impacts_{tag_for(args, job['target'])}_M{label}"
     scan = workdir / f"higgsCombine_paramFit_{name}_{job['nuisance']}.MultiDimFit.mH{format_mass_for_combine(mass)}.root"
     if scan.exists():
         scan.unlink()
-    common = impact_common_command(args, card, job["target"], label, mass,
-                                   Path(context["workspace"]), context["rmin"], context["rmax"])
-    run_command([*common, "--doFits", "--named", job["nuisance"]], workdir)
+    pois = job.get("impact_pois")
+    direct = dict(nuisance=job["nuisance"], pois=pois) if pois else {}
+    command = impact_common_command(args, card, job["target"], label, mass,
+                                    Path(context["workspace"]), context["rmin"], context["rmax"], **direct)
+    if not pois:
+        initial = Path(context["initial_file"])
+        shutil.copy2(initial, workdir / initial.name)
+        command.extend(["--doFits", "--named", job["nuisance"]])
+    run_command(command, workdir)
     return {"impact_run_id": context["impact_run_id"], "files": [str(scan)]}
 
 
@@ -6055,6 +6075,8 @@ def build_parser() -> argparse.ArgumentParser:
     combine.add_argument("--impact-masses", type=parse_float_list, default=None)
     combine.add_argument("--run-impacts-all-masses", dest="run_impacts_all_masses", action="store_true", default=True)
     combine.add_argument("--no-run-impacts-all-masses", dest="run_impacts_all_masses", action="store_false")
+    combine.add_argument("--impact-profile-strategy", type=int, choices=(0, 1, 2), default=0,
+                         help="Nominal robust crossing strategy (Combine v10.6.0 default: 0).")
     combine.add_argument("--impact-step-size", type=float, default=0.1,
                          help="Robust impact crossing search step size (Combine default: 0.1).")
     combine.add_argument("--impact-crossing-tolerance", type=float, default=1e-4,

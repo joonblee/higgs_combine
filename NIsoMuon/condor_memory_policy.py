@@ -54,6 +54,8 @@ def initial_memory(ad, payload, default=1024):
         index = int(node.group(1))
         if not 0 <= index < len(payload['jobs']):
             raise ValueError('Unknown DAG node: '+node.group(0))
+        if payload['jobs'][index]['kind'] == 'impact_final':
+            return default * payload.get('config', {}).get('impact_repair_cpus', 1)
         if payload['jobs'][index]['kind'] == 'workspace':
             return max(default, 2048)
     return default
@@ -69,6 +71,8 @@ def patch_submit(batch, payload, default):
     condition = ' || '.join('$(jobindex) == '+i for i in indices)
     expression = (f'ifThenElse(({condition}), {max(default,2048)}, {default})'
                   if condition else str(default))
+    if payload.get('config', {}).get('impact_repair_cpus', 1) > 1:
+        expression = f'({expression}) * $(nodecpus)'
     updated, count = re.subn(r'^request_memory\s*=.*$', 'request_memory = '+expression,
                             original, flags=re.MULTILINE)
     if count != 1:
@@ -115,7 +119,7 @@ def main(argv=None):
             payload = manifests[batch]
             if opt.set_idle and batch not in patched:
                 if not opt.dry_run:patch_submit(batch,payload,opt.memory)
-                print('[MEMORY] Future requests:',batch,'workspace >=2048 MB, others',opt.memory,'MB')
+                print('[MEMORY] Future requests:',batch,'workspace >=2048 MB, base',opt.memory,'MB per worker CPU')
                 patched.add(batch)
             commands = []
             if opt.set_idle and ad['JobStatus']==1 and ad.get('NumJobStarts',0)==0:

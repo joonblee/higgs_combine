@@ -801,26 +801,10 @@ def task_sb_impacts(args: argparse.Namespace, card: Path) -> None:
     tag = f"ReviewSBImpacts_{args.target}_M{label}"
     json_path = output / f"impacts_{args.target}_M{label}_SB.json"
 
+    from limit_workflow import nominal_impact_options
     common = [
-        "combineTool.py",
-        "-M",
-        "Impacts",
-        "-d",
-        str(workspace),
-        "-m",
-        mass_for_combine(args.mass),
-        "--robustFit",
-        "1",
-        "--setCrossingTolerance",
-        "1e-12",
-        "--cminDefaultMinimizerStrategy",
-        "1",
-        "--cminDefaultMinimizerTolerance",
-        "1e-4",
-        "--setRobustFitStrategy",
-        "1",
-        "--setRobustFitTolerance",
-        "1e-4",
+        "combineTool.py", "-M", "Impacts", "-d", str(workspace), "-m", mass_for_combine(args.mass),
+        *nominal_impact_options(args),
         "--setParameters",
         f"r={r_inj:.12g}",
         "--rMin",
@@ -1364,6 +1348,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hybrid-grid-points", type=int, default=29)
     parser.add_argument("--hybrid-grid-min-factor", type=float, default=0.20)
     parser.add_argument("--hybrid-grid-max-factor", type=float, default=3.00)
+    parser.add_argument("--impact-profile-strategy", type=int, choices=(0,1,2), default=0)
     parser.add_argument("--impact-parallel", type=int, default=12)
     parser.add_argument("--repair-sb-impacts", action="store_true",
         help="retry only missing/invalid S+B scans in the existing output directory")

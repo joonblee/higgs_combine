@@ -365,6 +365,9 @@ def memory_for_job(options, kind):
     return options['condor_memory']
 
 
+FIT_QUALITY_EXIT = 42
+
+
 def write_dag(payload, indices, path):
     selected = set(indices)
     lines = []
@@ -373,6 +376,8 @@ def write_dag(payload, indices, path):
         memory = memory_for_job(payload['options'], job['kind'])
         lines += [f'JOB J{index} submit.jds', f'VARS J{index} jobindex="{index}" memory="{memory}" retrymemory="{max(memory,8192)}"',
                   f'RETRY J{index} {payload["options"]["condor_retries"]}']
+        if job['kind'] in ('fit_b', 'fit_s', 'fit'):
+            lines[-1] += f' UNLESS-EXIT {FIT_QUALITY_EXIT}'
         parents = [i for i in job['dependencies'] if i in selected]
         if parents:
             lines.append('PARENT '+' '.join(f'J{i}' for i in parents)+f' CHILD J{index}')

@@ -121,6 +121,9 @@ class ReviewCondorTests(unittest.TestCase):
         for job in jobs[1:3]:
             command = job['commands'][0]['cmd']
             self.assertEqual(condor.option(command, '--expectSignal'), '1')
+            self.assertEqual(float(condor.option(command, '--setCrossingTolerance')), 1e-4)
+            self.assertEqual(float(condor.option(command, '--cminDefaultMinimizerTolerance')), .1)
+            self.assertEqual(condor.option(command, '--setRobustFitStrategy'), '0')
             self.assertEqual(condor.option(command, '--rMin'), '0')
             self.assertEqual(job['dependencies'], [0])
             self.assertEqual(len(job['copies_before']), 1)

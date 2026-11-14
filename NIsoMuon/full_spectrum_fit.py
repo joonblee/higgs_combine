@@ -527,6 +527,10 @@ def normalisation_diagnostics(parameter, specification, covariance_error=None):
         constraint=error, interval_method='transformed symmetric Hessian error; not a profile interval')
 
 
+class FitQualityError(ValueError):
+    """A completed fit failed its numerical quality checks with these options."""
+
+
 def fit_quality_ok(info):
     audit = info.get('covariance_audit', {})
     return info['status'] == 0 and (info['covQual'] == 3 or
@@ -540,7 +544,7 @@ def audit_robust_covariance(fit, workspace, log_path):
     iterations = re.findall(r'Verifying eigenvalues are all positive \(iteration (\d+)\)', text)
     if not iterations or any(int(i) != 0 for i in iterations) or \
             text.count('All eigenvalues are positive') != len(iterations):
-        raise ValueError('robustHesse did not validate every Hessian at iteration 0; inspect parameter removal in step1.log.')
+        raise FitQualityError('robustHesse did not validate every Hessian at iteration 0; inspect parameter removal in step1.log.')
     config = workspace.obj('ModelConfig')
     if not config:
         raise ValueError('Missing ModelConfig for covariance audit.')
@@ -549,15 +553,15 @@ def audit_robust_covariance(fit, workspace, log_path):
                     if fit.floatParsFinal().find(p.GetName()))
     actual = [str(p.GetName()) for p in fit.floatParsFinal()]
     if set(actual) != expected:
-        raise ValueError('Floating parameter set differs from the full workspace nuisance/POI set.')
+        raise FitQualityError('Floating parameter set differs from the full workspace nuisance/POI set.')
     cov = fit.covarianceMatrix()
     matrix = np.array([[float(cov[i][j]) for j in range(len(actual))] for i in range(len(actual))])
     if not np.isfinite(matrix).all() or not np.allclose(matrix, matrix.T, rtol=1e-10, atol=1e-12):
-        raise ValueError('Nonfinite or asymmetric robust covariance.')
+        raise FitQualityError('Nonfinite or asymmetric robust covariance.')
     try:
         np.linalg.cholesky(matrix)
     except np.linalg.LinAlgError as exc:
-        raise ValueError('Full robust covariance is not positive definite.') from exc
+        raise FitQualityError('Full robust covariance is not positive definite.') from exc
     return dict(method='robustHesse', validated=True, parameter_removal=False,
                 floating_parameters=len(actual), minimum_eigenvalue=float(np.linalg.eigvalsh(matrix)[0]),
                 log_sha256=hashlib.sha256(Path(log_path).read_bytes()).hexdigest())
@@ -593,13 +597,13 @@ def extract_summary(model, directory, opt, fit_kind=None):
                         minNll=float(fit.minNll()), saved_output=getattr(opt,'fit_output','full'),
                         normalisations={}, normalisation_correlations={})
             if not math.isfinite(info['edm']) or not math.isfinite(info['minNll']):
-                raise ValueError('Nonfinite fit diagnostics.')
+                raise FitQualityError('Nonfinite fit diagnostics.')
             result['fits'][key] = info
             if getattr(opt,'fit_robust_hesse',False) and info['status'] == 0:
                 info['covariance_audit'] = audit_robust_covariance(fit, workspace, fit_dir/'step1.log')
             if not fit_quality_ok(info):
                 (fit_dir/'fit_failure.json').write_text(json.dumps(result, indent=2, allow_nan=False)+'\n')
-                raise ValueError(f'{key} failed fit quality checks: status={info["status"]}, covQual={info["covQual"]}; see fit_failure.json.')
+                raise FitQualityError(f'{key} failed fit quality checks: status={info["status"]}, covQual={info["covQual"]}; see fit_failure.json.')
             for name, specification in model['normalisations'].items():
                 if name not in by_name:
                     raise ValueError('Normalisation missing from fit: '+name)
@@ -893,7 +897,11 @@ def main(argv=None):
     opt = make_parser().parse_args(argv)
     if opt.condor_worker:
         import full_spectrum_condor as batch
-        batch.run_worker(Path(opt.condor_worker), opt.condor_index)
+        try:
+            batch.run_worker(Path(opt.condor_worker), opt.condor_index)
+        except batch.fs.FitQualityError as error:
+            print('ERROR:', error, file=sys.stderr)
+            return batch.FIT_QUALITY_EXIT
         return 0
     if opt.stage in ('status', 'resume', 'recover', 'set-domain', 'set-memory', 'collect'):
         import full_spectrum_condor as batch

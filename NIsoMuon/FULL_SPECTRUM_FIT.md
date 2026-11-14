@@ -983,6 +983,24 @@ without submitting, `--task limits` or `--task impacts` to select one calculatio
 and optionally `--max-jobs 100` to cap simultaneous DAG nodes. Default memory
 is 1024 MB initially per job. Do not submit a resume DAG while the original DAG is active.
 
+New impact batches use the Combine v10.6.0 nominal settings of strategy 1 for
+the global minimum and strategy 0 for robust crossing searches. To compare
+against the previous production, use `--impact-profile-strategy 1`. Each
+nuisance worker invokes the same `MultiDimFit --algo impact` command generated
+by `combineTool.py`. The initial fit and the final collector still use the
+official Impacts tool. The collector computes prefit errors and checks the full
+nuisance list.
+
+Pass `--impact-repair-cpus 4` to `full_spectrum_inference.py` to run up to
+four independent repairs within each final job. Ordinary nuisance jobs use one
+CPU each. Condor scales the final job's memory request with its CPU count.
+For an existing batch that needs isolated final repairs, use
+`full_spectrum_impact_repair.py --parallel 4` with the selected final indices
+and the total memory for that repair job. New full-spectrum FitDiagnostics DAGs
+stop on a rejected numerical fit (exit 42). The workflow records the failure so
+the fit can be recovered with different minimizer settings. Transient failures
+retain the configured DAG retries.
+
 ### Diagnose the conditional-toy bias with the same saved datasets
 
 `complete: false` in `toy_summary.json` may mean failed fits even when every
@@ -994,8 +1012,8 @@ python3 full_spectrum_toy_refits.py --stage audit \
     --source-batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_toy100
 ```
 
-Refit the saved datasets with strategy 2, tighter minimiser tolerance (`1e-4`),
-a matching fallback and a larger call budget. The original injected starting
+New saved-toy refits start at strategy 2 with tolerance `0.1` and use Combine's
+call budget unless an override is supplied. The original injected starting
 value, signed POI range, nuisance model, seed and ordering within each saved
 chunk are preserved. No `GenerateOnly` command is run. Compare all toys, not
 only failures, to check numerical stability of the successful fits as well:
@@ -1186,9 +1204,9 @@ nodes; no template preparation, limits or impacts are repeated.
 
 Impact scans now default to Combine's `--stepSize 0.1` and
 `--setCrossingTolerance 1e-4`. Ordinary impact minimisation uses tolerance
-`0.1` and starts at strategy `1`, matching Combine defaults (robust profiling
-uses the same inherited strategy). Only invalid scans escalate to strategy 2
-and then 0; nested repair fallback loops are avoided. Interval audits remain
+`0.1` with global strategy `1` and robust crossing strategy `0`. Ordinary
+invalid nuisance scans retry with strategies 1, 2 and 0, advancing only while
+the interval audit fails. Interval audits remain
 unchanged. The specialised tiny absolute QCD-stat conditional profiles retain
 their existing stricter minimisation because those address known collapsed scans. `limit_workflow.py` exposes `--impact-step-size` and
 `--impact-crossing-tolerance` for explicit numerical studies. Existing source
