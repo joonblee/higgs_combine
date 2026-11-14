@@ -1,0 +1,92 @@
+{
+  "batch": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/full_spectrum_outputs/condor/M30_coarse_r1",
+  "batch_id": "20261112_042048_117801f0",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4",
+  "input_base_dir": "/data6/Users/joonblee/SKOutput/Run2UL_v3_Run3_v13/NIsoMuon",
+  "jobs": [
+    {
+      "dependencies": [],
+      "index": 0,
+      "kind": "workspace",
+      "mass": 30.0
+    },
+    {
+      "dependencies": [
+        0
+      ],
+      "index": 1,
+      "kind": "fit_b",
+      "mass": 30.0
+    },
+    {
+      "dependencies": [
+        0
+      ],
+      "index": 2,
+      "kind": "fit_s",
+      "mass": 30.0
+    },
+    {
+      "dependencies": [
+        1,
+        2
+      ],
+      "index": 3,
+      "kind": "summarize",
+      "mass": 30.0
+    }
+  ],
+  "manifest_sha256": "fab326484322613ca356236b5ae6c8a096e1c4d89a5ce83e27852b6fd6b81455",
+  "options": {
+    "backend": "condor",
+    "base_dir": "/data6/Users/joonblee/SKOutput/Run2UL_v3_Run3_v13/NIsoMuon",
+    "bin_sigma": 1.0,
+    "bins_per_job": 1,
+    "condor_cmssw_base": null,
+    "condor_dir": "full_spectrum_outputs/condor/M30_coarse_r1",
+    "condor_dry_run": false,
+    "condor_filesystem_domain": null,
+    "condor_index": null,
+    "condor_maxjobs": 0,
+    "condor_memory": 16000,
+    "condor_recovery_dir": null,
+    "condor_requirements": "",
+    "condor_retries": 2,
+    "condor_scram_arch": null,
+    "condor_worker": null,
+    "dry_run": false,
+    "fast_mode": false,
+    "fit_layout": "window",
+    "inject_r": 1.0,
+    "masses": [
+      30.0
+    ],
+    "norm_prior": 1.5,
+    "output_base": "full_spectrum_outputs/condor/M30_binning_medium15/results",
+    "overwrite": false,
+    "r_max": 100.0,
+    "region": "OS_POGMedium_tight_BJet_NIsoDimuon",
+    "resolution_map": null,
+    "sideband_binning": "coarse",
+    "sideband_edges": null,
+    "sideband_fragment_fraction": 0.25,
+    "sideband_refine": 1,
+    "sigfit_dir": "./sigfit_inputs",
+    "sr_nsigma": 5.0,
+    "stage": "fit",
+    "target": "Run2Run3",
+    "trigger": ""
+  },
+  "preflight_inputs": {},
+  "resolution_coefficients": {},
+  "schema": "NPS26009_full_spectrum_condor_v1",
+  "scram_arch": "el9_amd64_gcc12",
+  "signal_files": {},
+  "source_hashes": {
+    "full_spectrum_condor.py": "edecd027da720e6caf39029f1882166a55320de893d884450dc6372942867673",
+    "full_spectrum_fit.py": "8d07da550343e64c8553591b0fac3131d8e30585afc70b80f74ad3af835b611b",
+    "limit_workflow.py": "af3ef4161276b003712c49299e285a66982f934d129784e41021563db8176c8d",
+    "limit_workflow_sideband_fit.py": "1e2fd55cb095ec2a364f3977bfea10053e4e877645545cab4141b14f22931f4d"
+  },
+  "windows": {}
+}

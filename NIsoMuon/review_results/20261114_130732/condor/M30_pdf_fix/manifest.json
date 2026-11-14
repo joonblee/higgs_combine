@@ -1,0 +1,60 @@
+{
+  "batch": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/full_spectrum_outputs/condor/M30_pdf_fix",
+  "batch_id": "20261111_132459_838f5d6d",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4",
+  "input_base_dir": "/data6/Users/joonblee/SKOutput/Run2UL_v3_Run3_v13/NIsoMuon",
+  "jobs": [
+    {
+      "dependencies": [],
+      "index": 0,
+      "kind": "fit",
+      "mass": 30.0
+    }
+  ],
+  "manifest_sha256": "3d3e494bcc7c3c3f47395ca1dc84a0546a5fcd64a56da1b70d138db0aa127829",
+  "options": {
+    "backend": "condor",
+    "base_dir": "/data6/Users/joonblee/SKOutput/Run2UL_v3_Run3_v13/NIsoMuon",
+    "bin_sigma": 1.0,
+    "bins_per_job": 1,
+    "condor_cmssw_base": null,
+    "condor_dir": "full_spectrum_outputs/condor/M30_pdf_fix",
+    "condor_dry_run": false,
+    "condor_filesystem_domain": null,
+    "condor_index": null,
+    "condor_maxjobs": 0,
+    "condor_memory": 4000,
+    "condor_recovery_dir": null,
+    "condor_requirements": "",
+    "condor_retries": 2,
+    "condor_scram_arch": null,
+    "condor_worker": null,
+    "dry_run": false,
+    "inject_r": 0.0,
+    "masses": [
+      30.0
+    ],
+    "norm_prior": 1.5,
+    "output_base": "full_spectrum_outputs/condor/20261111_111352_c6387254/results",
+    "overwrite": false,
+    "r_max": 100.0,
+    "region": "OS_POGMedium_tight_BJet_NIsoDimuon",
+    "resolution_map": null,
+    "sigfit_dir": "./sigfit_inputs",
+    "stage": "fit",
+    "target": "Run2Run3",
+    "trigger": ""
+  },
+  "preflight_inputs": {},
+  "resolution_coefficients": {},
+  "schema": "NPS26009_full_spectrum_condor_v1",
+  "scram_arch": "el9_amd64_gcc12",
+  "signal_files": {},
+  "source_hashes": {
+    "full_spectrum_condor.py": "1b879aa808f3fe49d1d92e92a2553903da93e83e319ad04f9ca0dafb68ca6979",
+    "full_spectrum_fit.py": "d7849bf5a049c3e9016b053b0389d2fd83283fce96f4e1ec0af40145fc432edc",
+    "limit_workflow.py": "af3ef4161276b003712c49299e285a66982f934d129784e41021563db8176c8d",
+    "limit_workflow_sideband_fit.py": "1e2fd55cb095ec2a364f3977bfea10053e4e877645545cab4141b14f22931f4d"
+  },
+  "windows": {}
+}

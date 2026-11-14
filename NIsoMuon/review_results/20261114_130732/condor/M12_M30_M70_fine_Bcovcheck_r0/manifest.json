@@ -1,0 +1,147 @@
+{
+  "batch": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4/src/NIsoMuon/full_spectrum_outputs/condor/M12_M30_M70_fine_Bcovcheck_r0",
+  "batch_id": "20261113_124126_51af9938",
+  "cmssw_base": "/data6/Users/joonblee/higgs_combine/CMSSW_14_1_0_pre4",
+  "input_base_dir": "/data6/Users/joonblee/SKOutput/Run2UL_v3_Run3_v13/NIsoMuon",
+  "jobs": [
+    {
+      "dependencies": [],
+      "index": 0,
+      "kind": "workspace",
+      "mass": 12.0
+    },
+    {
+      "dependencies": [
+        0
+      ],
+      "index": 1,
+      "kind": "fit_b",
+      "mass": 12.0
+    },
+    {
+      "dependencies": [
+        1
+      ],
+      "index": 2,
+      "kind": "summarize",
+      "mass": 12.0
+    },
+    {
+      "dependencies": [],
+      "index": 3,
+      "kind": "workspace",
+      "mass": 30.0
+    },
+    {
+      "dependencies": [
+        3
+      ],
+      "index": 4,
+      "kind": "fit_b",
+      "mass": 30.0
+    },
+    {
+      "dependencies": [
+        4
+      ],
+      "index": 5,
+      "kind": "summarize",
+      "mass": 30.0
+    },
+    {
+      "dependencies": [],
+      "index": 6,
+      "kind": "workspace",
+      "mass": 70.0
+    },
+    {
+      "dependencies": [
+        6
+      ],
+      "index": 7,
+      "kind": "fit_b",
+      "mass": 70.0
+    },
+    {
+      "dependencies": [
+        7
+      ],
+      "index": 8,
+      "kind": "summarize",
+      "mass": 70.0
+    }
+  ],
+  "manifest_sha256": "3a5fc897b5044d1aa3151e33e522d92ed14a880130a08b870c03d5720984c4b4",
+  "options": {
+    "backend": "condor",
+    "base_dir": "/data6/Users/joonblee/SKOutput/Run2UL_v3_Run3_v13/NIsoMuon",
+    "bin_sigma": 1.0,
+    "bins_per_job": 1,
+    "condor_cmssw_base": null,
+    "condor_dir": "full_spectrum_outputs/condor/M12_M30_M70_fine_Bcovcheck_r0",
+    "condor_dry_run": false,
+    "condor_filesystem_domain": null,
+    "condor_index": null,
+    "condor_light_memory": 2048,
+    "condor_maxjobs": 0,
+    "condor_memory": 16000,
+    "condor_recovery_dir": null,
+    "condor_requirements": "",
+    "condor_retries": 2,
+    "condor_scram_arch": null,
+    "condor_worker": null,
+    "condor_workspace_memory": 4096,
+    "dry_run": false,
+    "dy_norm_max": 10.0,
+    "dy_normalisation": "prior",
+    "dy_shape_model": "linear",
+    "dy_shape_uncertainty": 0.0,
+    "expected_limits": false,
+    "fast_mode": false,
+    "fit_components": "b-only",
+    "fit_layout": "window",
+    "fit_max_calls": 5000000,
+    "fit_strategy": 2,
+    "fit_tolerance": 0.0001,
+    "fit_verbosity": 2,
+    "inject_r": 0.0,
+    "interpolate_signal": false,
+    "masses": [
+      12.0,
+      30.0,
+      70.0
+    ],
+    "norm_prior": 1.5,
+    "output_base": "full_spectrum_outputs/condor/M12_M30_M70_fine_limits_norm_r0/results",
+    "overwrite": false,
+    "r_max": 100.0,
+    "region": "OS_POGMedium_tight_BJet_NIsoDimuon",
+    "resolution_map": null,
+    "sideband_binning": "fine",
+    "sideband_edges": null,
+    "sideband_fragment_fraction": 0.25,
+    "sideband_refine": 1,
+    "sigfit_dir": "./sigfit_inputs",
+    "signal_counting_version": 2,
+    "sr_nsigma": 5.0,
+    "stage": "fit",
+    "target": "Run2Run3",
+    "trigger": ""
+  },
+  "preflight_inputs": {},
+  "resolution_coefficients": {},
+  "schema": "NPS26009_full_spectrum_condor_v1",
+  "scram_arch": "el9_amd64_gcc12",
+  "signal_files": {},
+  "signal_interpolation_anchors": {},
+  "signal_interpolation_audit": [],
+  "source_hashes": {
+    "dy_closure_shape.py": "26f0fb3e9ee8565042843ab3f7b09e0044a10df5c1eafb18df4ef75cdd12b7f6",
+    "full_spectrum_condor.py": "4360e82230b7e9b10492bcdb09a108c5c1aec1b0133185a0b51540de531ed8d9",
+    "full_spectrum_fit.py": "e7313d3f3372b3b925e13a9a16bdc247b73ddb142d297c0376deaef31f417609",
+    "limit_workflow.py": "20220631503242d3ac44ba498feda6bf257ef4c3cba7efae8a018348b3857183",
+    "limit_workflow_sideband_fit.py": "90683a359199810b17bff27c1eb90d98b6f060dd585a948f39864d08a73ccc8b",
+    "signal_spectrum_interpolation.py": "cf483bebafd993a16a2dbb2d1b594de1d0949fd65ade8c68f896072c16f1e738"
+  },
+  "windows": {}
+}
