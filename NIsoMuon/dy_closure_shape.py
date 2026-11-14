@@ -10,7 +10,9 @@ import math
 DOMAIN = (11., 80.)
 SLOPE = .00583
 INTERCEPT = .9038
-NUISANCE = 'CMS_NPS26009_DYClosureLinearShape'
+NUISANCE = 'CMS_NPS26009_DYShape'
+# Identifier written in existing SKPlotMaker DYAux files.
+SOURCE_NUISANCE = 'CMS_NPS26009_DYClosureLinearShape'
 META_PATH = 'DYAux/ClosureLinearMetadata'
 UP_PATH = 'DYAux/ClosureLinearSourceUp'
 DOWN_PATH = 'DYAux/ClosureLinearSourceDown'
@@ -20,7 +22,7 @@ SOURCE_PATH = 'DYAux/LightJetSource'
 def configuration():
     return dict(schema='NPS26009_DYClosureLinear_v1', slope_per_gev=SLOPE,
                 intercept=INTERCEPT, domain=list(DOMAIN), fit_domain=[11., 70.],
-                nuisance=NUISANCE, correlation='common across all eras and mass bins',
+                nuisance=SOURCE_NUISANCE, correlation='common across all eras and mass bins',
                 prescription='normalised linear Up; nominal-reflected Down; physical bounds then renormalisation',
                 source='AN eq:dy_mass_shape_linear_fit; central trend, not fit statistical errors')
 
@@ -110,7 +112,7 @@ def morph(nominal, up, down, theta):
     return [x*total/sum(raw) for x in raw] if total else list(raw)
 
 
-def card_lines(rows, era):
+def card_lines(rows, era, nuisance=NUISANCE):
     """One Gaussian shape plus a shared per-era normaliser, attached only to positive bins."""
     selected = [r for r in rows if r['era'] == era and r['rates']['DY'] > 0.]
     if not selected:
@@ -126,11 +128,11 @@ def card_lines(rows, era):
     lines = []
     for index, (row, weight) in enumerate(zip(selected, factors)):
         channel = row['channel']
-        lines.append(f'DYClosureBin_{channel} rateParam {channel} DY {weight} {NUISANCE}')
+        lines.append(f'DYClosureBin_{channel} rateParam {channel} DY {weight} {nuisance}')
         # Define the O(n-bin) denominator once; identities attach it to other
         # channels without an O(n-bin squared) card for fine spectrum layouts.
         if index == 0:
-            lines.append(f'DYClosureNorm_{era} rateParam {channel} DY {normaliser} {NUISANCE}')
+            lines.append(f'DYClosureNorm_{era} rateParam {channel} DY {normaliser} {nuisance}')
         else:
             lines.append(f'DYClosureNormUse_{channel} rateParam {channel} DY @0 DYClosureNorm_{era}')
     return lines

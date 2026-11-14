@@ -427,9 +427,10 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
                       f'{parameter_prefix}_DYYield_{channel} rateParam {channel} DY max(0.,{f(row["dy_stat"])}*@0) {name}']
     if model.get('dy_linear_shape'):
         import dy_closure_shape
-        lines.append(dy_closure_shape.NUISANCE+' param 0 1')
+        nuisance = model['dy_linear_shape']['configuration']['nuisance']
+        lines.append(nuisance+' param 0 1')
         for era in sorted({row['era'] for row in rows}):
-            lines.extend(dy_closure_shape.card_lines(rows, era))
+            lines.extend(dy_closure_shape.card_lines(rows, era, nuisance))
     return '\n'.join(lines)+'\n'
 
 

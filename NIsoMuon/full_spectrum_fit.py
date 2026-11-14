@@ -405,7 +405,7 @@ def decorate_model(model, opt, windows):
         model.pop('dy_linear_shape', None)
     if getattr(opt, 'dy_shape_model', 'none') == 'linear':
         import dy_closure_shape as closure
-        model['dy_linear_shape'] = dict(configuration=closure.configuration(), eras={})
+        model['dy_linear_shape'] = dict(configuration=dict(closure.configuration(), nuisance=closure.NUISANCE), eras={})
         for era in model['eras']:
             selected = sorted([r for r in model['rows'] if r['era'] == era], key=lambda r:r['low'])
             if (abs(selected[0]['low']-11.) > 1e-7 or abs(selected[-1]['high']-80.) > 1e-7
@@ -643,8 +643,7 @@ def extract_summary(model, directory, opt, fit_kind=None):
                     denom = math.sqrt(max(float(covariance[i][i])*float(covariance[j][j]), 1e-300))
                     info['normalisation_correlations'][a][b] = float(covariance[i][j])/denom
             if model.get('dy_linear_shape'):
-                import dy_closure_shape
-                name = dy_closure_shape.NUISANCE
+                name = model['dy_linear_shape']['configuration']['nuisance']
                 if name not in by_name:
                     raise ValueError('Missing DY closure shape in validated fit')
                 i = indices[name]
@@ -769,17 +768,17 @@ def audit_dy_shape_workspace(model, fit_dir):
     if not model.get('dy_linear_shape'):
         return
     import ROOT
-    import dy_closure_shape
+    name = model['dy_linear_shape']['configuration']['nuisance']
     handle = ROOT.TFile.Open(str(Path(fit_dir)/'workspace.root'))
     if not handle or handle.IsZombie():
         raise ValueError('Cannot audit DY closure workspace')
     try:
         workspace = handle.Get('w')
-        theta = workspace.var(dy_closure_shape.NUISANCE) if workspace else None
+        theta = workspace.var(name) if workspace else None
         if not theta:
             raise ValueError('Compiled DY closure shape parameter is missing')
         totals = {era:sum(r['rates']['DY'] for r in model['rows'] if r['era']==era) for era in model['eras']}
-        audit = dict(nuisance=dy_closure_shape.NUISANCE, nominal_totals=totals, points=[])
+        audit = dict(nuisance=name, nominal_totals=totals, points=[])
         original = float(theta.getVal())
         for value in (-3., -1., -.5, 0., .5, 1., 3.):
             theta.setVal(value)

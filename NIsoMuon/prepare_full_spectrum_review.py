@@ -24,7 +24,7 @@ import limit_workflow_sideband_fit as shared
 def review_card(text,model,opt):
     """Edit the audited source card, preserving every unrelated nuisance line."""
     # A new review model may derive from a hash-verified card with the old names.
-    text = re.sub(r'\b(?:FS_|CMS_NPS26009_inSituNorm_)\w+',
+    text = re.sub(r'\b(?:(?:FS_|CMS_NPS26009_inSituNorm_)\w+|CMS_NPS26009_DYClosureLinearShape\b)',
                   lambda match: base.spectrum_parameter_name(match.group()), text)
     lines=text.splitlines()
     tokenised=[line.split() for line in lines if line and not line.startswith('#')]

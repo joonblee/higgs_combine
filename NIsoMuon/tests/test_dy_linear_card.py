@@ -36,6 +36,15 @@ class LinearCardTests(unittest.TestCase):
                 selected=[r for r in model['rows'] if r['era']==era]
                 self.assertAlmostEqual(sum(totals[r['channel']] for r in selected),sum(r['asimov'] for r in selected),places=8)
 
+    def test_legacy_name_changes_only_the_model_parameter(self):
+        model = self.linear_model()
+        self.assertEqual(c.configuration()['nuisance'], c.SOURCE_NUISANCE)
+        current = shared.card_text(model, normalisation_kappa=1.5, prefix='FS')
+        model['dy_linear_shape']['configuration']['nuisance'] = c.SOURCE_NUISANCE
+        old = shared.card_text(model, normalisation_kappa=1.5, prefix='FS')
+        self.assertEqual(old.replace(c.SOURCE_NUISANCE, c.NUISANCE), current)
+        self.assertEqual(fs.base.spectrum_parameter_name(c.SOURCE_NUISANCE), c.NUISANCE)
+
     def test_nominal_zero_keeps_additive_stat_and_no_shape_multiplier(self):
         model=self.linear_model();row=model['rows'][0]
         row['rates']['DY']=0.;row['dy_stat']=2.;row['dy_closure_raw_up']=3.

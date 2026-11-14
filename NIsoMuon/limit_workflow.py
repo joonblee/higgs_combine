@@ -2917,6 +2917,8 @@ def read_dy_closure_inputs(reader, filename):
 
 def spectrum_parameter_name(name: str) -> str:
     """Map a legacy full-spectrum parameter to the analysis naming convention."""
+    if name == "CMS_NPS26009_DYClosureLinearShape":
+        return "CMS_NPS26009_DYShape"
     if name.startswith("CMS_NPS26009_inSituNorm_"):
         return name.replace("_inSituNorm_", "_Norm_", 1)
     if name.startswith("FS_QCDFitMode"):

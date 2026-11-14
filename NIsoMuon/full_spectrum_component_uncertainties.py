@@ -45,7 +45,7 @@ def category(name, model):
     if name in model.get('normalisations', {}): return 'Normalisation'
     key = name.lower()
     if any(x in key for x in ('mcstat','mc_stat','_stat','stat_','fitmode')): return 'Statistics'
-    if any(x in key for x in ('qcdshape','bckgshape','closurelinear','dyclosure','transportshape')): return 'Modelling'
+    if any(x in key for x in ('qcdshape','bckgshape','closurelinear','dyclosure','dyshape','transportshape')): return 'Modelling'
     return 'Other'
 
 

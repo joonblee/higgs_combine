@@ -22,6 +22,7 @@ class ComponentTests(unittest.TestCase):
         self.assertEqual(priors,dict(s=(0.,1.),f=(0.,2.)));self.assertEqual(free,{'n'})
         self.assertEqual(component.category('FS_QCDFitMode1_2018',{}),'Statistics')
         self.assertEqual(component.category('CMS_NPS26009_QCDStat_mode4_2018',{}),'Statistics')
+        self.assertEqual(component.category('CMS_NPS26009_DYShape',{}),'Modelling')
         self.assertEqual(component.category('CMS_NPS26009_DYClosureLinearShape',{}),'Modelling')
 
     @unittest.skipUnless(importlib.util.find_spec("ROOT"),"PyROOT unavailable")

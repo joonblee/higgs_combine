@@ -809,7 +809,7 @@ The new protocol module is included in worker snapshots and source hashes.
 The adopted modelling variation uses the **central** Run2+3 fit
 `R(m)=0.00583*m/GeV+0.9038`, measured over 11--70 GeV and extrapolated to 80 GeV.
 Its fit statistical errors are not separate shape parameters. One nuisance,
-`CMS_NPS26009_DYClosureLinearShape`, is shared across all eras and mass bins.
+`CMS_NPS26009_DYShape`, is shared across all eras and mass bins.
 The existing independent per-era DY lnN 1.5 normalisations remain; NFStat/NFModel
 remain excluded from these in-situ cards. Source statistics are retained once.
 This is a correlated tilt, not a guarantee of independent >=30% freedom in
