@@ -990,9 +990,10 @@ by `combineTool.py`. The initial fit and the final collector still use the
 official Impacts tool. The collector computes prefit errors and checks the full
 nuisance list.
 
+New inference batches validate each ordinary nuisance scan inside its own Condor job. Each nuisance worker reserves three CPUs and memory for three processes. It runs the nominal scan once. On failure it races strategies 1, 2 and 0 in separate directories, accepts the first validated interval, and terminates the other processes. Use --serial-strategies for one-CPU sequential retries. Other nuisance workers proceed independently. The final collector handles specialised QCD profiles and verifies the combined result.
+
 Pass `--impact-repair-cpus 4` to `full_spectrum_inference.py` to run up to
-four independent repairs within each final job. Ordinary nuisance jobs use one
-CPU each. Condor scales the final job's memory request with its CPU count.
+four independent repairs within each final job. The final-job option is independent of the nuisance workers. Condor scales the final job's memory request with its CPU count.
 For an existing batch that needs isolated final repairs, use
 `full_spectrum_impact_repair.py --parallel 4` with the selected final indices
 and the total memory for that repair job. New full-spectrum FitDiagnostics DAGs
@@ -1248,8 +1249,7 @@ Updating the checkout does not change existing Condor source snapshots.
 with independent Condor nodes. Submission first validates completed parents and
 collects their ROOT scans to identify missing/invalid intervals (no new fit in
 this planning phase). Each invalid ordinary nuisance gets its own job; each
-case's final audit/plot waits only for that case's repair jobs. Failed scans
-alone escalate through strategies 1/2/0. Completed task outputs are hashed and
+case's final audit/plot waits only for that case's repair jobs. Ordinary repair jobs race strategies 1/2/0 by default, with three CPUs and three times --memory per scan job. Use --serial-strategies for sequential execution. Completed task outputs are hashed and
 can be reused after a DAG rescue; an exclusive worker lock prevents concurrent
 writers. Final collection refuses to silently run ordinary missing scans in
 serial. Existing specialised boundary/tiny-QCD profiles and all interval,

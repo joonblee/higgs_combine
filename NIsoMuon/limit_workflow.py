@@ -219,6 +219,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import time
 import sys
 from collections import defaultdict
 from collections.abc import MutableMapping
@@ -5606,6 +5607,58 @@ def run_condor_impact_initial(args, job, card, label, mass, workdir):
     raise WorkflowError("Impact initial range retries exhausted")
 
 
+def read_nuisance_scan(scan, nuisance):
+    from HiggsAnalysis.CombinedLimit.tool_base.utils import get_singles_results
+
+    if not scan.is_file():
+        return None
+    try:
+        rows = get_singles_results(str(scan), [nuisance], [nuisance, "r"])
+    except (OSError, ReferenceError, TypeError, AttributeError) as error:
+        print(f"[IMPACT RETRY] Unreadable scan {scan}: {error}", flush=True)
+        return None
+    if not rows:
+        return None
+    return dict(name=nuisance, fit=rows[nuisance][nuisance], r=rows[nuisance]["r"])
+
+
+def race_impact_strategies(command, scan, nuisance):
+    """Run independent direct Combine processes. Publish only a validated scan."""
+    processes = {}
+    try:
+        for strategy in (1, 2, 0):
+            directory = scan.parent / f"strategy{strategy}"
+            directory.mkdir(exist_ok=True)
+            candidate = directory / scan.name
+            candidate.unlink(missing_ok=True)
+            cmd = list(command)
+            for flag in ("--cminDefaultMinimizerStrategy", "--setRobustFitStrategy"):
+                cmd[cmd.index(flag) + 1] = str(strategy)
+            with (directory / "fit.log").open("w") as log:
+                processes[strategy] = subprocess.Popen(cmd, cwd=directory, stdout=log,
+                                                       stderr=subprocess.STDOUT)
+        while processes:
+            for strategy, process in list(processes.items()):
+                code = process.poll()
+                if code is None:
+                    continue
+                del processes[strategy]
+                candidate = scan.parent / f"strategy{strategy}" / scan.name
+                param = read_nuisance_scan(candidate, nuisance) if code == 0 else None
+                if param and impact_interval_issues({"params": [param]}, [nuisance]) == ([], {}):
+                    candidate.replace(scan)
+                    print(f"[IMPACT REPAIR] {nuisance}: accepted strategy {strategy}", flush=True)
+                    return strategy
+            if processes:
+                time.sleep(0.5)
+        raise WorkflowError(f"No valid impact scan for {nuisance} after strategies 1/2/0 in {scan.parent}")
+    finally:
+        for process in processes.values():
+            process.kill()
+        for process in processes.values():
+            process.wait()
+
+
 def run_condor_impact_nuisance(payload, args, job, card, label, mass, workdir):
     context = condor_impact_context(payload, args, job["initial"])
     name = f".Impacts_{tag_for(args, job['target'])}_M{label}"
@@ -5620,7 +5673,42 @@ def run_condor_impact_nuisance(payload, args, job, card, label, mass, workdir):
         initial = Path(context["initial_file"])
         shutil.copy2(initial, workdir / initial.name)
         command.extend(["--doFits", "--named", job["nuisance"]])
-    run_command(command, workdir)
+    if job.get("race_strategies"):
+        nuisance = job["nuisance"]
+        code = run_command(command, workdir, allow_failure=True, stdout_path=workdir / "scan_nominal.log")
+        param = read_nuisance_scan(scan, nuisance) if code == 0 else None
+        special = "_stat_QCD_" in nuisance or "_bckgShape_QCD_" in nuisance
+        if not param or (not special and impact_interval_issues({"params": [param]}, [nuisance])[1]):
+            winner = race_impact_strategies(command, scan, nuisance)
+            return {"impact_run_id": context["impact_run_id"], "strategy": winner, "files": [str(scan)]}
+    elif not job.get("repair_in_worker"):
+        run_command(command, workdir)
+    else:
+        nuisance = job["nuisance"]
+        # Each Condor worker owns this scan, including retries. The final
+        # collector retains the specialised boundary and tiny-QCD profiles.
+        flags = ("--cminDefaultMinimizerStrategy", "--setRobustFitStrategy")
+        nominal = tuple(command[command.index(flag) + 1] for flag in flags)
+        strategies = [s for s in (1, 2, 0) if nominal != (str(s), str(s))]
+        for strategy in (None, *strategies):
+            if strategy is not None:
+                scan.unlink(missing_ok=True)
+                for flag in flags:
+                    command[command.index(flag) + 1] = str(strategy)
+            attempt = "nominal" if strategy is None else f"strategy{strategy}"
+            code = run_command(command, workdir, allow_failure=True,
+                               stdout_path=workdir / f"scan_{attempt}.log")
+            param = read_nuisance_scan(scan, nuisance) if code == 0 else None
+            if param is None:
+                continue
+            _, bad = impact_interval_issues({"params": [param]}, [nuisance])
+            if not bad:
+                break
+            if "_stat_QCD_" in nuisance or "_bckgShape_QCD_" in nuisance:
+                # The collector needs workspace prefit metadata for these.
+                break
+        else:
+            raise WorkflowError(f"No valid impact scan for {nuisance} after strategies 1/2/0 in {workdir}")
     return {"impact_run_id": context["impact_run_id"], "files": [str(scan)]}
 
 

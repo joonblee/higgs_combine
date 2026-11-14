@@ -95,9 +95,9 @@ class OptimisationTest(unittest.TestCase):
                  patch.object(base,'condor_impact_context',return_value=context), \
                  patch.object(base,'completed_condor_job',side_effect=completed), \
                  patch.object(base,'run_command',side_effect=run), \
-                 patch.object(base,'impact_workspace_parameters',return_value={'n':(-7,7)}), \
+                 patch.object(base,'impact_workspace_model',return_value=(['r'],{'n':(-7,7)})), \
                  patch.object(base,'run_condor_impact_final',side_effect=finish):
-                dag.main(['--source-batch',str(src),'--batch',str(batch),'--indices','2','--dry-run'])
+                dag.main(['--source-batch',str(src),'--batch',str(batch),'--indices','2','--serial-strategies','--dry-run'])
                 plan=json.loads((batch/'plan.json').read_text())
                 self.assertEqual([t['kind'] for t in plan['tasks']],['scan','final'])
                 self.assertEqual(plan['tasks'][1]['dependencies'],[0])

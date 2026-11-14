@@ -267,7 +267,7 @@ def _write_dag(batch, payload, resume=False):
                 done = True
             except base.WorkflowError:
                 pass
-        cpus = payload['config'].get('impact_repair_cpus', 1) if job['kind'] == 'impact_final' else 1
+        cpus = payload['config'].get('impact_repair_cpus', 1) if job['kind'] == 'impact_final' else (3 if job.get('race_strategies') else 1)
         node = f'J{job["index"]}'
         lines += [f'JOB {node} submit.jds'+(' DONE' if done else ''),
                   f'VARS {node} jobindex="{job["index"]}" nodecpus="{cpus}"']
@@ -343,7 +343,7 @@ def submit(opt):
                 rmin = max(safe, -5*reference)
                 initial = add('impact_initial', injected_r=injection, r_min=rmin, safe_r_min=safe)
                 scans = [add('impact_nuisance', [initial['index']], initial=initial['index'],
-                    nuisance=n, impact_pois=pois, injected_r=injection, r_min=rmin) for n in nuisances]
+                    nuisance=n, repair_in_worker=True, race_strategies=not opt.serial_strategies, impact_pois=pois, injected_r=injection, r_min=rmin) for n in nuisances]
                 add('impact_final', [initial['index'], *[s['index'] for s in scans]],
                     initial=initial['index'], nuisance_jobs=[s['index'] for s in scans],
                     injected_r=injection, r_min=rmin)
@@ -373,7 +373,7 @@ def submit(opt):
         f'initialdir = {batch}', 'arguments = $(jobindex)', 'should_transfer_files = NO',
         'getenv = True', 'request_cpus = $(nodecpus)', f'request_memory = {memory}',
         'output = jobs/job_$(jobindex).out', 'error = jobs/job_$(jobindex).err',
-        'log = condor.log', *memory_policy.retry_lines(str(max(opt.condor_memory * opt.impact_repair_cpus, opt.impact_memory, opt.plot_memory, 8192))), 'queue 1', '']))
+        'log = condor.log', *memory_policy.retry_lines(str(max(opt.condor_memory * opt.impact_repair_cpus, opt.impact_memory * (1 if opt.serial_strategies else 3), opt.plot_memory, 8192))), 'queue 1', '']))
     dag = write_dag(batch, payload)
     command = ['condor_submit_dag']+(['-maxjobs', str(opt.max_jobs)] if opt.max_jobs else [])+[dag]
     print('[PLAN]', dict(Counter(j['kind'] for j in jobs)))
@@ -430,7 +430,7 @@ def set_memory(opt):
     ads = json.loads(subprocess.check_output(['condor_q','-constraint',
         f'DAGManJobId == {opt.dag_id} && {never_started}',
         '-attributes','ClusterId,ProcId,DAGNodeName,Iwd,RequestMemory','-json'], text=True))
-    selected = {**{i:opt.impact_memory for i in nuisance}, **{i:opt.plot_memory for i in plots}}
+    selected = {**{i:opt.impact_memory * (3 if payload["jobs"][i].get("race_strategies") else 1) for i in nuisance}, **{i:opt.plot_memory for i in plots}}
     ids = []
     for ad in ads:
         match = re.fullmatch(r'J(\d+)',str(ad.get('DAGNodeName','')))
@@ -442,7 +442,7 @@ def set_memory(opt):
         if ad.get('RequestMemory') != memory:
             ids.append((int(ad['ClusterId']),int(ad['ProcId']),memory))
     edits = []
-    for memory in sorted({opt.impact_memory,opt.plot_memory}):
+    for memory in sorted(set(selected.values())):
         subset = [(c,p) for c,p,m in ids if m==memory]
         if not subset:
             continue
@@ -473,6 +473,7 @@ def main(argv=None):
     parser.add_argument('--batch', required=True)
     parser.add_argument('--stage', choices=('submit', 'status', 'collect', 'resume', 'set-memory'), default='submit')
     parser.add_argument('--task', choices=('limits', 'impacts', 'all'), default='all')
+    parser.add_argument('--serial-strategies', action='store_true', help='Use a single CPU and retry strategies consecutively.')
     parser.add_argument('--impact-repair-cpus', type=int, default=1,
                         help='CPUs for independent retries within each final impact job. Memory scales per CPU.')
     parser.add_argument('--impact-profile-strategy', type=int, choices=(0,1,2), default=0,

@@ -67,6 +67,12 @@ def scan_case(case, args, task, directory):
     name = f'.Impacts_{base.tag_for(args,case["target"])}_M{label}'
     mass_arg = base.format_mass_for_combine(mass)
     output = directory/f'higgsCombine_paramFit_{name}_{nuisance}.MultiDimFit.mH{mass_arg}.root'
+    if task.get('race_strategies'):
+        command = base.impact_common_command(args, Path(case['card']), case['target'], label,
+            mass, Path(context['workspace']), context['rmin'], context['rmax'],
+            nuisance=nuisance, pois=case['pois'])
+        strategy = base.race_impact_strategies(command, output, nuisance)
+        return dict(files=[str(output)], strategy=strategy)
     for strategy in (1,2,0):
         if output.exists():
             shutil.copy2(output, directory/f'previous_strategy{strategy}.root')
@@ -158,13 +164,13 @@ def _worker(batch, index):
         write(directory/'status.json',status)
 
 
-def make_tasks(cases):
+def make_tasks(cases, race=False):
     tasks=[]
     for i,case in enumerate(cases):
         dependencies=[]
         for nuisance in case['pending']:
             dependencies.append(len(tasks))
-            tasks.append(dict(case=i,kind='scan',nuisance=nuisance,dependencies=[]))
+            tasks.append(dict(case=i,kind='scan',nuisance=nuisance,race_strategies=race,dependencies=[]))
         tasks.append(dict(case=i,kind='final',dependencies=dependencies))
     return tasks
 
@@ -173,9 +179,10 @@ def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--source-batch')
     p.add_argument('--batch',required=True)
-    p.add_argument('--indices',default='2221,2983,4524')
+    p.add_argument('--indices',default='unfinished', help='unfinished, or comma-separated impact_final indices')
     p.add_argument('--stage',choices=('submit','collect'),default='submit')
-    p.add_argument('--memory',type=int,default=16000)
+    p.add_argument('--memory',type=int,default=2048,help='Memory in MB per CPU')
+    p.add_argument('--serial-strategies',action='store_true')
     p.add_argument('--dry-run',action='store_true')
     p.add_argument('--worker',type=int,help=argparse.SUPPRESS)
     opt=p.parse_args(argv); batch=Path(opt.batch).resolve()
@@ -199,7 +206,21 @@ def main(argv=None):
     payload=json.loads((source/'manifest.json').read_text())
     if payload.get('manifest_sha256')!=inference.manifest_digest(payload):
         raise ValueError('Source manifest digest mismatch')
-    indices=[int(i) for i in opt.indices.split(',')]
+    if opt.indices == 'unfinished':
+        indices = []
+        for job in payload['jobs']:
+            if job['kind'] != 'impact_final':
+                continue
+            path = Path(job['workdir'])/'status.json'
+            state = json.loads(path.read_text())['state'] if path.is_file() else 'pending'
+            print('[SOURCE]', job['index'], 'M', job['mass'], 'r', job['injected_r'], state)
+            if state != 'success':
+                indices.append(job['index'])
+        if not indices:
+            print('[COMPLETE] All source finals succeeded.')
+            return
+    else:
+        indices=[int(i) for i in opt.indices.split(',')]
     if len(indices)!=len(set(indices)) or any(i<0 or i>=len(payload['jobs']) or
             payload['jobs'][i]['kind']!='impact_final' for i in indices):
         raise ValueError('Select unique valid impact_final indices')
@@ -226,13 +247,13 @@ def main(argv=None):
             base.run_command(['combineTool.py','-M','Impacts','-d',context['workspace'],
                 '-m',base.format_mass_for_combine(job['mass']),'-n',name,'-o',collected.name],
                 out,stdout_path=out/'collect_baseline.log')
-            bounds=base.impact_workspace_parameters(Path(context['workspace']))
+            pois,bounds=base.impact_workspace_model(Path(context['workspace']))
             pending=pending_scans(json.loads(collected.read_text()),bounds)
-            cases.append(dict(source_index=index,mass=job['mass'],target=job['target'],
+            cases.append(dict(pois=pois,source_index=index,mass=job['mass'],target=job['target'],
                 card=job['card'],context=context,parents=parents,pending=pending,directory=out.name,
                 nuisance_parents={payload['jobs'][i]['nuisance']:i for i in job['nuisance_jobs']}))
             print('[SPLIT]',index,len(pending),'ordinary nuisance repairs',flush=True)
-    tasks=make_tasks(cases)
+    tasks=make_tasks(cases, race=not opt.serial_strategies)
     write(batch/'plan.json',dict(cases=cases,tasks=tasks,
         manifest_sha256=inference.digest(batch/'source_manifest.json'),
         source_hashes={'source/'+n:inference.digest(batch/'source'/n) for n in SOURCES}))
@@ -245,14 +266,15 @@ def main(argv=None):
         ' --batch '+shlex.quote(str(batch))+' --worker "$1"','']))
     wrapper.chmod(0o755)
     (batch/'submit.jds').write_text('\n'.join(['universe = vanilla',f'executable = {wrapper}',
-        f'initialdir = {batch}','arguments = $(index)',f'request_memory = {opt.memory}MB',
-        'request_cpus = 1','getenv = True','should_transfer_files = YES',
+        f'initialdir = {batch}','arguments = $(index)','request_memory = $(memory)MB',
+        'request_cpus = $(cpus)','getenv = True','should_transfer_files = YES',
         'when_to_transfer_output = ON_EXIT','transfer_output_files = ""',
         'output = task_$(index).out','error = task_$(index).err','log = condor.log',
         'jobbatchname = NPSImpactSplit_'+batch.name,'queue','']))
     lines=[]
     for i,task in enumerate(tasks):
-        lines.extend([f'JOB J{i} submit.jds',f'VARS J{i} index="{i}"'])
+        cpus = 3 if task.get("race_strategies") else 1
+        lines.extend([f'JOB J{i} submit.jds',f'VARS J{i} index="{i}" cpus="{cpus}" memory="{opt.memory*cpus}"'])
         if task['dependencies']:
             lines.append('PARENT '+' '.join('J'+str(j) for j in task['dependencies'])+f' CHILD J{i}')
     (batch/'workflow.dag').write_text('\n'.join(lines)+'\n')

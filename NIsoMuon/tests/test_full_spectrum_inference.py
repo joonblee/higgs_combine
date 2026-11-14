@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import full_spectrum_inference as inf
@@ -21,7 +21,8 @@ class InferenceTests(unittest.TestCase):
         with patch.object(inf.memory_policy,'native_retry_supported',return_value=True):
             self.prepare('impacts')
         submit=(self.batch/'submit.jds').read_text()
-        self.assertIn('request_memory = ifThenElse(',submit)
+        self.assertIn('request_memory = (ifThenElse(',submit)
+        self.assertIn('nodecpus="3"', (self.batch/'workflow.dag').read_text())
         self.assertIn(', 2048, 1024)',submit)
         self.assertIn('retry_request_memory_max = 8192MB',submit)
 
@@ -37,7 +38,7 @@ class InferenceTests(unittest.TestCase):
 
     def test_only_final_workers_request_parallel_repair_resources(self):
         inf.main(['--results', str(self.results), '--batch', str(self.batch), '--dry-run',
-            '--impact-repair-cpus', '3', '--condor-cmssw-base', str(self.root/'CMSSW'),
+            '--serial-strategies', '--impact-repair-cpus', '3', '--condor-cmssw-base', str(self.root/'CMSSW'),
             '--condor-scram-arch', 'test'])
         payload = inf.read_manifest(self.batch)
         for dag in ('workflow.dag', inf.write_dag(self.batch, payload, resume=True)):
@@ -166,6 +167,8 @@ if a[a.index("-M")+1] == "MultiDimFit":
             side_effect=lambda p: json.loads(Path(p).read_text())))
         self.stack.enter_context(patch.object(inf.base, 'read_impact_initial_poi',
             side_effect=lambda p: json.loads(Path(p).read_text())['POIs'][0]['fit']))
+        self.stack.enter_context(patch.object(inf.base, 'read_nuisance_scan',
+            side_effect=lambda path, nuisance: json.loads(path.read_text())))
         self.stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
         (self.root/'CMSSW/src').mkdir(parents=True)
         self.results = self.root/'results'
@@ -197,6 +200,36 @@ if a[a.index("-M")+1] == "MultiDimFit":
         payload['manifest_sha256'] = inf.manifest_digest(payload)
         (self.batch/'manifest.json').write_text(json.dumps(payload))
         return payload
+
+    def test_strategy_race_stops_running_sibling_only_after_valid_scan(self):
+        scan = self.root/'result.root'
+        processes = [MagicMock() for _ in range(3)]
+        for process, code in zip(processes, (0, 0, None)):
+            process.poll.return_value = code
+        cmd = ['combine', '--cminDefaultMinimizerStrategy','1','--setRobustFitStrategy','1']
+        def read(candidate, name):
+            candidate.write_text(candidate.parent.name)
+            fit = [0, 0, 0] if candidate.parent.name == 'strategy1' else [-1, 0, 1]
+            return dict(name=name, fit=fit, r=[0, 0, 0])
+        with patch.object(inf.base.subprocess, 'Popen', side_effect=processes), \
+             patch.object(inf.base, 'read_nuisance_scan', side_effect=read):
+            self.assertEqual(inf.base.race_impact_strategies(cmd, scan, 'theta'), 2)
+        self.assertEqual(scan.read_text(), 'strategy2')
+        processes[2].kill.assert_called_once()
+        processes[2].wait.assert_called_once()
+
+    def test_invalid_scan_retried_before_final_collection(self):
+        payload = self.prepare('impacts')
+        job = next(j for j in payload['jobs'] if j['kind'] == 'impact_nuisance')
+        inf.worker(self.batch, job['initial'])
+        valid = dict(name=job['nuisance'], fit=[-1, 0, 1], r=[0, 0, 0])
+        collapsed = dict(valid, fit=[0, 0, 0])
+        with patch.object(inf.base, 'read_nuisance_scan', side_effect=lambda path, name: (valid if path.parent.name == 'strategy2' else collapsed)):
+            inf.worker(self.batch, job['index'])
+        directory = Path(job['workdir'])
+        self.assertEqual(json.loads((directory/'status.json').read_text())['strategy'], 2)
+        for strategy in (1, 2, 0):
+            self.assertTrue((directory/f'strategy{strategy}'/'fit.log').exists())
 
     def test_end_to_end_limits_and_both_injections(self):
         payload = self.prepare()
@@ -283,9 +316,9 @@ if a[a.index("-M")+1] == "MultiDimFit":
             inf.main(['--stage','set-memory','--batch',str(self.batch),'--dag-id','19457414'])
         self.assertEqual(run.call_count,2)
         calls=[c.args[0] for c in run.call_args_list]
-        self.assertEqual({c[-1] for c in calls},{'1024','2048'})
+        self.assertEqual({c[-1] for c in calls},{'1024','6144'})
         self.assertTrue(all('NumJobStarts == 0' in c[2] for c in calls))
-        self.assertIn('ClusterId == 100',next(c[2] for c in calls if c[-1]=='2048'))
+        self.assertIn('ClusterId == 100',next(c[2] for c in calls if c[-1]=='6144'))
         self.assertFalse(any('ClusterId == 101' in c[2] for c in calls))
         self.assertTrue(all('JobStatus == 1' in c[2] for c in calls))
         self.assertEqual(manifest,(self.batch/'manifest.json').read_bytes())

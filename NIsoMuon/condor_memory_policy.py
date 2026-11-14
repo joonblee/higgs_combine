@@ -77,7 +77,7 @@ def submit_memory(payload, default, *, impact=None, plot=None):
     for memory, indices in sorted(by_memory.items()):
         condition = index_condition(indices, '$(jobindex)')
         expression = f'ifThenElse(({condition}), {memory}, {expression})'
-    if payload.get('config', {}).get('impact_repair_cpus', 1) > 1:
+    if payload.get('config', {}).get('impact_repair_cpus', 1) > 1 or any(j.get('race_strategies') for j in payload.get('jobs', [])):
         expression = f'({expression}) * $(nodecpus)'
     return expression
 
@@ -91,7 +91,7 @@ def initial_memory(ad, payload, default=1024):
         if payload['jobs'][index]['kind'] == 'impact_final':
             return default * payload.get('config', {}).get('impact_repair_cpus', 1)
         if payload['jobs'][index]['kind'] == 'impact_nuisance':
-            return max(default, IMPACT_NUISANCE_MEMORY)
+            return max(default, IMPACT_NUISANCE_MEMORY) * (3 if payload['jobs'][index].get('race_strategies') else 1)
         if payload['jobs'][index]['kind'] == 'workspace':
             return max(default, 2048)
     return default
