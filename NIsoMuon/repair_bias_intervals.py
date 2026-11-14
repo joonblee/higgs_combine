@@ -9,7 +9,6 @@ saved candidate when available. Seeds are never accepted without all original
 fit, centre and endpoint checks.
 """
 import argparse
-import json
 import math
 import tempfile
 from pathlib import Path

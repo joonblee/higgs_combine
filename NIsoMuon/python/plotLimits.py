@@ -8,8 +8,6 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import plotting as plot
 
-# import CombineHarvester.CombineTools.maketable as maketable
-
 parser = argparse.ArgumentParser()
 parser.add_argument("input", nargs="+", help="""Input json files""")
 parser.add_argument(
@@ -20,9 +18,6 @@ parser.add_argument(
     plot without file extension""",
 )
 parser.add_argument("--show", default="exp,obs")
-# parser.add_argument(
-#     '--debug-output', '-d', help="""If specified, write the
-#     TGraphs into this output ROOT file""")
 parser.add_argument("--x-title", default="m_{H} (GeV)", help="""Title for the x-axis""")
 parser.add_argument("--y-title", default=None, help="""Title for the y-axis""")
 parser.add_argument("--limit-on", default="#sigma/#sigma_{SM}", help="""Shortcut for setting the y-axis label""")
@@ -30,8 +25,7 @@ parser.add_argument("--cms-sub", default="Internal", help="""Text below the CMS 
 parser.add_argument(
     "--scenario-label",
     default="",
-    help="""Scenario name to be drawn in top
-    left of plot""",
+    help=argparse.SUPPRESS,
 )
 parser.add_argument("--title-right", default="", help="""Right header text above the frame""")
 parser.add_argument("--title-left", default="", help="""Left header text above the frame""")
@@ -40,7 +34,8 @@ parser.add_argument("--logx", action="store_true", help="""Draw x-axis in log sc
 parser.add_argument("--ratio-to", default=None)
 parser.add_argument("--pad-style", default=None, help="""Extra style options for the pad, e.g. Grid=(1,1)""")
 parser.add_argument("--auto-style", nargs="?", const="", default=None, help="""Take line colors and styles from a pre-defined list""")
-parser.add_argument("--table_vals", help="Amount of values to be written in a table for different masses", default=10)
+# Older invocations may still pass these unused options.
+parser.add_argument("--table_vals", help=argparse.SUPPRESS)
 args = parser.parse_args()
 
 
@@ -96,8 +91,6 @@ defcols = [
     ROOT.kViolet - 5,
     ROOT.kGray,
 ]
-
-deflines = [1, 2, 3]
 
 if args.auto_style is not None:
     icol = {x: 0 for x in args.auto_style.split(",")}
@@ -161,8 +154,6 @@ axis[0].GetXaxis().SetLabelOffset(axis[0].GetXaxis().GetLabelOffset() * 2)
 if args.logy:
     axis[0].SetMinimum(0.1)  # we'll fix this later
     pads[0].SetLogy(True)
-    # axis[0].GetYaxis().SetMoreLogLabels()
-    # axis[0].SetNdivisions(50005, "X")
 
 y_min, y_max = (plot.GetPadYMin(pads[0]), plot.GetPadYMax(pads[0]))
 plot.FixBothRanges(pads[0], y_min if args.logy else 0, 0.05 if args.logy else 0, y_max, 0.25)
@@ -195,23 +186,15 @@ if args.ratio_to is not None:
 pads[0].cd()
 if legend.GetNRows() == 1:
     legend.SetY1(legend.GetY2() - 0.5 * (legend.GetY2() - legend.GetY1()))
-legend.Draw()
-
-# line = ROOT.TLine()
-# line.SetLineColor(ROOT.kBlue)
-# line.SetLineWidth(2)
-# plot.DrawHorizontalLine(pads[0], line, 1)
 
 box = ROOT.TPave(pads[0].GetLeftMargin(), 0.81, 1 - pads[0].GetRightMargin(), 1 - pads[0].GetTopMargin(), 1, "NDC")
 box.Draw()
 
 legend.Draw()
 
-#plot.DrawCMSLogo(pads[0], "CMS", args.cms_sub, 11, 0.045, 0.035, 1.2, "", 0.8)
 plot.DrawCMSLogo(pads[0], "CMS", args.cms_sub, 11, 0.1, 0.035, 1.2, "", 0.8)
 plot.DrawTitle(pads[0], args.title_right, 3)
 plot.DrawTitle(pads[0], args.title_left, 1)
 
 canv.Print(".pdf")
 canv.Print(".png")
-# maketable.TablefromJson(args.table_vals, args.file, "TablefromJson.txt")

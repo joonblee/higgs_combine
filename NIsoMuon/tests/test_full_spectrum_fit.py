@@ -259,7 +259,6 @@ class CardTests(unittest.TestCase):
             stack.enter_context(patch.object(base,'prepare_resolution_coefficients'))
             stack.enter_context(patch.object(base,'relative_resolution',return_value=.01))
             stack.enter_context(patch.object(base,'read_qcd_stat_inputs',return_value=inputs))
-            stack.enter_context(patch.object(base,'read_qcd_stat_metadata',return_value=metadata))
             stack.enter_context(patch.object(base,'qcd_root_window_statistics',return_value={'gradient':[1.]}))
             stack.enter_context(patch.object(base,'build_channels_for_mass',side_effect=channel_builder))
             model=fs.build_model(reader,args,opt,30.,{'2018':'signal.root'},windows)

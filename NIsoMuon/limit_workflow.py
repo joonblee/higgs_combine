@@ -660,11 +660,6 @@ def read_qcd_stat_inputs(root_file, era=None, template_path=None):
     return metadata, native, basis
 
 
-def read_qcd_stat_metadata(root_file, era=None, template_path=None):
-    # Preflight validates all required ROOT objects before old cards are removed.
-    return read_qcd_stat_inputs(root_file, era, template_path)[0]
-
-
 def whole_bin_window(hist, low, high):
     axis, n = hist.GetXaxis(), hist.GetNbinsX()
     low, high = max(low, axis.GetXmin()), min(high, axis.GetXmax())
@@ -1862,12 +1857,6 @@ def lnn_from_down_up(
     if max(abs(kd - 1.0), abs(ku - 1.0)) < ignore_rel_below:
         return "-"
     return f"{format_kappa(kd)}/{format_kappa(ku)}"
-
-
-def lnn_from_single(kappa: float, ignore_rel_below: float) -> str:
-    if not math.isfinite(kappa) or kappa <= 0.0 or abs(kappa - 1.0) < ignore_rel_below:
-        return "-"
-    return format_kappa(kappa)
 
 
 def lnn_from_symmetric_error(

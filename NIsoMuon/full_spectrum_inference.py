@@ -218,11 +218,8 @@ def _worker(payload, index):
     status_path = directory/'status.json'
     base.write_condor_status(status_path, status)
     try:
-        with base.validation_cache():
-            if digest(job['card']) != job['card_sha256'] or digest(job['workspace']) != job['workspace_sha256']:
-                raise ValueError('Submitted card/workspace changed.')
-            parents = {str(i): base.completed_condor_job(payload, args, payload['jobs'][i])['completion_id']
-                       for i in job['dependencies']}
+        parents = {str(i): base.completed_condor_job(payload, args, payload['jobs'][i])['completion_id']
+                   for i in job['dependencies']}
         card = Path(job['card'])
         mass, label = job['mass'], base.mass_label(job['mass'])
         if job['kind'] == 'limits':

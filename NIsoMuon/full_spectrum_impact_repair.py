@@ -2,7 +2,6 @@
 """Independent final-impact retries from immutable completed parent scans."""
 import argparse
 from collections import Counter
-import hashlib
 import json
 import os
 from pathlib import Path

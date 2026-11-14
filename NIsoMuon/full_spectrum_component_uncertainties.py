@@ -16,7 +16,6 @@ Example:
  python3 full_spectrum_component_uncertainties.py /path/to/M30/model.json
 """
 import argparse
-from array import array
 import json
 import math
 from pathlib import Path
