@@ -32,13 +32,16 @@ def raw_part(reader, args, opt, mass, files, era, windows, full_spectrum=False):
                 'DY_LightJetStat':{'DY':'0.9/1.1'}, 'QCD_norm':{'QCD':'0.8/1.2'}},
             qcd_modes=[.1*rates['QCD']], qcd_shape=.2*rates['QCD'], dy_stat=1.,
             dy_nf=.1, warnings=[]))
+        if args.mode == 'unblind':
+            rows[-1]['observation'] = 7 if first else 0
     return dict(era=era, rows=rows, transfer_ratios=[[.1,.2] for _ in rows],
                 input_audits=[dict(era=era,region=w['region'],requirements=1,
                                   diagnostic_failures=[]) for w in windows])
 
 
 class FakeReader:
-    def __init__(self):
+    def __init__(self, mode='blind'):
+        self.mode = mode
         self.fingerprints = {}
     def check_inputs(self):
         pass
@@ -47,6 +50,19 @@ class FakeReader:
 
 
 class CondorTests(unittest.TestCase):
+    def test_observed_condor_preparation_and_workspace_preserve_data_counts(self):
+        opt,args,payload=self.make_batch(extra=('--mode','unblind'))
+        self.assertEqual(payload['options']['mode'],'unblind')
+        self.workers(payload,'prepare');self.workers(payload,'assemble')
+        directory=fs.model_directory(batch.worker_options(payload)[0],opt.masses[0])
+        model=json.loads((directory/'model.json').read_text())
+        self.assertFalse(model['blind']);self.assertEqual(model['observation'],'OS_data')
+        observations=next(line.split()[1:] for line in (directory/'datacard.txt').read_text().splitlines()
+                          if line.startswith('observation '))
+        self.assertEqual(list(map(float,observations)),[r['observation'] for r in model['rows']])
+        self.assertIn(0.,list(map(float,observations)))
+        self.assertTrue(all(r['asimov']>0 for r in model['rows']))
+
     def test_worker_reuses_common_dependency_checks_and_workspace_hash(self):
         opt,args,payload=self.make_batch()
         self.workers(payload,'prepare');self.workers(payload,'assemble');self.run_fits(payload)

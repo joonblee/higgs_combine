@@ -117,13 +117,14 @@ def regions(edges, mass, sigma, sr_nsigma=5., exclude_nsigma=5., width=2., outer
 
 class BlindedReader(base.RootReader):
     """Prevent target-data reads and enforce exactly disjoint input integrals."""
+    allow_data = False
     def _file(self, filename):
-        if Path(filename).name.lower() == 'data.root':
+        if not self.allow_data and Path(filename).name.lower() == 'data.root':
             raise base.WorkflowError('OS data.root is forbidden in this blinded workflow.')
         return super()._file(filename)
 
     def integral(self, filename, path, low, high):
-        if Path(filename).name.lower() == 'data.root':
+        if not self.allow_data and Path(filename).name.lower() == 'data.root':
             raise base.WorkflowError('OS data.root is forbidden in this blinded workflow.')
         key = (filename, path, round(low, 12), round(high, 12))
         if key in self.integral_cache:
@@ -135,6 +136,11 @@ class BlindedReader(base.RootReader):
                 if abs(a-low) > 1e-7 or abs(b-high) > 1e-7:
                     raise base.WorkflowError(f'Incompatible bin edges: {filename}:{path}: requested {low},{high}; actual {a},{b}')
         return super().integral(filename, path, low, high)
+
+
+class ObservedReader(BlindedReader):
+    """Explicit opt-in OS observations; preserve whole-native-bin checks."""
+    allow_data = True
 
 
 def common_edges(reader, args, era, signal_file):
@@ -247,6 +253,13 @@ def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=F
                    qcd_shape=max(ch.qcd_shape_sigma_down or 0., ch.qcd_shape_sigma_up or 0.),
                    dy_stat=(ch.dy_nf_amc or 0.)*(ch.dy_lightjet_error or 0.),
                    dy_nf=ch.dy_nf_amc, warnings=ch.warnings)
+        if args.mode == 'unblind':
+            filename = str(Path(base.root_dir(args,era))/'data.root')
+            data = reader.integral(filename,base.hist_path(args.region),low,high)
+            if (data is None or not math.isfinite(data.value) or data.value < 0
+                    or abs(data.value-round(data.value)) > 1e-6):
+                raise base.WorkflowError(f'{era}/{window["region"]}: require nonnegative integer OS data counts.')
+            row['observation'] = int(round(data.value))
         if closure is not None:
             import dy_closure_shape
             row['dy_closure_raw_up'] = ch.dy_nf_amc * dy_closure_shape.integrate(closure[1], low, high)
@@ -301,7 +314,10 @@ def assemble_model(args, opt, mass, parts, full_spectrum=False):
     diagnostics = {g: separation_diagnostic(rs) for g, rs in groups.items()}
     if not full_spectrum and any(not d['identifiable'] for d in diagnostics.values()):
         raise ValueError(f'QCD/DY not separately identifiable: {diagnostics}. Widen sidebands or reconsider the model; no automatic regularisation.')
-    return dict(schema_version=SCHEMA, blind=True, observation='nominal_background_Asimov',
+    blind = args.mode != 'unblind'
+    if not blind and any('observation' not in row for row in rows):
+        raise ValueError('Missing observed data count; cannot substitute an Asimov observation.')
+    return dict(schema_version=SCHEMA, blind=blind, observation='nominal_background_Asimov' if blind else 'OS_data',
                 target=opt.target, mass=mass, alpha_internal_unit=alpha_unit,
                 signal_normalisation_reference='11--80 GeV' if spectrum_reference else 'SR',
                 raw_reference_signal_yield=raw_sr,
@@ -339,12 +355,12 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
         return 1. if process == 'QCD' or (process == 'DY' and row['rates']['DY'] == 0 and row['dy_stat'] > 0) else row['rates'][process]
     lines = [f'imax {len(rows)}', 'jmax *', 'kmax *', '------------',
              'bin ' + ' '.join(r['channel'] for r in rows),
-             'observation ' + ' '.join(f(r['asimov']) for r in rows), '------------',
+             'observation ' + ' '.join(f(r['asimov'] if model.get('blind',True) else r['observation']) for r in rows), '------------',
              'bin ' + ' '.join(r['channel'] for r, p in columns),
              'process ' + ' '.join('Zprime' if p == 'sig' else p for r, p in columns),
              'process ' + ' '.join(str(base.PROC_ID[p]) for r, p in columns),
              'rate ' + ' '.join(f(rate(r, p)) for r, p in columns), '------------',
-             '# BLINDED STUDY: all observations are nominal background Asimov.',
+             '# BLINDED STUDY: all observations are nominal background Asimov.' if model.get('blind',True) else '# UNBLINDED: all observations are OS data counts.',
              '# Model-based closure is not a test of background modelling bias.',
              '# alpha_internal_unit = '+f(model['alpha_internal_unit']),
              '# alpha_internal_signal_yield = '+f(sum(r['rates']['sig'] for r in rows

@@ -1279,3 +1279,53 @@ only that representative batch's results. All masses/injections and nuisance
 jobs run independently subject to the initial-fit dependencies. The inference
 reader accepts externally supplied covariance only with the saved successful
 robustHesse audit; bare covQual=-1 is still rejected.
+
+## Observed-data full-spectrum limits
+
+`--mode blind` remains the default and preserves existing blinded paths and
+signatures. `--mode unblind` explicitly reads the selected OS `data.root`
+histogram in every era and fit bin, including both sidebands. Observations
+must be finite nonnegative integer counts; missing/weighted/negative inputs
+are errors and never replaced by Asimov counts. Data histogram binning is
+checked and fingerprinted during submission, and input versions are checked
+again during preparation and assembly. Background estimates and their
+nuisances are unchanged.
+
+Unblinded model directories have an `_unblind` suffix and a different model
+signature. Use a new Condor batch directory; a blinded card/workspace cannot
+be reused as an observed-data model. `--inject-r` must remain 0 in this mode:
+it is not an injection, and FitDiagnostics has no `-t -1`/`--expectSignal`.
+Its B-only and S+B fits both use the actual observed counts.
+
+For a dense observed scan, after activating CMSSW:
+
+```bash
+masses=$(python3 - <<'PY'
+import json
+from pathlib import Path
+print(','.join(map(str,json.loads(Path('mass_scan_grid.json').read_text())['masses'])))
+PY
+)
+python3 full_spectrum_fit.py \
+  --mode unblind --masses "$masses" --interpolate-signal --target full \
+  --fit-layout window --sideband-binning central \
+  --norm-prior 1.5 --dy-shape-model linear \
+  --fit-components none --limits --bins-per-job 40 \
+  --condor-dir full_spectrum_outputs/condor/dense_central_limits_unblind
+```
+
+`--limits` is an alias for `--expected-limits`. In unblind mode the existing
+AsymptoticLimits driver computes observed limits from data plus a separate
+`--run blind` expected calculation. The latter retains the background-only
+Asimov convention of the blinded workflow. The historical per-mass filename
+`fit_r0/limits/expected_limits.json` now includes `blind: false` and `obs` in
+both `r` and physical `alpha`. The batch's `expected_limits.csv` and
+`limits_Run2Run3_alpha.json` also include `obs`; limits-only batches draw both
+expected bands and the observed curve in the PDF/PNG. All quantiles use the
+saved mass-dependent `alpha_internal_unit` conversion.
+
+The representative-impact entry point remains a blinded Asimov validation:
+`--impact-injections 0,1` requests two datasets, whereas
+`--impact-injections 0` requests only background-only expected impacts (one
+per mass, as in the AN main-text figures). These options do not define
+observed-data impacts; the inference entry point rejects observed input fits.

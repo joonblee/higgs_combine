@@ -44,6 +44,8 @@ def make_parser():
     p = argparse.ArgumentParser(description=__doc__)
     # Stored in fresh manifests; absent in old batches, which keep their paths/reference.
     p.set_defaults(signal_counting_version=2)
+    p.add_argument('--mode', choices=('blind','unblind'), default='blind',
+                   help='blind: nominal-background Asimov; unblind: actual OS counts in all fit bins.')
     p.add_argument('--interpolate-signal', action='store_true',
                    help='Use limit_workflow counting-yield interpolation for bracketed masses, with corresponding sideband counts; no extrapolation')
     p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
@@ -84,8 +86,8 @@ def make_parser():
                    help='Upper numerical bound of a free DY scale; not a prior.')
     p.add_argument('--inject-r', type=float, default=0., help='Asimov signal strength, e.g. 0 or 1.')
     p.add_argument('--r-max', type=shared.finite_positive, default=100.)
-    p.add_argument('--expected-limits', action='store_true',
-                   help='Also compute blinded expected limits from each workspace; no impacts or toys. Condor writes limit/normalisation CSV tables automatically.')
+    p.add_argument('--expected-limits', '--limits', dest='expected_limits', action='store_true',
+                   help='Compute expected limits, and observed limits in unblind mode; Condor writes tables and a limits-only plot.')
     p.add_argument('--fit-components', choices=('both','b-only','s-only','none'), default='both',
                    help='Select diagnostic fits; none builds workspace and limits without FitDiagnostics (requires --expected-limits).')
     p.add_argument('--fit-output', choices=('full','norms'), default='full',
@@ -124,6 +126,8 @@ def make_parser():
 
 
 def configuration(opt):
+    if getattr(opt,'mode','blind') == 'unblind' and (opt.inject_r != 0 or getattr(opt,'fast_mode',False)):
+        raise ValueError('Unblind mode uses actual observations; inject-r must be 0 and fast-mode is not supported.')
     if not selected_fits(opt) and not opt.expected_limits:
         raise ValueError("--fit-components none requires --expected-limits")
     if getattr(opt,'fit_max_calls',None) is not None and opt.fit_max_calls < 1:
@@ -155,7 +159,7 @@ def configuration(opt):
     args = base.build_parser().parse_args([])
     for name in ('base_dir', 'sigfit_dir', 'resolution_map', 'region', 'trigger', 'r_max'):
         setattr(args, name, getattr(opt, name))
-    args.mode, args.backend, args.strict = 'blind', 'local', True
+    args.mode, args.backend, args.strict = getattr(opt,'mode','blind'), 'local', True
     args.target, args.masses = opt.target, opt.masses
     if getattr(opt, 'fit_layout', 'spectrum') == 'window':
         args.n_sigma = opt.sr_nsigma
@@ -279,16 +283,20 @@ def dy_study_tag(opt):
         tag += '_DYfree'+base.mass_label(opt.dy_norm_max)
     if getattr(opt,'interpolate_signal',False) and getattr(opt,'signal_counting_version',1)>=2:
         tag += '_signalCounting_v2'
+    if getattr(opt,'mode','blind') == 'unblind':
+        tag += '_unblind'
     return tag
 
 
 def signature(opt):
-    ignored = {'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base', 'expected_limits',
+    ignored = {'mode', 'stage', 'masses', 'overwrite', 'dry_run', 'inject_r', 'r_max', 'output_base', 'expected_limits',
                'fit_strategy', 'fit_tolerance', 'fit_max_calls', 'fit_verbosity', 'fit_components', 'fit_robust_hesse', 'fit_output',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
                'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal', 'signal_counting_version'}
     result = {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
+    if getattr(opt,'mode','blind') == 'unblind':
+        result['mode'] = 'unblind'
     if getattr(opt, 'interpolate_signal', False):
         result['interpolate_signal'] = True
         if getattr(opt,'signal_counting_version',1)>=2:
@@ -424,6 +432,10 @@ def fit_commands(opt, mass, directory, fit_kind=None):
          '--robustFit', '1', '--cminDefaultMinimizerStrategy', str(getattr(opt,'fit_strategy',1)),
          '--saveNormalizations', '-n', '.FullSpectrum'],
     ]
+    if getattr(opt,'mode','blind') == 'unblind':
+        for name in ('-t','--expectSignal'):
+            i=commands[1].index(name)
+            del commands[1][i:i+2]
     if getattr(opt,'fit_output','full') == 'full':
         commands[1] += ['--saveShapes','--saveWithUncertainties']
     if getattr(opt,'fit_strategy',1) != 1:
@@ -564,7 +576,7 @@ def extract_summary(model, directory, opt, fit_kind=None):
         workspace = wf.Get('w')
         if not workspace:
             raise ValueError('Missing workspace w.')
-        result = dict(schema_version=SCHEMA, blind=True, target=model['target'], mass=model['mass'],
+        result = dict(schema_version=SCHEMA, blind=model['blind'], target=model['target'], mass=model['mass'],
                       test_only=model.get('test_only', False),
                       inject_r=opt.inject_r, alpha_internal_unit=model['alpha_internal_unit'],
                       card_sha256=model['card_sha256'],
@@ -656,7 +668,7 @@ def load_model(directory, opt):
                          'rerun with --stage all --overwrite using the same configuration.')
     model = json.loads((directory/'model.json').read_text())
     if (model.get('schema_version') != SCHEMA or model.get('signature') != signature(opt)
-            or model.get('blind') is not True):
+            or model.get('blind') is not (getattr(opt,'mode','blind') == 'blind')):
         raise ValueError('Saved model configuration differs; rebuild cards.')
     if hashlib.sha256((directory/'datacard.txt').read_bytes()).hexdigest() != model.get('card_sha256'):
         raise ValueError('Datacard changed since generation; rebuild cards.')
@@ -682,6 +694,15 @@ def prepare_inputs(reader, args, opt):
         if era not in reference:
             raise ValueError(f'Missing reference signal in {era}.')
         edges = shared.common_edges(reader, args, era, reference[era])
+        if getattr(args,'mode','blind') == 'unblind':
+            filename = str(Path(base.root_dir(args,era))/'data.root')
+            hist = reader.histogram(filename,base.hist_path(args.region))
+            if not hist or not hasattr(hist,'GetNbinsX'):
+                raise ValueError(f'Missing OS data histogram: {filename}')
+            data_edges = {round(float(hist.GetXaxis().GetBinLowEdge(i)),8)
+                          for i in range(1,hist.GetNbinsX()+2)}
+            if not set(edges).issubset(data_edges):
+                raise ValueError(f'OS data binning cannot reproduce the planned fit bins: {era}')
         if is_window:
             for mass in opt.masses:
                 low,high = base.mass_window(args,era,mass)
@@ -795,7 +816,7 @@ def combine_fit_summaries(model, directory, opt):
     (root_dir/'fit_summary.json').unlink(missing_ok=True)
     result = None
     fit_card_hash = hashlib.sha256((root_dir/'datacard.txt').read_bytes()).hexdigest()
-    expected = dict(schema_version=SCHEMA, blind=True, target=model['target'], mass=model['mass'],
+    expected = dict(schema_version=SCHEMA, blind=model['blind'], target=model['target'], mass=model['mass'],
                     test_only=model.get('test_only', False), inject_r=opt.inject_r,
                     alpha_internal_unit=model['alpha_internal_unit'], card_sha256=model['card_sha256'],
                     fit_card_sha256=fit_card_hash)
@@ -827,8 +848,9 @@ def run_fit(model, directory, opt):
 
 def run_expected_limits(model, directory, opt):
     """Reuse the audited workspace, keeping physical limits separate from diagnostics."""
-    if model.get('blind') is not True or model.get('test_only') or opt.inject_r != 0:
-        raise ValueError('Expected limits require a non-test background-only Asimov model.')
+    if (model.get('blind') is not (getattr(opt,'mode','blind') == 'blind')
+            or model.get('test_only') or opt.inject_r != 0):
+        raise ValueError('Limits require matching observation mode, a non-test model and inject-r 0.')
     fit_dir = Path(directory)/'fit_r0'
     card = fit_dir/'datacard.txt'
     expected_card = fit_card_text((Path(directory)/'datacard.txt').read_text())
@@ -839,7 +861,7 @@ def run_expected_limits(model, directory, opt):
     destination = work/'expected_limits.json'
     destination.unlink(missing_ok=True)
     args = base.build_parser().parse_args([])
-    vars(args).update(mode='blind', parameter='alpha', r_min=0., r_max=opt.r_max, strict=True, jobs=1)
+    vars(args).update(mode=getattr(opt,'mode','blind'), parameter='alpha', r_min=0., r_max=opt.r_max, strict=True, jobs=1)
     mass, target = model['mass'], model['target']
     label = base.mass_label(mass)
     result = base.run_asymptotic(args, fit_dir/'workspace.root', target, label, mass, work)
@@ -848,14 +870,23 @@ def run_expected_limits(model, directory, opt):
     if invalid:
         raise ValueError('Invalid expected limits: '+reason)
     values = {key:float(values[key]) for key in base.EXPECTED_LIMIT_KEYS}
+    if args.mode == 'unblind':
+        observed = base._read_single_limit_json(result.observed, work, 'full_spectrum_observed')
+        value = float(observed['obs'])
+        if not math.isfinite(value) or value < 0 or value >= .98*opt.r_max:
+            raise ValueError('Invalid or range-truncated observed limit.')
+        values['obs'] = value
     unit = model['alpha_internal_unit']
-    payload = dict(blind=True, mass=mass, target=target, card_sha256=model['card_sha256'],
+    payload = dict(blind=model['blind'], mass=mass, target=target, card_sha256=model['card_sha256'],
         fit_card_sha256=hashlib.sha256(card.read_bytes()).hexdigest(),
         workspace_sha256=base.validation_digest(fit_dir/'workspace.root'),
         alpha_internal_unit=unit, r=values, alpha={key:value*unit for key,value in values.items()})
     destination.write_text(json.dumps(payload, indent=2, allow_nan=False)+'\n')
     print(f'[LIMIT] M{mass:g}: median alpha={payload["alpha"]["exp0"]:.6g}')
-    return [destination, result.expected]
+    products = [destination, result.expected]
+    if args.mode == 'unblind':
+        products.append(result.observed)
+    return list(dict.fromkeys(products))
 
 
 def main(argv=None):
@@ -877,7 +908,7 @@ def main(argv=None):
               f'refine={opt.sideband_refine}.', flush=True)
     if opt.dry_run:
         for mass in opt.masses:
-            print('[PLAN] blinded full spectrum, era channels, QCD/DY/tt lnN', opt.norm_prior)
+            print('[PLAN]',getattr(opt,'mode','blind'),'full spectrum, era channels, QCD/DY/tt lnN', opt.norm_prior)
             print(json.dumps(fit_commands(opt, mass, model_directory(opt,mass)), indent=2))
         return 0
     if opt.backend == 'condor':
@@ -888,7 +919,7 @@ def main(argv=None):
     try:
         signals, windows = None, {}
         if opt.stage in ('cards', 'all'):
-            reader = shared.BlindedReader()
+            reader = shared.ObservedReader() if args.mode == 'unblind' else shared.BlindedReader()
             signals, windows = prepare_inputs(reader, args, opt)
         for mass in opt.masses:
             directory = model_directory(opt,mass)

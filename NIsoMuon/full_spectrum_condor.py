@@ -54,13 +54,16 @@ def stamp(path):
 
 class InputReader(shared.BlindedReader):
     """Record every opened input, checking that it did not change during a job."""
-    def __init__(self):
+    def __init__(self, mode='blind'):
+        if mode not in ('blind','unblind'):
+            raise ValueError('Invalid observation mode.')
+        self.allow_data = mode == 'unblind'
         super().__init__()
         self.fingerprints = {}
 
     def _file(self, filename):
         # Apply the blinding check before even stat-ing a target-data file.
-        if Path(filename).name.lower() == 'data.root':
+        if not self.allow_data and Path(filename).name.lower() == 'data.root':
             raise base.WorkflowError('OS data.root is forbidden in this blinded workflow.')
         path = str(Path(filename).resolve())
         if path not in self.fingerprints and Path(path).is_file():
@@ -75,6 +78,10 @@ def check_inputs(fingerprints):
     for path, expected in fingerprints.items():
         if stamp(path) != expected:
             raise ValueError(f'Input changed during the batch: {path}; submit a new batch.')
+
+
+def input_reader(opt):
+    return InputReader(mode='unblind') if getattr(opt,'mode','blind') == 'unblind' else InputReader()
 
 
 def make_jobs(opt, windows):
@@ -121,6 +128,10 @@ def result_tables(payload, opt):
             raise ValueError('Limit and normalisation summaries use different cards.')
         limits.append(dict(mass=mass, target=summary['target'],
             **{key.replace('+','plus').replace('-','minus'):limit['alpha'][key] for key in base.EXPECTED_LIMIT_KEYS}))
+        if getattr(opt,'mode','blind') == 'unblind':
+            if limit.get('blind') is not False:
+                raise ValueError('Expected unblinded limit products.')
+            limits[-1]['obs'] = limit['alpha']['obs']
         for kind, fit in summary['fits'].items():
             if not fs.fit_quality_ok(fit):
                 raise ValueError('Failed normalisation fit quality.')
@@ -141,13 +152,14 @@ def result_tables(payload, opt):
         print('[TABLE]', path)
     if not fs.selected_fits(opt):
         output = Path(payload['batch'])
+        keys = (*base.EXPECTED_LIMIT_KEYS,'obs') if getattr(opt,'mode','blind') == 'unblind' else base.EXPECTED_LIMIT_KEYS
         plotdata = {str(row['mass']): {key:row[key.replace('+','plus').replace('-','minus')]
-                    for key in base.EXPECTED_LIMIT_KEYS} for row in limits}
+                    for key in keys} for row in limits}
         stem = f'limits_{opt.target}_alpha'
         path = output/(stem+'.json')
         path.write_text(json.dumps(plotdata,indent=2)+'\n')
         base.run_command([sys.executable,str(Path(__file__).parent/'python/plotLimits.py'),
-            path.name,'--logy','--show','exp','--x-title',"m_{Z'} (GeV)",
+            path.name,'--logy','--show','exp,obs' if 'obs' in keys else 'exp','--x-title',"m_{Z'} (GeV)",
             '--y-title',base.y_axis_title('alpha'),'--title-right',base.lumi_label(opt.target),
             '--output',stem],output)
         paths.extend([path,output/(stem+'.pdf'),output/(stem+'.png')])
@@ -291,7 +303,7 @@ def run_worker(manifest, index):
             opt, args = worker_options(payload)
             check_inputs(payload['preflight_inputs'])
             if job['kind'] == 'prepare':
-                reader = InputReader()
+                reader = input_reader(opt)
                 try:
                     part = shared.build_bin_rows(reader, args, opt, job['mass'],
                         payload['signal_files'][base.mass_label(job['mass'])], job['era'],
@@ -417,7 +429,7 @@ def submit(opt, args, prepared_plan=None):
         args.signal_interpolation_anchors = prepared_plan.get('signal_interpolation_anchors', {})
         args.signal_interpolation_audit = prepared_plan.get('signal_interpolation_audit', [])
     elif opt.stage in ('cards', 'all'):
-        reader = InputReader()
+        reader = input_reader(opt)
         try:
             signals, windows = fs.prepare_inputs(reader, args, opt)
             reader.check_inputs()
