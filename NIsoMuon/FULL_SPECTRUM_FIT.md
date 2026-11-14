@@ -1303,10 +1303,20 @@ changing diagnostic output; do not overwrite active results.
 
 ## Dense expected limits without redundant FitDiagnostics
 
-For a resolution-spaced limit scan, read the frozen `mass_scan_grid.json`
-(229 hypotheses, approximately half a reference resolution apart), pass its
-masses with `--interpolate-signal`, and select
-`--fit-components none --expected-limits`. The Condor graph then prepares
+Run the blinded limit scan with the following command:
+
+```bash
+python3 full_spectrum_fit.py --mode blind --interpolate-signal --target full \
+  --fit-layout window --sideband-binning central --norm-prior 1.5 \
+  --dy-shape-model linear --fit-components none --limits --bins-per-job 40 \
+  --condor-dir full_spectrum_outputs/condor/central_limits_blind_2p5sigma
+```
+
+Omitting `--masses` in an interpolated limit scan selects a spacing of
+2.5 reference resolutions in blind mode and the frozen 0.5-resolution grid
+in unblind mode. Both include all simulated signal masses. The SR half-width
+is independently set by `--sr-nsigma` (default 5). An explicit `--masses`
+list takes precedence. The Condor graph then prepares
 cards, builds workspaces and computes limits per mass without B/S diagnostics.
 The final tables node writes expected_limits.csv and a physical-alpha
 limits_TARGET_alpha.json/pdf/png. Limits are independently computed at each
@@ -1343,14 +1353,8 @@ Its B-only and S+B fits both use the actual observed counts.
 For a dense observed scan, after activating CMSSW:
 
 ```bash
-masses=$(python3 - <<'PY'
-import json
-from pathlib import Path
-print(','.join(map(str,json.loads(Path('mass_scan_grid.json').read_text())['masses'])))
-PY
-)
 python3 full_spectrum_fit.py \
-  --mode unblind --masses "$masses" --interpolate-signal --target full \
+  --mode unblind --interpolate-signal --target full \
   --fit-layout window --sideband-binning central \
   --norm-prior 1.5 --dy-shape-model linear \
   --fit-components none --limits --bins-per-job 40 \

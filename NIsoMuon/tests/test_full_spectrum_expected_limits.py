@@ -14,6 +14,21 @@ import full_spectrum_condor as condor
 
 
 class ExpectedLimitTests(unittest.TestCase):
+    def test_interpolated_limit_grids_and_explicit_override(self):
+        grid = json.loads(Path(fs.__file__).with_name('mass_scan_grid.json').read_text())
+        def masses(*args):
+            opt = fs.make_parser().parse_args(list(args))
+            return fs.configuration(opt).masses
+        scan = ['--interpolate-signal', '--limits']
+        blind = masses(*scan)
+        self.assertEqual(len(blind), 57)
+        self.assertEqual(blind, sorted(set(blind)))
+        self.assertEqual(blind[:2], [12, 12.417])
+        self.assertTrue(set(grid['generation']['include_simulated_masses']) <= set(blind))
+        self.assertEqual(masses(*scan, '--mode', 'unblind'), grid['masses'])
+        self.assertEqual(masses(*scan, '--masses', '20,50'), [20, 50])
+        self.assertEqual(masses(), [12, 30, 70])
+
     def test_optional_limit_and_table_dependencies_exclude_impacts_and_toys(self):
         opt=fs.make_parser().parse_args(['--stage','fit','--masses','12,30,70','--expected-limits'])
         jobs=condor.make_jobs(opt,{})

@@ -48,7 +48,8 @@ def make_parser():
                    help='blind: nominal-background Asimov; unblind: actual OS counts in all fit bins.')
     p.add_argument('--interpolate-signal', action='store_true',
                    help='Use limit_workflow counting-yield interpolation for bracketed masses, with corresponding sideband counts; no extrapolation')
-    p.add_argument('--masses', type=base.parse_float_list, default=[12., 30., 70.])
+    p.add_argument('--masses', type=base.parse_float_list,
+                   help='Explicit hypotheses. Interpolated limit scans default to the mode-specific resolution grid; other runs default to 12,30,70.')
     p.add_argument('--target', type=shared.single_target, default='Run2Run3')
     p.add_argument('--stage', choices=('cards', 'fit', 'all', 'status', 'resume', 'recover', 'set-domain', 'set-memory', 'collect'), default='all')
     p.add_argument('--backend', choices=('local', 'condor'), default='condor',
@@ -125,7 +126,32 @@ def make_parser():
     return p
 
 
+def limit_scan_masses(mode):
+    grid = json.loads(Path(__file__).with_name('mass_scan_grid.json').read_text())
+    if mode == 'unblind':
+        return grid['masses']
+    reference = grid['reference']
+    generation = grid['generation']
+    masses = set(generation['include_simulated_masses'])
+    # Integer ticks implement the frozen grid's downward rounding in GeV.
+    tick = generation['round_down_GeV']
+    current = round(generation['mass_min'] / tick)
+    stop = round(generation['mass_max'] / tick)
+    while current < stop:
+        mass = current * tick
+        masses.add(round(mass, 3))
+        sigma = mass * (reference['a'] * mass + reference['b'])
+        current += max(1, math.floor(2.5 * sigma / tick))
+    masses.add(generation['mass_max'])
+    return sorted(masses)
+
+
 def configuration(opt):
+    if opt.masses is None:
+        if opt.interpolate_signal and opt.expected_limits:
+            opt.masses = limit_scan_masses(opt.mode)
+        else:
+            opt.masses = [12., 30., 70.]
     if getattr(opt,'mode','blind') == 'unblind' and (opt.inject_r != 0 or getattr(opt,'fast_mode',False)):
         raise ValueError('Unblind mode uses actual observations; inject-r must be 0 and fast-mode is not supported.')
     if not selected_fits(opt) and not opt.expected_limits:
