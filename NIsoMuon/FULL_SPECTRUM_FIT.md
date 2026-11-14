@@ -1329,3 +1329,14 @@ The representative-impact entry point remains a blinded Asimov validation:
 `--impact-injections 0` requests only background-only expected impacts (one
 per mass, as in the AN main-text figures). These options do not define
 observed-data impacts; the inference entry point rejects observed input fits.
+
+Impact preparation does not require saved MINOS/profile errors in the input
+FitDiagnostics summary. If the positive profile error is absent, it uses the
+positive `r_covariance_error` from a fit that passed the existing covariance
+quality/audit checks as an initial POI-range seed. This is recorded as
+`planning_reference_error` and `planning_reference_method`; it is not a
+replacement profile interval or a new sensitivity measurement. The raw bounded
+`r_error` is not used. Each impact initial job still measures and validates its
+own profile crossings before nuisance jobs are released. Existing prepared
+fits need not be repeated. `--impact-injections 0` creates only the r=0 dataset;
+the r=1 dataset is included only when explicitly requested.

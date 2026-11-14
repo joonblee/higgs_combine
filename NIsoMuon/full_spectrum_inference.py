@@ -115,27 +115,35 @@ def input_case(path):
                     and audit.get('validated') is True)
         if fit['status'] != 0 or not (fit['covQual'] == 3 or external):
             raise ValueError('Failed Asimov fit quality: '+str(path))
-    # The raw bounded RooRealVar error is deliberately never used as sensitivity.
-    reference = summary['fits']['fit_s'].get('r_profile_error_high')
-    if reference is None:
+    # This scale only seeds the signed initial POI range and recovery tolerance.
+    # Every impact context still obtains/validates its own profile crossings.
+    # An audited HESSE covariance is not relabelled as a profile interval.
+    info = summary['fits']['fit_s']
+    reference = info.get('r_profile_error_high')
+    method = 'positive_profile_error'
+    if not isinstance(reference,(int,float)) or not math.isfinite(reference) or reference <= 0:
+        reference = info.get('r_covariance_error')
+        method = 'audited_covariance_error_range_seed'
+    if not isinstance(reference,(int,float)) or not math.isfinite(reference) or reference <= 0:
         import ROOT
         source = ROOT.TFile.Open(str(path.parent/'fit_s/fitDiagnostics.FullSpectrum.root'))
         try:
             fit = source.Get('fit_s') if source and not source.IsZombie() else None
             parameter = fit.floatParsFinal().find('r') if fit else None
             reference = float(parameter.getAsymErrorHi()) if parameter and parameter.hasAsymError() else None
+            method = 'saved_positive_profile_error'
         finally:
             if source:
                 source.Close()
     if reference is None or not math.isfinite(reference) or reference <= 0:
-        raise ValueError('Missing positive profile error in completed Asimov fit.')
+        raise ValueError('Missing positive profile/covariance range seed: '+str(path))
     safe = min(row['asimov']/row['rates']['sig'] for row in model['rows'] if row['rates']['sig'] > 0)
     unit = base.alpha_unit_from_card(card)
     if (not math.isfinite(safe) or safe <= 0
             or not math.isclose(unit, model['alpha_internal_unit'], rel_tol=1e-12)
             or not math.isclose(unit, summary['alpha_internal_unit'], rel_tol=1e-12)):
         raise ValueError('Invalid nominal Poisson means or signal unit.')
-    return model, card, workspace, reference, -.9*safe
+    return model, card, workspace, reference, -.9*safe, method
 
 
 def initial_job(payload, args, job, directory):
@@ -152,7 +160,7 @@ def initial_job(payload, args, job, directory):
         poi = {'POIs': [{'name': 'r', 'fit': base.read_impact_initial_poi(initial)}]}
         centre = poi['POIs'][0]['fit'][1]
         if not math.isfinite(centre) or not math.isclose(centre, args.impact_expect_signal,
-                rel_tol=1e-3, abs_tol=1e-3*job['reference_positive_profile_error']):
+                rel_tol=1e-3, abs_tol=1e-3*job.get('planning_reference_error',job.get('reference_positive_profile_error'))):
             raise ValueError('Impact Asimov best fit does not recover the requested injection.')
         boundary, _ = base.impact_fit_reaches_lower_boundary(poi, rmin)
         if boundary:
@@ -297,8 +305,9 @@ def submit(opt):
         shutil.copy2(Path(__file__).parent/name, destination)
         source_hashes[str(destination.relative_to(batch))] = digest(destination)
     jobs, limits = [], {}
-    for model, source_card, source_workspace, reference, safe in cases:
+    for model, source_card, source_workspace, reference, safe, reference_method in cases:
         target, mass = model['target'], model['mass']
+        print(f'[RANGE SEED] {target} M{mass:g}: {reference:g} ({reference_method})',flush=True)
         label = base.mass_label(mass)
         directory = batch/'input'/target/f'M{label}'
         directory.mkdir(parents=True)
@@ -310,7 +319,8 @@ def submit(opt):
         shutil.copy2(source_card.parent/'fit_summary.json', directory/'fit_summary.json')
         common = dict(target=target, mass=mass, card=str(card), card_sha256=digest(card),
             workspace=str(workspace), workspace_sha256=digest(workspace),
-            original_workspace=str(source_workspace.resolve()), reference_positive_profile_error=reference,
+            original_workspace=str(source_workspace.resolve()), planning_reference_error=reference,
+            planning_reference_method=reference_method,
             original_card_sha256=model['card_sha256'], alpha_internal_unit=model['alpha_internal_unit'])
         def add(kind, dependencies=(), **extra):
             index = len(jobs)

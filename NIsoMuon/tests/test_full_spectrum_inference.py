@@ -17,6 +17,47 @@ from test_condor_impacts import IMPACT_TOOL, PLOT_IMPACTS
 
 
 class InferenceTests(unittest.TestCase):
+    def test_audited_covariance_seeds_range_when_profile_errors_are_missing(self):
+        for path in self.results.glob('*/fit_r0/fit_summary.json'):
+            record=json.loads(path.read_text())
+            for fit in record['fits'].values():
+                fit.update(covQual=-1,covariance_audit=dict(method='robustHesse',validated=True))
+            record['fits']['fit_s'].update(r_profile_error_high=None,r_covariance_error=.75,r_error=999.)
+            path.write_text(json.dumps(record))
+        payload=self.prepare('impacts')
+        initial=[j for j in payload['jobs'] if j['kind']=='impact_initial']
+        self.assertEqual(len(initial),6)
+        for job in initial:
+            self.assertEqual(job['planning_reference_error'],.75)
+            self.assertEqual(job['planning_reference_method'],'audited_covariance_error_range_seed')
+            self.assertNotIn('reference_positive_profile_error',job)
+            self.assertEqual(job['r_min'],-3.75)
+        # The initial fit must still supply the measured profile interval.
+        for job in payload['jobs']:inf.worker(self.batch,job['index'])
+        inf.report(self.batch)
+
+    def test_profile_error_is_preferred_and_unvalidated_covariance_still_rejected(self):
+        path=self.results/'M12/fit_r0/fit_summary.json'
+        record=json.loads(path.read_text())
+        record['fits']['fit_s']['r_covariance_error']=123.
+        path.write_text(json.dumps(record))
+        case=inf.input_case(path)
+        self.assertEqual(case[3],1.)
+        self.assertEqual(case[-1],'positive_profile_error')
+        record['fits']['fit_s'].update(r_profile_error_high=None,covQual=2)
+        path.write_text(json.dumps(record))
+        with self.assertRaisesRegex(ValueError,'fit quality'):inf.input_case(path)
+
+    def test_zero_injection_requests_only_one_dataset_per_mass(self):
+        inf.main(['--results',str(self.results),'--batch',str(self.batch),'--dry-run',
+            '--task','impacts','--impact-injections','0',
+            '--condor-cmssw-base',str(self.root/'CMSSW'),'--condor-scram-arch','el9_amd64_gcc12'])
+        payload=inf.read_manifest(self.batch)
+        initial=[j for j in payload['jobs'] if j['kind']=='impact_initial']
+        final=[j for j in payload['jobs'] if j['kind']=='impact_final']
+        self.assertEqual(len(initial),3);self.assertEqual(len(final),3)
+        self.assertEqual({j['injected_r'] for j in initial+final},{0.})
+
     def test_worker_checks_own_dependency_inputs_not_other_masses(self):
         payload = self.prepare()
         job = next(j for j in payload['jobs'] if j['kind']=='impact_initial' and j['mass']==12.)
