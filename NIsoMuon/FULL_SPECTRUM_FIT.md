@@ -1340,3 +1340,45 @@ replacement profile interval or a new sensitivity measurement. The raw bounded
 own profile crossings before nuisance jobs are released. Existing prepared
 fits need not be repeated. `--impact-injections 0` creates only the r=0 dataset;
 the r=1 dataset is included only when explicitly requested.
+
+## Saved-toy numerical retry after a failed strict comparison
+
+Keep the original ensemble and its seven failed fits separate from the old
+strict comparison; do not replace it by an ensemble conditioned on the strict
+refit's many new failures. First collect the old comparison with the current
+script: its `toy_refit_summary.json` now includes `refit_status_counts` and
+`failed_refit_entries` (original chunk, entry, seed and both fit statuses).
+The old ROOT results, toy datasets and fit acceptance remain unchanged.
+
+Fresh refit batches expose `--fit-strategy`, `--fit-tolerance` (default 0.1)
+and optional `--fit-max-calls`. The default comparison strategy remains 2,
+with strategy 1 as a fallback at the same tolerance. Old manifests without
+these options retain their historical strategy-2, tolerance-1e-4 settings.
+Only status-zero finite fits are accepted in either case.
+
+```bash
+python3 full_spectrum_toy_refits.py --stage collect \
+  --batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_toy100_refit
+python3 full_spectrum_toy_refits.py --stage refit \
+  --source-batch full_spectrum_outputs/condor/M12_M30_M70_countingSignal_toy100 \
+  --batch full_spectrum_outputs/condor/M12_M30_M70_toy100_failed_standardTol \
+  --selection failed --fit-strategy 2 --fit-tolerance 0.1 --backend condor
+```
+
+This selects chunks containing the ORIGINAL failures, not the hundreds of
+strict-refit regressions. It uses the same saved datasets, workspace, signal
+injections, seeds and POI bounds. Successful control entries in each selected
+chunk are also refitted, and all selected refit entries replace those chunks
+in the comparison summary, including any regressions. After completion:
+
+```bash
+python3 full_spectrum_toy_refits.py --stage collect \
+  --batch full_spectrum_outputs/condor/M12_M30_M70_toy100_failed_standardTol
+```
+
+Check pending chunks, recovered failures, new failures, full-ensemble remaining
+failures and boundary hits before interpreting bias. Zero failures alone is
+not a bias-validation result: the nine ensemble means and paired numerical
+changes must still be assessed. A larger failure count in the strict retry
+does not establish its cause; its status distribution and individual logs
+remain necessary for diagnosis.

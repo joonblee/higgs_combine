@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Audit/re-fit saved conditional toys without regenerating or changing datasets.
 
-The default comparison refits every original chunk with strategy 2 and tighter
-minimisation. A failed-only selection refits chunks containing failures (and
+Fresh comparisons use strategy 2 with the standard minimiser tolerance 0.1.
+A failed-only selection refits chunks containing failures (and
 therefore also the successful control toys inside those chunks). Originals and
 comparison fits remain separate. This checks numerical stability, not coverage.
 """
 import argparse
+from collections import Counter
 import json
 import math
 from pathlib import Path
@@ -99,12 +100,16 @@ def extract_toys(source, task, destination):
             shutil.copyfileobj(src, dst)
 
 
-def fit_command(task, workspace, dataset):
+def fit_command(task, workspace, dataset, options=None):
+    # Preserve numerical settings for old immutable manifests and callers.
+    options = options or dict(strategy=2,tolerance=.0001,max_calls=5000000)
     _, command = toys.commands(task, workspace, workspace, dataset)
-    command[command.index('--cminDefaultMinimizerStrategy')+1] = '2'
-    command += ['--cminDefaultMinimizerTolerance', '0.0001',
-        '--cminFallbackAlgo', 'Minuit2,Migrad,1:0.0001',
-        '--X-rtd', 'MINIMIZER_MaxCalls=5000000']
+    strategy,tolerance=options['strategy'],options['tolerance']
+    command[command.index('--cminDefaultMinimizerStrategy')+1] = str(strategy)
+    command += ['--cminDefaultMinimizerTolerance',str(tolerance),
+        '--cminFallbackAlgo',f'Minuit2,Migrad,{1 if strategy!=1 else 2}:{tolerance}']
+    if options.get('max_calls') is not None:
+        command += ['--X-rtd','MINIMIZER_MaxCalls='+str(options['max_calls'])]
     return command
 
 
@@ -145,11 +150,13 @@ def worker(path, index, destination):
     destination.mkdir(parents=True, exist_ok=True)
     if any(destination.iterdir()):
         raise ValueError('Comparison output is not empty; choose a new batch.')
-    command = fit_command(task['original_task'], locate(task['workspace']), locate(task['dataset']))
+    command = fit_command(task['original_task'], locate(task['workspace']), locate(task['dataset']),
+                          payload.get('fit_options'))
     (destination/'command.json').write_text(json.dumps(command, indent=2)+'\n')
     base.run_command(command, destination, stdout_path=destination/'fit.log')
     entries = read_fits(destination/'fitDiagnostics.Bias.root', task['original_task']['count'])
-    result = dict(task=task, entries=entries, comparison='same saved datasets, strategy 2, tolerance 1e-4')
+    result = dict(task=task, entries=entries, command=command,
+                  comparison='same saved datasets; numerical settings recorded in command.json')
     (destination/'result.json').write_text(json.dumps(result, indent=2, allow_nan=False)+'\n')
 
 
@@ -159,6 +166,9 @@ def prepare(opt):
 
 
 def _prepare(opt):
+    if (not math.isfinite(opt.fit_tolerance) or opt.fit_tolerance <= 0
+            or (opt.fit_max_calls is not None and opt.fit_max_calls < 1)):
+        raise ValueError('Use positive fit tolerance and max-calls.')
     source = Path(opt.source_batch).resolve()
     parent, rows, failures = original(source)
     selected = {f['chunk'] for f in failures}
@@ -193,6 +203,7 @@ def _prepare(opt):
         (batch/'jobs'/f'job_{current["index"]:05d}').mkdir()
     payload = dict(schema='NPS26009_saved_toy_refits_v1', blind=True, source_batch=str(source),
         original_manifest_sha256=parent['manifest_sha256'], original_rows=rows, selection=opt.selection,
+        fit_options=dict(strategy=opt.fit_strategy,tolerance=opt.fit_tolerance,max_calls=opt.fit_max_calls),
         tasks=tasks, source_hashes=source_hashes)
     payload['manifest_sha256'] = toys.manifest_digest(payload)
     (batch/'manifest.json').write_text(json.dumps(payload, indent=2, allow_nan=False)+'\n')
@@ -231,6 +242,7 @@ def collect(batch):
     payload = load(batch)
     merged = {r['task']['index']: r for r in payload['original_rows']}
     pending, pairs, recovered, regressions = [], [], 0, 0
+    statuses,failed_entries=Counter(),[]
     for task in payload['tasks']:
         item = record(batch/'jobs'/f'job_{task["index"]:05d}')
         if item is None:
@@ -241,6 +253,12 @@ def collect(batch):
         old = task['original_task']
         merged[old['index']] = dict(task=old, entries=item['entries'])
         for i, (before, after) in enumerate(zip(task['original_entries'], item['entries']), 1):
+            statuses[str(after.get('status','missing'))]+=1
+            if not valid(after):
+                failed_entries.append(dict(mass=old['mass'],injected_r=old['injected_r'],
+                    original_chunk=old['index'],refit_chunk=task['index'],entry=i,seed=old['seed'],
+                    original_status=before.get('status'),refit_status=after.get('status'),
+                    newly_failed=valid(before),r=after.get('r')))
             recovered += not valid(before) and valid(after)
             regressions += valid(before) and not valid(after)
             if valid(before) and valid(after):
@@ -257,6 +275,8 @@ def collect(batch):
     output = batch/'toy_refit_summary.json'
     result = dict(blind=True, selection=payload['selection'], pending_chunks=pending,
         recovered_failed_fits=recovered, newly_failed_fits=regressions,
+        refit_status_counts=dict(statuses),failed_refit_entries=failed_entries,
+        fit_options=payload.get('fit_options',dict(strategy=2,tolerance=.0001,max_calls=5000000)),
         original_ensembles=ensembles(payload['original_rows']),
         refitted_ensembles=ensembles(list(merged.values())) if not pending else None,
         paired_changes=changes, paired_entries=pairs,
@@ -265,6 +285,7 @@ def collect(batch):
              'Failed-only chunk controls are selected by failure occurrence. Not a coverage/pull test.')
     output.write_text(json.dumps(result, indent=2, allow_nan=False)+'\n')
     print('[REFITS] pending=', len(pending), 'recovered=', recovered, 'newly_failed=', regressions)
+    print('[FIT STATUS]',json.dumps(dict(statuses),sort_keys=True))
     print('[SAVED]', output)
 
 
@@ -274,6 +295,9 @@ def main(argv=None):
     parser.add_argument('--source-batch')
     parser.add_argument('--batch')
     parser.add_argument('--selection', choices=('failed', 'all'), default='all')
+    parser.add_argument('--fit-strategy',type=int,choices=(0,1,2),default=2)
+    parser.add_argument('--fit-tolerance',type=float,default=.1)
+    parser.add_argument('--fit-max-calls',type=int)
     parser.add_argument('--backend', choices=('condor', 'local'), default='condor')
     parser.add_argument('--condor-memory', type=int, default=16000)
     parser.add_argument('--condor-cmssw-base')
@@ -291,8 +315,8 @@ def main(argv=None):
     else:
         if not opt.source_batch:
             raise ValueError('--source-batch is required.')
-        _, rows, failures = original(opt.source_batch)
         if opt.stage == 'audit':
+            _, rows, failures = original(opt.source_batch)
             print(json.dumps(dict(failed_fits=failures, ensembles=ensembles(rows)), indent=2, allow_nan=False))
         else:
             if not opt.batch:

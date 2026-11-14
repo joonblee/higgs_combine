@@ -15,6 +15,32 @@ import full_spectrum_toy_refits as refit
 
 
 class SavedToyRefits(unittest.TestCase):
+    def test_fresh_retry_uses_standard_tolerance_with_recorded_options(self):
+        payload=self.prepare('failed')
+        options=payload['fit_options']
+        self.assertEqual(options,dict(strategy=2,tolerance=.1,max_calls=None))
+        task=payload['tasks'][0]
+        command=refit.fit_command(task['original_task'],self.batch/task['workspace'],
+                                  self.batch/task['dataset'],options)
+        self.assertEqual(command[command.index('--cminDefaultMinimizerTolerance')+1],'0.1')
+        self.assertEqual(command[command.index('--cminFallbackAlgo')+1],'Minuit2,Migrad,1:0.1')
+        self.assertNotIn('--X-rtd',command)
+        self.assertEqual(task['original_task']['seed'],123)
+        self.assertEqual((self.batch/task['dataset']).read_text(),'saved dataset 0')
+
+    def test_legacy_manifest_without_options_preserves_old_retry_numerics(self):
+        payload=self.prepare('failed')
+        del payload['fit_options']
+        payload['manifest_sha256']=refit.toys.manifest_digest(payload)
+        (self.batch/'manifest.json').write_text(json.dumps(payload))
+        commands=[]
+        def run(command,cwd,**kwargs):
+            commands.append(command);(cwd/'fitDiagnostics.Bias.root').write_text('fit')
+        with patch.object(refit.base,'run_command',side_effect=run), \
+             patch.object(refit,'read_fits',return_value=[dict(r=0.,status=0)]*3):
+            refit.worker(self.batch/'manifest.json',0,self.batch/'jobs/job_00000/result')
+        self.assertEqual(commands[0][commands[0].index('--cminDefaultMinimizerTolerance')+1],'0.0001')
+
     def test_workspace_hash_is_shared_across_saved_toy_chunks(self):
         original=Path.open;reads=[]
         def opened(path,*args,**kwargs):
@@ -109,6 +135,12 @@ class SavedToyRefits(unittest.TestCase):
         self.assertEqual(summary['newly_failed_fits'],1)
         self.assertEqual(summary['pending_chunks'],[])
         self.assertEqual(summary['refitted_ensembles'][0]['failed'],1)
+        self.assertEqual(summary['refit_status_counts'],{'0':5,'4':1})
+        self.assertEqual(len(summary['failed_refit_entries']),1)
+        failure=summary['failed_refit_entries'][0]
+        self.assertTrue(failure['newly_failed'])
+        self.assertEqual((failure['original_chunk'],failure['entry'],failure['seed']),(1,1,124))
+        self.assertEqual(commands[0][commands[0].index('--cminDefaultMinimizerTolerance')+1],'0.1')
         self.assertEqual(len(summary['paired_entries']),4)
         self.assertTrue(all(c[c.index('-M')+1]=='FitDiagnostics' for c in commands))
         self.assertEqual(before,(self.source/'jobs/job_00000/result.tar.gz').read_bytes())
