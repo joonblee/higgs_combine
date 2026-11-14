@@ -280,6 +280,7 @@ def _write_dag(batch, payload, resume=False):
 
 def submit(opt):
     if (not math.isfinite(opt.r_max) or opt.r_max <= 0 or opt.condor_memory <= 0
+            or opt.impact_memory < 1 or opt.plot_memory < 1
             or opt.impact_repair_cpus < 1 or opt.max_jobs < 0 or not opt.impact_injections
             or any(not math.isfinite(x) or x < 0 or x >= opt.r_max for x in opt.impact_injections)):
         raise ValueError('Invalid POI range, injection, memory or concurrency.')
@@ -367,12 +368,12 @@ def submit(opt):
         'exec python3 -u '+shlex.quote(str(batch/'source/full_spectrum_inference.py'))+
         ' --batch '+shlex.quote(str(batch))+' --worker "$1"', '']))
     wrapper.chmod(0o755)
-    memory = str(opt.condor_memory)+'MB' if opt.impact_repair_cpus == 1 else f'{opt.condor_memory} * $(nodecpus)'
+    memory = memory_policy.submit_memory(payload, opt.condor_memory, impact=opt.impact_memory, plot=opt.plot_memory)
     (batch/'submit.jds').write_text('\n'.join(['universe = vanilla', f'executable = {wrapper}',
         f'initialdir = {batch}', 'arguments = $(jobindex)', 'should_transfer_files = NO',
         'getenv = True', 'request_cpus = $(nodecpus)', f'request_memory = {memory}',
         'output = jobs/job_$(jobindex).out', 'error = jobs/job_$(jobindex).err',
-        'log = condor.log', *memory_policy.retry_lines(str(max(opt.condor_memory * opt.impact_repair_cpus,8192))), 'queue 1', '']))
+        'log = condor.log', *memory_policy.retry_lines(str(max(opt.condor_memory * opt.impact_repair_cpus, opt.impact_memory, opt.plot_memory, 8192))), 'queue 1', '']))
     dag = write_dag(batch, payload)
     command = ['condor_submit_dag']+(['-maxjobs', str(opt.max_jobs)] if opt.max_jobs else [])+[dag]
     print('[PLAN]', dict(Counter(j['kind'] for j in jobs)))
@@ -411,18 +412,6 @@ def report(batch):
     return payload
 
 
-def index_condition(indices, variable):
-    indices = sorted(set(indices))
-    ranges = []
-    for index in indices:
-        if ranges and index == ranges[-1][1]+1:
-            ranges[-1][1] = index
-        else:
-            ranges.append([index,index])
-    return ' || '.join(f'{variable} == {a}' if a == b else
-                      f'({variable} >= {a} && {variable} <= {b})' for a,b in ranges) or 'false'
-
-
 def set_memory(opt):
     """Re-size only nuisance fits and plots; do not change active fits or inputs."""
     if opt.dag_id is None or min(opt.impact_memory, opt.plot_memory, opt.condor_memory) < 1:
@@ -431,18 +420,16 @@ def set_memory(opt):
     payload = read_manifest(batch)
     nuisance = [j['index'] for j in payload['jobs'] if j['kind']=='impact_nuisance']
     plots = [j['index'] for j in payload['jobs'] if j['kind']=='limit_plot']
-    expression = (f'ifThenElse(({index_condition(nuisance,"$(jobindex)")}), {opt.impact_memory}, '
-        f'ifThenElse(({index_condition(plots,"$(jobindex)")}), {opt.plot_memory}, {opt.condor_memory}))')
-    if payload['config'].get('impact_repair_cpus', 1) > 1:
-        expression = f'({expression}) * $(nodecpus)'
+    expression = memory_policy.submit_memory(payload, opt.condor_memory, impact=opt.impact_memory, plot=opt.plot_memory)
     submit = batch/'submit.jds'
     text, count = re.subn(r'^request_memory\s*=.*$', 'request_memory = '+expression,
                          submit.read_text(), flags=re.MULTILINE)
     if count != 1:
         raise ValueError('Expected exactly one request_memory in submit.jds.')
+    never_started = 'JobStatus == 1 && (NumJobStarts =?= undefined || NumJobStarts == 0)'
     ads = json.loads(subprocess.check_output(['condor_q','-constraint',
-        f'DAGManJobId == {opt.dag_id} && JobStatus == 1',
-        '-attributes','ClusterId,ProcId,DAGNodeName,Iwd','-json'], text=True))
+        f'DAGManJobId == {opt.dag_id} && {never_started}',
+        '-attributes','ClusterId,ProcId,DAGNodeName,Iwd,RequestMemory','-json'], text=True))
     selected = {**{i:opt.impact_memory for i in nuisance}, **{i:opt.plot_memory for i in plots}}
     ids = []
     for ad in ads:
@@ -451,7 +438,9 @@ def set_memory(opt):
             continue
         if ad.get('Iwd') and Path(ad['Iwd']).resolve() != batch:
             raise ValueError('DAG ID does not match the requested batch directory.')
-        ids.append((int(ad['ClusterId']),int(ad['ProcId']),selected[int(match.group(1))]))
+        memory = selected[int(match.group(1))]
+        if ad.get('RequestMemory') != memory:
+            ids.append((int(ad['ClusterId']),int(ad['ProcId']),memory))
     edits = []
     for memory in sorted({opt.impact_memory,opt.plot_memory}):
         subset = [(c,p) for c,p,m in ids if m==memory]
@@ -460,7 +449,7 @@ def set_memory(opt):
         # Bound command size even for a newly submitted large impact DAG.
         for start in range(0,len(subset),500):
             condition = ' || '.join(f'(ClusterId == {c} && ProcId == {p})' for c,p in subset[start:start+500])
-            edits.append(['condor_qedit','-constraint',f'JobStatus == 1 && ({condition})',
+            edits.append(['condor_qedit','-constraint',f'{never_started} && ({condition})',
                           'RequestMemory',str(memory)])
     if opt.dry_run:
         print('[MEMORY] would update',len(ids),'idle jobs and future submit requests.')
@@ -491,8 +480,8 @@ def main(argv=None):
     parser.add_argument('--impact-injections', type=base.parse_float_list, default=[0., 1.])
     parser.add_argument('--r-max', type=float, default=100.)
     parser.add_argument('--condor-memory', type=int, default=1024)
-    parser.add_argument('--impact-memory', type=int, default=1024)
-    parser.add_argument('--plot-memory', type=int, default=1024)
+    parser.add_argument('--impact-memory', type=int, help='MB per nuisance fit (default: at least 2048 MB).')
+    parser.add_argument('--plot-memory', type=int, help='MB per limit plot (default: --condor-memory).')
     parser.add_argument('--dag-id', type=int)
     parser.add_argument('--max-jobs', type=int, default=0, help='DAG concurrency cap; 0 means pool scheduling only')
     parser.add_argument('--condor-cmssw-base')
@@ -500,6 +489,10 @@ def main(argv=None):
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--worker', type=int, help=argparse.SUPPRESS)
     opt = parser.parse_args(argv)
+    if opt.impact_memory is None:
+        opt.impact_memory = max(opt.condor_memory, memory_policy.IMPACT_NUISANCE_MEMORY)
+    if opt.plot_memory is None:
+        opt.plot_memory = opt.condor_memory
     if opt.worker is not None:
         worker(opt.batch, opt.worker)
     elif opt.stage == 'set-memory':

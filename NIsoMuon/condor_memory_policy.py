@@ -48,6 +48,40 @@ def recovery_commands(ad, ceiling=8192):
     ]
 
 
+IMPACT_NUISANCE_MEMORY = 2048
+
+
+def index_condition(indices, variable):
+    indices = sorted(set(indices))
+    ranges = []
+    for index in indices:
+        if ranges and index == ranges[-1][1]+1:
+            ranges[-1][1] = index
+        else:
+            ranges.append([index,index])
+    return ' || '.join(f'{variable} == {a}' if a == b else
+                      f'({variable} >= {a} && {variable} <= {b})' for a,b in ranges) or 'false'
+
+
+def submit_memory(payload, default, *, impact=None, plot=None):
+    """Build compact job-index ranges, including for already submitted DAGs."""
+    by_memory = defaultdict(list)
+    values = {'workspace': max(default, 2048),
+              'impact_nuisance': max(default, IMPACT_NUISANCE_MEMORY) if impact is None else impact,
+              'limit_plot': default if plot is None else plot}
+    for job in payload.get('jobs', []):
+        memory = values.get(job.get('kind'), default)
+        if memory != default:
+            by_memory[memory].append(job['index'])
+    expression = str(default)
+    for memory, indices in sorted(by_memory.items()):
+        condition = index_condition(indices, '$(jobindex)')
+        expression = f'ifThenElse(({condition}), {memory}, {expression})'
+    if payload.get('config', {}).get('impact_repair_cpus', 1) > 1:
+        expression = f'({expression}) * $(nodecpus)'
+    return expression
+
+
 def initial_memory(ad, payload, default=1024):
     node = re.fullmatch(r'J(\d+)', str(ad.get('DAGNodeName', '')))
     if node and 'jobs' in payload:
@@ -56,6 +90,8 @@ def initial_memory(ad, payload, default=1024):
             raise ValueError('Unknown DAG node: '+node.group(0))
         if payload['jobs'][index]['kind'] == 'impact_final':
             return default * payload.get('config', {}).get('impact_repair_cpus', 1)
+        if payload['jobs'][index]['kind'] == 'impact_nuisance':
+            return max(default, IMPACT_NUISANCE_MEMORY)
         if payload['jobs'][index]['kind'] == 'workspace':
             return max(default, 2048)
     return default
@@ -67,12 +103,7 @@ def patch_submit(batch, payload, default):
     if not path.is_file():
         raise ValueError('Missing submit.jds: '+str(batch))
     original = path.read_text()
-    indices = [str(j['index']) for j in payload.get('jobs', []) if j['kind']=='workspace']
-    condition = ' || '.join('$(jobindex) == '+i for i in indices)
-    expression = (f'ifThenElse(({condition}), {max(default,2048)}, {default})'
-                  if condition else str(default))
-    if payload.get('config', {}).get('impact_repair_cpus', 1) > 1:
-        expression = f'({expression}) * $(nodecpus)'
+    expression = submit_memory(payload, default)
     updated, count = re.subn(r'^request_memory\s*=.*$', 'request_memory = '+expression,
                             original, flags=re.MULTILINE)
     if count != 1:
@@ -119,7 +150,7 @@ def main(argv=None):
             payload = manifests[batch]
             if opt.set_idle and batch not in patched:
                 if not opt.dry_run:patch_submit(batch,payload,opt.memory)
-                print('[MEMORY] Future requests:',batch,'workspace >=2048 MB, base',opt.memory,'MB per worker CPU')
+                print('[MEMORY] Future requests:',batch,'workspace and nuisance fits >=2048 MB, base',opt.memory,'MB per worker CPU')
                 patched.add(batch)
             commands = []
             if opt.set_idle and ad['JobStatus']==1 and ad.get('NumJobStarts',0)==0:

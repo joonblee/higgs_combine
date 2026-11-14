@@ -45,7 +45,8 @@ class MemoryPolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             batch=Path(temp)
             manifest=json.dumps(dict(jobs=[dict(index=0,kind='workspace'),
-                                          dict(index=1,kind='impact_nuisance')]))
+                                          dict(index=1,kind='impact_nuisance'),
+                                          dict(index=2,kind='prepare')]))
             (batch/'manifest.json').write_text(manifest)
             (batch/'submit.jds').write_text('request_memory = 16000MB\nqueue 1\n')
             rows=[dict(ClusterId=100+i,ProcId=0,Iwd=str(batch),DAGNodeName='J'+str(node),
@@ -53,7 +54,7 @@ class MemoryPolicyTests(unittest.TestCase):
                        HoldReasonCode=hold)
                   for i,(node,state,memory,starts,hold) in enumerate(
                       [(0,1,16000,0,0),(1,1,16000,0,0),(1,2,16000,1,0),
-                       (1,1,2048,1,0),(1,5,1024,1,34),(1,5,1024,1,12)])]
+                       (1,1,2048,1,0),(1,5,1024,1,34),(1,5,1024,1,12),(2,1,16000,0,0)])]
             def output(command,**kwargs):
                 return 'joonblee\n' if command[0]=='id' else json.dumps(rows)
             with patch.object(policy.subprocess,'check_output',side_effect=output), \
@@ -64,6 +65,8 @@ class MemoryPolicyTests(unittest.TestCase):
             combined=' '.join(' '.join(c) for c in commands)
             for untouched in (102,103,105):
                 self.assertNotIn('ClusterId == '+str(untouched),combined)
+            self.assertTrue(any('ClusterId == 101' in c[2] and c[-1]=='2048' for c in commands))
+            self.assertTrue(any('ClusterId == 106' in c[2] and c[-1]=='1024' for c in commands))
             self.assertIn('2048',(batch/'submit.jds').read_text())
             self.assertIn('1024',(batch/'submit.jds').read_text())
             self.assertEqual((batch/'manifest.json').read_text(),manifest)

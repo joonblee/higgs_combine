@@ -6,7 +6,7 @@ there is no new SKPlotMaker production command for this step.
 
 Execution defaults to **Condor**, with **no submission cap added by the
 workflow** (`--condor-maxjobs 0`). Jobs start at **1024 MB** (`--condor-memory 1024`), except workspace
-compilation, which retains **2048 MB**. Memory-limit failures can retry at
+compilation and full-spectrum inference nuisance scans, which start at **2048 MB**. Memory-limit failures can retry at
 **2048, 4096 and 8192 MB**; see the memory-recovery section below. The default preparation grouping is one
 spectrum bin per job (`--bins-per-job 1`). Use `--backend local` for foreground
 execution. Condor results are isolated under each batch's `results/` directory.
@@ -980,8 +980,7 @@ Inspect failed-node stdout/stderr under `jobs/`; failed/missing intervals are
 reported rather than substituted. Successful jobs are retained on resume, with
 dependency completion IDs rejecting stale children. Use `--dry-run` to prepare
 without submitting, `--task limits` or `--task impacts` to select one calculation,
-and optionally `--max-jobs 100` to cap simultaneous DAG nodes. Default memory
-is 1024 MB initially per job. Do not submit a resume DAG while the original DAG is active.
+and optionally `--max-jobs 100` to cap simultaneous DAG nodes. Full-spectrum inference nuisance scans start at 2048 MB, and other single-CPU inference jobs at 1024 MB. Do not submit a resume DAG while the original DAG is active.
 
 New impact batches use the Combine v10.6.0 nominal settings of strategy 1 for
 the global minimum and strategy 0 for robust crossing searches. To compare
@@ -1119,8 +1118,8 @@ edits. A subsequent DAG retry uses the updated submit expression automatically.
 Updating the checkout alone does not change existing queued jobs.
 
 For an active inference DAG, `full_spectrum_inference.py --stage set-memory
---batch <inference-batch> --dag-id <DAGMan-cluster>` sets idle nuisance fits to
-1024 MB and limit plotting to 1024 MB, and updates the submit expression for
+--batch <inference-batch> --dag-id <DAGMan-cluster>` sets never-started idle nuisance fits to
+2048 MB and limit plotting to 1024 MB, and updates the submit expression for
 future jobs. Initial impacts, final collection/repair fits and limits also
 start at 1024 MB on fresh submissions. `--impact-memory`, `--plot-memory` and `--condor-memory` override these
 values. Running jobs, manifests and source snapshots are unchanged. This is
@@ -1131,7 +1130,7 @@ OOM-recovery command below handles memory-limit holds separately.
 
 The small request is a starting allocation, not a claim that every fit fits in
 1 GiB. Fresh Condor submissions start at 1024 MB except for workspace compilation
-(2048 MB). HTCondor 25.2.1 or newer receives `retry_request_memory_max`, allowing
+and full-spectrum nuisance scans (2048 MB). HTCondor 25.2.1 or newer receives `retry_request_memory_max`, allowing
 OOM retries doubling up to 8192 MB. On older submitters this directive is omitted with a
 message; use the queue-only recovery helper instead. No history scan is needed.
 
@@ -1145,7 +1144,7 @@ python3 condor_memory_policy.py --dag-id 19501530 \
 
 Alternatively use `--batch <batch-directory>`, including non-DAG toy batches.
 Without `--watch`, this makes one queue pass. `--dry-run` previews edits.
-The helper keeps workspaces at least 2048 MB, leaves running/completed jobs and
+The helper keeps workspaces and impact nuisance scans at least 2048 MB, leaves running/completed jobs and
 previously started idle jobs alone, and does not edit manifests or source
 snapshots. It groups idle edits rather than launching a command per queued job.
 Only a vanilla job held with `HoldReasonCode == 34` and a request below 8192 MB
@@ -1430,7 +1429,7 @@ remain necessary for diagnosis.
 ### Incremental memory recovery update
 
 Current defaults supersede the earlier fixed 2 GiB retry policy: ordinary jobs
-start at 1024 MB and workspaces at 2048 MB. OOM-only retries double the request
+start at 1024 MB and workspaces and full-spectrum impact nuisance scans at 2048 MB. OOM-only retries double the request
 through 2048, 4096 and 8192 MB; the default ceiling is 8192 MB. The queue monitor
 accepts `--retry-memory` to change this ceiling. Running jobs remain unchanged.
 A workspace starts at 2048 MB because only some fine compilations exceeded that

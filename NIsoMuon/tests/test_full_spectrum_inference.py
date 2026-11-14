@@ -21,8 +21,19 @@ class InferenceTests(unittest.TestCase):
         with patch.object(inf.memory_policy,'native_retry_supported',return_value=True):
             self.prepare('impacts')
         submit=(self.batch/'submit.jds').read_text()
-        self.assertIn('request_memory = 1024MB',submit)
+        self.assertIn('request_memory = ifThenElse(',submit)
+        self.assertIn(', 2048, 1024)',submit)
         self.assertIn('retry_request_memory_max = 8192MB',submit)
+
+    def test_submit_honours_role_specific_overrides(self):
+        inf.main(['--results', str(self.results), '--batch', str(self.batch), '--dry-run',
+                  '--impact-memory', '3072', '--plot-memory', '512', '--condor-memory', '1536',
+                  '--condor-cmssw-base', str(self.root/'CMSSW'), '--condor-scram-arch', 'test'])
+        jobs = inf.read_manifest(self.batch)['jobs']
+        submit = (self.batch/'submit.jds').read_text()
+        plot = next(j['index'] for j in jobs if j['kind'] == 'limit_plot')
+        self.assertIn(f'ifThenElse(($(jobindex) == {plot}), 512, 1536)', submit)
+        self.assertIn(', 3072, ifThenElse(', submit)
 
     def test_only_final_workers_request_parallel_repair_resources(self):
         inf.main(['--results', str(self.results), '--batch', str(self.batch), '--dry-run',
@@ -37,9 +48,10 @@ class InferenceTests(unittest.TestCase):
                 self.assertIn(f'VARS J{index} jobindex="{index}" nodecpus="{cpus}"', lines)
                 self.assertEqual(inf.options(payload,job).impact_parallel,cpus)
                 ad = dict(DAGNodeName=f'J{index}')
-                self.assertEqual(inf.memory_policy.initial_memory(ad,payload),1024*cpus)
+                self.assertEqual(inf.memory_policy.initial_memory(ad,payload),
+                                 2048 if job['kind'] == 'impact_nuisance' else 1024*cpus)
         submit = self.batch/'submit.jds'
-        self.assertIn('request_memory = 1024 * $(nodecpus)', submit.read_text())
+        self.assertIn(', 2048, 1024)) * $(nodecpus)', submit.read_text())
         inf.memory_policy.patch_submit(self.batch,payload,2048)
         self.assertIn('request_memory = (2048) * $(nodecpus)', submit.read_text())
 
@@ -269,9 +281,11 @@ if a[a.index("-M")+1] == "MultiDimFit":
         with patch.object(inf.subprocess,'check_output',return_value=json.dumps(ads)), \
              patch.object(inf.base,'run_command') as run:
             inf.main(['--stage','set-memory','--batch',str(self.batch),'--dag-id','19457414'])
-        self.assertEqual(run.call_count,1)
+        self.assertEqual(run.call_count,2)
         calls=[c.args[0] for c in run.call_args_list]
-        self.assertEqual({c[-1] for c in calls},{'1024'})
+        self.assertEqual({c[-1] for c in calls},{'1024','2048'})
+        self.assertTrue(all('NumJobStarts == 0' in c[2] for c in calls))
+        self.assertIn('ClusterId == 100',next(c[2] for c in calls if c[-1]=='2048'))
         self.assertFalse(any('ClusterId == 101' in c[2] for c in calls))
         self.assertTrue(all('JobStatus == 1' in c[2] for c in calls))
         self.assertEqual(manifest,(self.batch/'manifest.json').read_bytes())
