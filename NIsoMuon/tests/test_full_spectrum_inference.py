@@ -17,6 +17,13 @@ from test_condor_impacts import IMPACT_TOOL, PLOT_IMPACTS
 
 
 class InferenceTests(unittest.TestCase):
+    def test_new_submit_has_small_request_and_bounded_native_retry(self):
+        with patch.object(inf.memory_policy,'native_retry_supported',return_value=True):
+            self.prepare('impacts')
+        submit=(self.batch/'submit.jds').read_text()
+        self.assertIn('request_memory = 1024MB',submit)
+        self.assertIn('retry_request_memory_max = 2048MB',submit)
+
     def test_audited_covariance_seeds_range_when_profile_errors_are_missing(self):
         for path in self.results.glob('*/fit_r0/fit_summary.json'):
             record=json.loads(path.read_text())
@@ -227,9 +234,9 @@ class InferenceTests(unittest.TestCase):
         with patch.object(inf.subprocess,'check_output',return_value=json.dumps(ads)), \
              patch.object(inf.base,'run_command') as run:
             inf.main(['--stage','set-memory','--batch',str(self.batch),'--dag-id','19457414'])
-        self.assertEqual(run.call_count,2)
+        self.assertEqual(run.call_count,1)
         calls=[c.args[0] for c in run.call_args_list]
-        self.assertEqual({c[-1] for c in calls},{'2048','4096'})
+        self.assertEqual({c[-1] for c in calls},{'1024'})
         self.assertFalse(any('ClusterId == 101' in c[2] for c in calls))
         self.assertTrue(all('JobStatus == 1' in c[2] for c in calls))
         self.assertEqual(manifest,(self.batch/'manifest.json').read_bytes())

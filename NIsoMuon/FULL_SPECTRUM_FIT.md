@@ -5,8 +5,9 @@ CMSSW/Combine environment. SKPlotMaker supplies the current ROOT estimates;
 there is no new SKPlotMaker production command for this step.
 
 Execution defaults to **Condor**, with **no submission cap added by the
-workflow** (`--condor-maxjobs 0`). Every job requests **16000 MB** by default
-(`--condor-memory 16000`). The default preparation grouping is one
+workflow** (`--condor-maxjobs 0`). Jobs start at **1024 MB** (`--condor-memory 1024`), except workspace
+compilation, which retains **4096 MB**. Memory-limit failures can retry at
+**2048 MB**; see the memory-recovery section below. The default preparation grouping is one
 spectrum bin per job (`--bins-per-job 1`). Use `--backend local` for foreground
 execution. Condor results are isolated under each batch's `results/` directory.
 
@@ -95,7 +96,7 @@ model signatures. `model.json` stores the snapped per-era edges, signal
 window and proposed sideband settings. Fine-binned saved cards cannot be
 used as coarse-window cards: submit fresh preparation. `--fast-mode` and
 nondefault `--bin-sigma` are rejected with this layout; its speed comes from
-the coarse sideband geometry. Memory defaults to 16000 MB and B-only/S+B jobs
+the coarse sideband geometry. Initial fit memory defaults to 1024 MB and B-only/S+B jobs
 remain parallel, with no workflow concurrency cap.
 
 These edges are a starting proposal, not a validated optimum. Compare nominal
@@ -373,7 +374,7 @@ the spectrum binning, number of CPUs per job or statistical model.
 `--condor-maxjobs 0` is the default: the workflow does not pass a `-maxjobs` cap
 to DAGMan. Available resources and cluster scheduling still determine how many
 jobs run. A positive value explicitly opts into a submission cap. Jobs request
-one CPU and `--condor-memory 16000` MB each.
+one CPU and `--condor-memory 1024` MB initially each.
 `--condor-retries 2` retries failed nodes twice before their dependants stop.
 Optional `--condor-requirements` is passed to the submit file.
 
@@ -980,7 +981,7 @@ reported rather than substituted. Successful jobs are retained on resume, with
 dependency completion IDs rejecting stale children. Use `--dry-run` to prepare
 without submitting, `--task limits` or `--task impacts` to select one calculation,
 and optionally `--max-jobs 100` to cap simultaneous DAG nodes. Default memory
-is 16000 MB per job. Do not submit a resume DAG while the original DAG is active.
+is 1024 MB initially per job. Do not submit a resume DAG while the original DAG is active.
 
 ### Diagnose the conditional-toy bias with the same saved datasets
 
@@ -1011,7 +1012,7 @@ python3 full_spectrum_toy_refits.py --stage collect \
 ```
 
 For the 900-toy, five-toys-per-chunk pilot this submits 180 independent Condor
-chunks. Default memory is 16000 MB per job. The wrapper transfers the saved
+chunks. Default memory is 1024 MB initially per job. The wrapper transfers the saved
 GenerateOnly datasets and fit workspaces; use the initialised Combine CMSSW
 environment. `--dry-run` prepares without submitting. `--selection failed` can
 instead select chunks containing failures; it also refits the successful toys
@@ -1079,9 +1080,9 @@ or existing default job graph. Use `--stage status --condor-dir <batch>` to
 check progress, and the existing resume mechanism for incomplete nodes.
 
 New full-spectrum DAG submissions request memory by stage: preparation,
-assembly, summary collection and CSV tables use 2048 MB. Workspace compilation
+assembly, summary collection and CSV tables start at 1024 MB. Workspace compilation
 uses 4096 MB; a fine-binning compilation exceeded a 2048 MB cgroup limit.
-Fits and expected limits retain 16000 MB (`--condor-memory`). Override the light
+Fits and limits start at 1024 MB (`--condor-memory`). Override the light
 stages with `--condor-light-memory`, or compilation independently with
 `--condor-workspace-memory`. Reservations are not measurements of actual use.
 
@@ -1092,8 +1093,7 @@ currently idle node ClassAds without resubmitting the DAG:
 python3 full_spectrum_fit.py --stage set-memory --condor-dir <existing-batch>
 ```
 
-This preserves the original batch's fit/limit memory value, uses current light
-and workspace memory options, and leaves running jobs unchanged. It edits only
+This applies the current fit/limit, light and workspace memory options, and leaves running jobs unchanged. It edits only
 `submit.jds` (backing up its original contents) and idle RequestMemory attributes;
 manifest, source snapshots, calculations and completed results are unchanged.
 The original source snapshot continues to execute. `--condor-dry-run` previews
@@ -1102,13 +1102,39 @@ Updating the checkout alone does not change existing queued jobs.
 
 For an active inference DAG, `full_spectrum_inference.py --stage set-memory
 --batch <inference-batch> --dag-id <DAGMan-cluster>` sets idle nuisance fits to
-4096 MB and limit plotting to 2048 MB, and updates the submit expression for
-future jobs. Initial impacts, final collection/repair fits and limits retain
-16000 MB. `--impact-memory`, `--plot-memory` and `--condor-memory` override these
+1024 MB and limit plotting to 1024 MB, and updates the submit expression for
+future jobs. Initial impacts, final collection/repair fits and limits also
+start at 1024 MB on fresh submissions. `--impact-memory`, `--plot-memory` and `--condor-memory` override these
 values. Running jobs, manifests and source snapshots are unchanged. This is
-an explicit administrative update; fresh inference submissions still use their
-existing uniform request until this command is invoked. A held job is excluded:
-raise its request explicitly and release only that job after checking HoldReason.
+an explicit administrative update. A held job is excluded; the bounded
+OOM-recovery command below handles memory-limit holds separately.
+
+### Memory-limit recovery (1024 to 2048 MB)
+
+The small request is a starting allocation, not a claim that every fit fits in
+1 GiB. Fresh Condor submissions start at 1024 MB except for workspace compilation
+(4096 MB). HTCondor 25.2.1 or newer receives `retry_request_memory_max`, allowing
+an OOM retry at 2048 MB. On older submitters this directive is omitted with a
+message; use the queue-only recovery helper instead. No history scan is needed.
+
+For an existing DAG, lower never-started idle jobs and future submissions, then
+monitor memory-limit holds in another terminal:
+
+```bash
+python3 condor_memory_policy.py --dag-id 19501530 \
+    --set-idle --retry-held --watch
+```
+
+Alternatively use `--batch <batch-directory>`, including non-DAG toy batches.
+Without `--watch`, this makes one queue pass. `--dry-run` previews edits.
+The helper keeps workspaces at least 4096 MB, leaves running/completed jobs and
+previously started idle jobs alone, and does not edit manifests or source
+snapshots. It groups idle edits rather than launching a command per queued job.
+Only a vanilla job held with `HoldReasonCode == 34` and a request below 2048 MB
+is raised to 2048 MB and released. A second OOM at 2048 MB remains held; other
+hold reasons and numerical fit failures are never automatically released.
+Stopping the monitor with Ctrl+C does not stop Condor jobs, but disables this
+helper's subsequent automatic recovery on older HTCondor versions.
 
 ### Independent numerical retry of a failed covariance
 

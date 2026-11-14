@@ -24,10 +24,11 @@ from uuid import uuid4
 
 import full_spectrum_fit as fs
 import limit_workflow as base
+import condor_memory_policy as memory_policy
 import limit_workflow_sideband_fit as shared
 
 SCHEMA = 'NPS26009_full_spectrum_condor_v1'
-SOURCES = ('full_spectrum_fit.py', 'full_spectrum_condor.py',
+SOURCES = ('condor_memory_policy.py', 'full_spectrum_fit.py', 'full_spectrum_condor.py',
            'limit_workflow.py', 'limit_workflow_sideband_fit.py', 'dy_closure_shape.py',
            'signal_spectrum_interpolation.py', 'python/plotLimits.py', 'python/plotting.py')
 
@@ -370,7 +371,7 @@ def write_dag(payload, indices, path):
     for index in indices:
         job = payload['jobs'][index]
         memory = memory_for_job(payload['options'], job['kind'])
-        lines += [f'JOB J{index} submit.jds', f'VARS J{index} jobindex="{index}" memory="{memory}"',
+        lines += [f'JOB J{index} submit.jds', f'VARS J{index} jobindex="{index}" memory="{memory}" retrymemory="{max(memory,2048)}"',
                   f'RETRY J{index} {payload["options"]["condor_retries"]}']
         parents = [i for i in job['dependencies'] if i in selected]
         if parents:
@@ -494,7 +495,7 @@ def submit(opt, args, prepared_plan=None):
         'should_transfer_files = YES', 'when_to_transfer_output = ON_EXIT',
         'transfer_output_files = ""', 'output = jobs/job_$(jobindex).out',
         'error = jobs/job_$(jobindex).err', 'request_cpus = 1',
-        'request_memory = $(memory)MB', f'jobbatchname = NPSFullSpectrum_{batch_id}']
+        'request_memory = $(memory)MB', f'jobbatchname = NPSFullSpectrum_{batch_id}', *memory_policy.retry_lines('$(retrymemory)')]
     requirements=domain_requirements(opt.condor_requirements,opt.condor_filesystem_domain)
     if requirements:
         submit_lines.append('requirements = '+requirements)
@@ -693,7 +694,7 @@ def set_domain(opt, payload):
 def set_memory(opt, payload):
     """Update future DAG submissions and idle ClassAds, leaving running jobs intact."""
     validate_options(opt)
-    options = dict(payload['options'], condor_light_memory=opt.condor_light_memory,
+    options = dict(payload['options'], condor_memory=opt.condor_memory, condor_light_memory=opt.condor_light_memory,
                    condor_workspace_memory=opt.condor_workspace_memory)
     choices = {}
     for job in payload['jobs']:

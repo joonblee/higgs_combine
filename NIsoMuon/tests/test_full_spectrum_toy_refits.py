@@ -15,6 +15,14 @@ import full_spectrum_toy_refits as refit
 
 
 class SavedToyRefits(unittest.TestCase):
+    def test_saved_toy_retry_uses_small_memory_and_keeps_dataset(self):
+        with patch.object(refit.memory_policy,'native_retry_supported',return_value=True):
+            payload=self.prepare('failed')
+        submit=(self.batch/'submit.jds').read_text()
+        self.assertIn('request_memory = 1024MB',submit)
+        self.assertIn('retry_request_memory_max = 2048MB',submit)
+        self.assertEqual((self.batch/payload['tasks'][0]['dataset']).read_text(),'saved dataset 0')
+
     def test_fresh_retry_uses_standard_tolerance_with_recorded_options(self):
         payload=self.prepare('failed')
         options=payload['fit_options']

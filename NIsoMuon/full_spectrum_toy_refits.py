@@ -19,6 +19,7 @@ import tarfile
 import numpy as np
 import full_spectrum_toys as toys
 import limit_workflow as base
+import condor_memory_policy as memory_policy
 
 SOURCES = ('full_spectrum_toy_refits.py', *toys.SOURCES)
 
@@ -228,7 +229,7 @@ def _prepare(opt):
         'when_to_transfer_output = ON_EXIT', 'transfer_input_files = '+','.join(transfer)+',$(fitfile),$(toyfile)',
         'transfer_output_files = result.tar.gz', 'transfer_output_remaps = "result.tar.gz=$(destination)"',
         'output = jobs/job_$(taskid).out', 'error = jobs/job_$(taskid).err', 'log = condor.log',
-        'queue taskid,fitfile,toyfile,destination from tasks.txt', '']))
+        *memory_policy.retry_lines(str(max(opt.condor_memory,2048))), 'queue taskid,fitfile,toyfile,destination from tasks.txt', '']))
     (batch/'tasks.txt').write_text('\n'.join(f'{t["index"]} {batch/t["workspace"]} {batch/t["dataset"]} '
         f'{batch}/jobs/job_{t["index"]:05d}/result.tar.gz' for t in tasks)+'\n')
     print(f'[PLAN] {len(tasks)} chunks; {sum(t["original_task"]["count"] for t in tasks)} saved-toy refits; no generation.')
@@ -299,7 +300,7 @@ def main(argv=None):
     parser.add_argument('--fit-tolerance',type=float,default=.1)
     parser.add_argument('--fit-max-calls',type=int)
     parser.add_argument('--backend', choices=('condor', 'local'), default='condor')
-    parser.add_argument('--condor-memory', type=int, default=16000)
+    parser.add_argument('--condor-memory', type=int, default=1024)
     parser.add_argument('--condor-cmssw-base')
     parser.add_argument('--condor-scram-arch')
     parser.add_argument('--dry-run', action='store_true')

@@ -50,6 +50,19 @@ class FakeReader:
 
 
 class CondorTests(unittest.TestCase):
+    def test_small_requests_keep_workspace_above_known_oom_limit(self):
+        with patch.object(batch.memory_policy,'native_retry_supported',return_value=True):
+            opt,args,payload=self.make_batch()
+        directory=Path(payload['batch'])
+        self.assertIn('retry_request_memory_max = $(retrymemory)MB',
+                      (directory/'submit.jds').read_text())
+        dag=(directory/'workflow.dag').read_text()
+        for job in payload['jobs']:
+            line=next(s for s in dag.splitlines() if s.startswith(f'VARS J{job["index"]} '))
+            memory=4096 if job['kind']=='workspace' else 1024
+            self.assertIn(f'memory="{memory}"',line)
+            self.assertIn(f'retrymemory="{max(memory,2048)}"',line)
+
     def test_observed_condor_preparation_and_workspace_preserve_data_counts(self):
         opt,args,payload=self.make_batch(extra=('--mode','unblind'))
         self.assertEqual(payload['options']['mode'],'unblind')

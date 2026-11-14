@@ -360,7 +360,7 @@ class CardTests(unittest.TestCase):
 
     def test_independent_fits_keep_full_diagnostics_and_share_workspace(self):
         opt=fs.make_parser().parse_args(['--masses','30'])
-        self.assertEqual(opt.condor_memory,16000)
+        self.assertEqual(opt.condor_memory,1024)
         commands={k:fs.fit_commands(opt,30,Path('/tmp/model'),k) for k in ('fit_b','fit_s')}
         self.assertEqual(commands['fit_b'][0],commands['fit_s'][0])
         for kind,skip in (('fit_b','--skipSBFit'),('fit_s','--skipBOnlyFit')):

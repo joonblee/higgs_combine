@@ -23,8 +23,9 @@ import numpy as np
 import full_spectrum_audit as audit
 import full_spectrum_fit as fs
 import limit_workflow as base
+import condor_memory_policy as memory_policy
 
-SOURCES=('full_spectrum_toys.py','full_spectrum_audit.py','full_spectrum_fit.py',
+SOURCES=('condor_memory_policy.py','full_spectrum_toys.py','full_spectrum_audit.py','full_spectrum_fit.py',
          'limit_workflow.py','limit_workflow_sideband_fit.py')
 
 
@@ -272,6 +273,7 @@ def _submit(opt):
         'transfer_output_files = result.tar.gz','transfer_output_remaps = "result.tar.gz=$(destination)"',
         'output = jobs/job_$(taskid).out','error = jobs/job_$(taskid).err','log = condor.log',
         'request_memory = '+str(opt.condor_memory),
+        *memory_policy.retry_lines(str(max(opt.condor_memory,2048))),
         'queue taskid,fitfile,truthfile,destination from tasks.txt','']))
     task_lines=[]
     for task in tasks:
@@ -298,7 +300,7 @@ def main(argv=None):
     parser.add_argument('--truth-json')
     parser.add_argument('--toy-errors',action='store_true',help='Calculate HESSE errors too; empirical bias summary does not use getError().')
     parser.add_argument('--backend',choices=('condor','local'),default='condor')
-    parser.add_argument('--condor-memory',type=int,default=16000)
+    parser.add_argument('--condor-memory',type=int,default=1024)
     parser.add_argument('--condor-cmssw-base')
     parser.add_argument('--condor-scram-arch')
     parser.add_argument('--dry-run',action='store_true',help='Prepare Condor files without submitting.')

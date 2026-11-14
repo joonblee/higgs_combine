@@ -109,9 +109,9 @@ def make_parser():
     batch.add_argument('--condor-dry-run', action='store_true', help='Prepare the real DAG and manifest without submitting (reads nominal axes).')
     batch.add_argument('--condor-maxjobs', type=int, default=0,
                        help='DAG submission cap (default: 0, no cap added by this workflow).')
-    batch.add_argument('--condor-memory', type=int, default=16000, help='Memory in MB for fits and limits (default: 16000).')
-    batch.add_argument('--condor-light-memory', type=int, default=2048,
-                       help='Memory in MB for preparation, assembly and table jobs (default: 2048).')
+    batch.add_argument('--condor-memory', type=int, default=1024, help='Initial memory in MB for fits and limits (default: 1024; OOM retry up to 2048).')
+    batch.add_argument('--condor-light-memory', type=int, default=1024,
+                       help='Initial memory in MB for preparation, assembly and table jobs (default: 1024).')
     batch.add_argument('--condor-workspace-memory', type=int, default=4096,
                        help='Memory in MB for workspace compilation (default: 4096).')
     batch.add_argument('--condor-retries', type=int, default=2)
