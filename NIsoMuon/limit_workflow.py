@@ -757,6 +757,10 @@ class WorkflowError(RuntimeError):
     pass
 
 
+class ImpactRepairNeeded(WorkflowError):
+    """The nominal nuisance scan needs a parallel DAGMan retry."""
+
+
 @dataclass
 class YieldResult:
     value: float
@@ -5720,7 +5724,7 @@ def race_impact_strategies(command, scan, nuisance):
             process.wait()
 
 
-def run_condor_impact_nuisance(payload, args, job, card, label, mass, workdir):
+def run_condor_impact_nuisance(payload, args, job, card, label, mass, workdir, *, repair_attempt=False):
     context = condor_impact_context(payload, args, job["initial"])
     name = f".Impacts_{tag_for(args, job['target'])}_M{label}"
     scan = workdir / f"higgsCombine_paramFit_{name}_{job['nuisance']}.MultiDimFit.mH{format_mass_for_combine(mass)}.root"
@@ -5734,12 +5738,17 @@ def run_condor_impact_nuisance(payload, args, job, card, label, mass, workdir):
         initial = Path(context["initial_file"])
         shutil.copy2(initial, workdir / initial.name)
         command.extend(["--doFits", "--named", job["nuisance"]])
+    if repair_attempt:
+        winner = race_impact_strategies(command, scan, job["nuisance"])
+        return {"impact_run_id": context["impact_run_id"], "strategy": winner, "files": [str(scan)]}
     if job.get("race_strategies"):
         nuisance = job["nuisance"]
         code = run_command(command, workdir, allow_failure=True, stdout_path=workdir / "scan_nominal.log")
         param = read_nuisance_scan(scan, nuisance) if code == 0 else None
         special = "_stat_QCD_" in nuisance or "_bckgShape_QCD_" in nuisance
         if not param or (not special and impact_interval_issues({"params": [param]}, [nuisance])[1]):
+            if job.get("separate_repair"):
+                raise ImpactRepairNeeded(f"Nominal scan requires repair for {nuisance}")
             winner = race_impact_strategies(command, scan, nuisance)
             return {"impact_run_id": context["impact_run_id"], "strategy": winner, "files": [str(scan)]}
     elif not job.get("repair_in_worker"):

@@ -91,7 +91,9 @@ def initial_memory(ad, payload, default=1024):
         if payload['jobs'][index]['kind'] == 'impact_final':
             return default * payload.get('config', {}).get('impact_repair_cpus', 1)
         if payload['jobs'][index]['kind'] == 'impact_nuisance':
-            return max(default, IMPACT_NUISANCE_MEMORY) * (3 if payload['jobs'][index].get('race_strategies') else 1)
+            job = payload['jobs'][index]
+            cpus = ad['RequestCpus'] if job.get('separate_repair') else (3 if job.get('race_strategies') else 1)
+            return max(default, IMPACT_NUISANCE_MEMORY) * cpus
         if payload['jobs'][index]['kind'] == 'workspace':
             return max(default, 2048)
     return default
@@ -138,7 +140,7 @@ def main(argv=None):
     manifests, patched = {}, set()
     while True:
         ads = json.loads(subprocess.check_output(['condor_q','-constraint',constraint,
-            '-attributes','ClusterId,ProcId,Iwd,DAGNodeName,JobUniverse,JobStatus,HoldReasonCode,RequestMemory,NumJobStarts','-json'], text=True))
+            '-attributes','ClusterId,ProcId,Iwd,DAGNodeName,JobUniverse,JobStatus,HoldReasonCode,RequestMemory,RequestCpus,NumJobStarts','-json'], text=True))
         if not ads:
             print('[MEMORY] No matching live jobs.');return
         edits = retries = 0

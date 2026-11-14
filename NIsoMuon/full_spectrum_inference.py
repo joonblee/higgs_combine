@@ -183,7 +183,7 @@ def initial_job(payload, args, job, directory):
     raise ValueError('Impact initial range retries exhausted.')
 
 
-def worker(batch, index):
+def worker(batch, index, attempt=0):
     payload = read_manifest(batch,index=index,check_inputs=False)
     directory = Path(payload['jobs'][index]['workdir'])
     with (directory/'worker.lock').open('a') as lock:
@@ -191,7 +191,7 @@ def worker(batch, index):
         try:
             with base.validation_cache():
                 _check_manifest_inputs(Path(batch).resolve(),payload,index)
-                return _worker(payload,index)
+                return _worker(payload,index,attempt)
         except base.WorkflowError as error:
             # Cache exit checks run while the worker lock is still held.
             if str(error).startswith('Input changed during validation:'):
@@ -203,7 +203,7 @@ def worker(batch, index):
             raise
 
 
-def _worker(payload, index):
+def _worker(payload, index, attempt=0):
     job = payload['jobs'][index]
     args = options(payload, job)
     directory = Path(job['workdir'])
@@ -216,7 +216,10 @@ def _worker(payload, index):
     status = dict(batch_id=payload['batch_id'], index=index, target=job['target'], mode='blind',
         kind=job['kind'], card_sha256=job['card_sha256'], state='running')
     status_path = directory/'status.json'
-    base.write_condor_status(status_path, status)
+    repair_attempt = bool(attempt and job.get('separate_repair'))
+    previous = json.loads(status_path.read_text()) if repair_attempt and status_path.is_file() else {}
+    if not repair_attempt:
+        base.write_condor_status(status_path, status)
     try:
         parents = {str(i): base.completed_condor_job(payload, args, payload['jobs'][i])['completion_id']
                    for i in job['dependencies']}
@@ -228,7 +231,11 @@ def _worker(payload, index):
         elif job['kind'] == 'impact_initial':
             products = initial_job(payload, args, job, directory)
         elif job['kind'] == 'impact_nuisance':
-            products = base.run_condor_impact_nuisance(payload, args, job, card, label, mass, directory)
+            if repair_attempt and (previous.get('state') != 'repair_pending' or
+                    previous.get('dependency_completions') != parents or previous.get('batch_id') != payload['batch_id']):
+                raise ValueError('Parallel repair requires a failed nominal scan from this initial fit.')
+            products = base.run_condor_impact_nuisance(payload, args, job, card, label, mass, directory,
+                                                       repair_attempt=repair_attempt)
         elif job['kind'] == 'impact_final':
             products = base.run_condor_impact_final(payload, args, job, card, label, mass, directory)
         elif job['kind'] == 'limit_plot':
@@ -243,6 +250,10 @@ def _worker(payload, index):
         if any(not Path(p).is_file() or Path(p).stat().st_size == 0 for p in products['files']):
             raise ValueError('Missing/empty inference output.')
         status.update(products, state='success', completion_id=uuid4().hex, dependency_completions=parents)
+    except base.ImpactRepairNeeded as error:
+        status.update(state='repair_pending', error=str(error), dependency_completions=parents)
+        base.write_condor_status(status_path, status)
+        raise
     except Exception as error:
         status.update(state='failed', error=str(error))
         base.write_condor_status(status_path, status)
@@ -268,9 +279,13 @@ def _write_dag(batch, payload, resume=False):
             except base.WorkflowError:
                 pass
         cpus = payload['config'].get('impact_repair_cpus', 1) if job['kind'] == 'impact_final' else (3 if job.get('race_strategies') else 1)
+        if job.get('separate_repair'):
+            cpus = '$CHOICE($(RETRY),1,3)'
         node = f'J{job["index"]}'
         lines += [f'JOB {node} submit.jds'+(' DONE' if done else ''),
                   f'VARS {node} jobindex="{job["index"]}" nodecpus="{cpus}"']
+        if job.get('separate_repair'):
+            lines.append(f'RETRY {node} 1 UNLESS-EXIT 1')
         if job['dependencies']:
             lines += ['PARENT '+' '.join(f'J{i}' for i in job['dependencies'])+' CHILD '+node]
     name = 'resume_'+uuid4().hex[:8]+'.dag' if resume else 'workflow.dag'
@@ -343,7 +358,7 @@ def submit(opt):
                 rmin = max(safe, -5*reference)
                 initial = add('impact_initial', injected_r=injection, r_min=rmin, safe_r_min=safe)
                 scans = [add('impact_nuisance', [initial['index']], initial=initial['index'],
-                    nuisance=n, repair_in_worker=True, race_strategies=not opt.serial_strategies, impact_pois=pois, injected_r=injection, r_min=rmin) for n in nuisances]
+                    nuisance=n, repair_in_worker=True, race_strategies=not opt.serial_strategies, separate_repair=not opt.serial_strategies, impact_pois=pois, injected_r=injection, r_min=rmin) for n in nuisances]
                 add('impact_final', [initial['index'], *[s['index'] for s in scans]],
                     initial=initial['index'], nuisance_jobs=[s['index'] for s in scans],
                     injected_r=injection, r_min=rmin)
@@ -366,11 +381,11 @@ def submit(opt):
         'cd '+shlex.quote(str(cmssw/'src')), 'eval "$(scram runtime -sh)"',
         'export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1',
         'exec python3 -u '+shlex.quote(str(batch/'source/full_spectrum_inference.py'))+
-        ' --batch '+shlex.quote(str(batch))+' --worker "$1"', '']))
+        ' --batch '+shlex.quote(str(batch))+' --worker "$1" --attempt "$2"', '']))
     wrapper.chmod(0o755)
     memory = memory_policy.submit_memory(payload, opt.condor_memory, impact=opt.impact_memory, plot=opt.plot_memory)
     (batch/'submit.jds').write_text('\n'.join(['universe = vanilla', f'executable = {wrapper}',
-        f'initialdir = {batch}', 'arguments = $(jobindex)', 'should_transfer_files = NO',
+        f'initialdir = {batch}', 'arguments = $(jobindex) $(RETRY:0)', 'should_transfer_files = NO',
         'getenv = True', 'request_cpus = $(nodecpus)', f'request_memory = {memory}',
         'output = jobs/job_$(jobindex).out', 'error = jobs/job_$(jobindex).err',
         'log = condor.log', *memory_policy.retry_lines(str(max(opt.condor_memory * opt.impact_repair_cpus, opt.impact_memory * (1 if opt.serial_strategies else 3), opt.plot_memory, 8192))), 'queue 1', '']))
@@ -429,7 +444,7 @@ def set_memory(opt):
     never_started = 'JobStatus == 1 && (NumJobStarts =?= undefined || NumJobStarts == 0)'
     ads = json.loads(subprocess.check_output(['condor_q','-constraint',
         f'DAGManJobId == {opt.dag_id} && {never_started}',
-        '-attributes','ClusterId,ProcId,DAGNodeName,Iwd,RequestMemory','-json'], text=True))
+        '-attributes','ClusterId,ProcId,DAGNodeName,Iwd,RequestMemory,RequestCpus','-json'], text=True))
     selected = {**{i:opt.impact_memory * (3 if payload["jobs"][i].get("race_strategies") else 1) for i in nuisance}, **{i:opt.plot_memory for i in plots}}
     ids = []
     for ad in ads:
@@ -438,11 +453,14 @@ def set_memory(opt):
             continue
         if ad.get('Iwd') and Path(ad['Iwd']).resolve() != batch:
             raise ValueError('DAG ID does not match the requested batch directory.')
-        memory = selected[int(match.group(1))]
+        index = int(match.group(1))
+        memory = selected[index]
+        if payload['jobs'][index].get('separate_repair'):
+            memory = opt.impact_memory * ad['RequestCpus']
         if ad.get('RequestMemory') != memory:
             ids.append((int(ad['ClusterId']),int(ad['ProcId']),memory))
     edits = []
-    for memory in sorted(set(selected.values())):
+    for memory in sorted({m for _,_,m in ids}):
         subset = [(c,p) for c,p,m in ids if m==memory]
         if not subset:
             continue
@@ -489,13 +507,14 @@ def main(argv=None):
     parser.add_argument('--condor-scram-arch')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--worker', type=int, help=argparse.SUPPRESS)
+    parser.add_argument('--attempt', type=int, default=0, choices=(0, 1), help=argparse.SUPPRESS)
     opt = parser.parse_args(argv)
     if opt.impact_memory is None:
         opt.impact_memory = max(opt.condor_memory, memory_policy.IMPACT_NUISANCE_MEMORY)
     if opt.plot_memory is None:
         opt.plot_memory = opt.condor_memory
     if opt.worker is not None:
-        worker(opt.batch, opt.worker)
+        worker(opt.batch, opt.worker, opt.attempt)
     elif opt.stage == 'set-memory':
         set_memory(opt)
     elif opt.stage == 'submit':
@@ -512,6 +531,9 @@ def main(argv=None):
 if __name__ == '__main__':
     try:
         main()
+    except base.ImpactRepairNeeded as error:
+        print(error, file=sys.stderr)
+        raise SystemExit(2)
     except (ValueError, OSError, base.WorkflowError) as error:
         print('ERROR:', error, file=sys.stderr)
         raise SystemExit(1)

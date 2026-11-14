@@ -22,7 +22,17 @@ class InferenceTests(unittest.TestCase):
             self.prepare('impacts')
         submit=(self.batch/'submit.jds').read_text()
         self.assertIn('request_memory = (ifThenElse(',submit)
-        self.assertIn('nodecpus="3"', (self.batch/'workflow.dag').read_text())
+        dag = (self.batch/'workflow.dag').read_text()
+        self.assertIn('nodecpus="$CHOICE($(RETRY),1,3)"', dag)
+        self.assertIn('arguments = $(jobindex) $(RETRY:0)', submit)
+        payload = inf.read_manifest(self.batch)
+        for job in payload['jobs']:
+            retry = f'RETRY J{job["index"]} 1 UNLESS-EXIT 1'
+            self.assertEqual(retry in dag.splitlines(), job['kind'] == 'impact_nuisance')
+            if job['kind'] == 'impact_nuisance':
+                for cpus in (1, 3):
+                    ad = dict(DAGNodeName=f'J{job["index"]}', RequestCpus=cpus)
+                    self.assertEqual(inf.memory_policy.initial_memory(ad, payload), 2048 * cpus)
         self.assertIn(', 2048, 1024)',submit)
         self.assertIn('retry_request_memory_max = 8192MB',submit)
 
@@ -225,8 +235,13 @@ if a[a.index("-M")+1] == "MultiDimFit":
         valid = dict(name=job['nuisance'], fit=[-1, 0, 1], r=[0, 0, 0])
         collapsed = dict(valid, fit=[0, 0, 0])
         with patch.object(inf.base, 'read_nuisance_scan', side_effect=lambda path, name: (valid if path.parent.name == 'strategy2' else collapsed)):
-            inf.worker(self.batch, job['index'])
-        directory = Path(job['workdir'])
+            with self.assertRaises(inf.base.ImpactRepairNeeded):
+                inf.worker(self.batch, job['index'])
+            directory = Path(job['workdir'])
+            self.assertEqual(json.loads((directory/'status.json').read_text())['state'], 'repair_pending')
+            self.assertFalse(list(directory.glob('strategy*')))
+            with patch.object(inf.base, 'run_command', side_effect=AssertionError('repeated nominal scan')):
+                inf.worker(self.batch, job['index'], attempt=1)
         self.assertEqual(json.loads((directory/'status.json').read_text())['strategy'], 2)
         for strategy in (1, 2, 0):
             self.assertTrue((directory/f'strategy{strategy}'/'fit.log').exists())
@@ -309,16 +324,18 @@ if a[a.index("-M")+1] == "MultiDimFit":
         manifest=(self.batch/'manifest.json').read_bytes()
         kinds=('impact_nuisance','impact_initial','limit_plot')
         jobs=[next(j for j in payload['jobs'] if j['kind']==kind) for kind in kinds]
-        ads=[dict(ClusterId=100+i,ProcId=0,DAGNodeName='J'+str(j['index']),Iwd=str(self.batch))
+        ads=[dict(ClusterId=100+i,ProcId=0,DAGNodeName='J'+str(j['index']),Iwd=str(self.batch), RequestCpus=1)
              for i,j in enumerate(jobs)]
+        ads.append(dict(ads[0], ClusterId=103, RequestCpus=3))
         with patch.object(inf.subprocess,'check_output',return_value=json.dumps(ads)), \
              patch.object(inf.base,'run_command') as run:
             inf.main(['--stage','set-memory','--batch',str(self.batch),'--dag-id','19457414'])
-        self.assertEqual(run.call_count,2)
+        self.assertEqual(run.call_count,3)
         calls=[c.args[0] for c in run.call_args_list]
-        self.assertEqual({c[-1] for c in calls},{'1024','6144'})
+        self.assertEqual({c[-1] for c in calls},{'1024','2048','6144'})
         self.assertTrue(all('NumJobStarts == 0' in c[2] for c in calls))
-        self.assertIn('ClusterId == 100',next(c[2] for c in calls if c[-1]=='6144'))
+        self.assertIn('ClusterId == 100',next(c[2] for c in calls if c[-1]=='2048'))
+        self.assertIn('ClusterId == 103',next(c[2] for c in calls if c[-1]=='6144'))
         self.assertFalse(any('ClusterId == 101' in c[2] for c in calls))
         self.assertTrue(all('JobStatus == 1' in c[2] for c in calls))
         self.assertEqual(manifest,(self.batch/'manifest.json').read_bytes())

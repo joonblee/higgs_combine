@@ -999,7 +999,7 @@ by `combineTool.py`. The initial fit and the final collector still use the
 official Impacts tool. The collector computes prefit errors and checks the full
 nuisance list.
 
-New inference batches validate each ordinary nuisance scan inside its own Condor job. Each nuisance worker reserves three CPUs and memory for three processes. It runs the nominal scan once. On failure it races strategies 1, 2 and 0 in separate directories, accepts the first validated interval, and terminates the other processes. Use --serial-strategies for one-CPU sequential retries. Other nuisance workers proceed independently. The final collector handles specialised QCD profiles and verifies the combined result.
+New inference batches validate each ordinary nuisance scan inside its own Condor job. The nominal worker requests one CPU and one fit’s memory (2048 MB by default). A validated scan completes the node. If the scan needs repair, DAGMan resubmits that node once with three CPUs and three times the per-fit memory. The repair worker immediately races strategies 1, 2 and 0 in separate directories, accepts the first validated interval, and terminates the other processes. Use --serial-strategies for one-CPU sequential retries. Other nuisance workers proceed independently. The final collector handles specialised QCD profiles and verifies the combined result.
 
 Pass `--impact-repair-cpus 4` to `full_spectrum_inference.py` to run up to
 four independent repairs within each final job. The final-job option is independent of the nuisance workers. Condor scales the final job's memory request with its CPU count.
