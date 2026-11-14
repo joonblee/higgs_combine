@@ -27,7 +27,9 @@ def window_example():
     model['settings']['fit_layout']='window'
     for row in model['rows']:
         if row['low']==29.:
-            row['region']='SR';row['channel']='bin_'+row['era']+'_SR'
+            row['region']='SR';row['channel']='SR_'+row['era']
+        if row['low']==31.:
+            row['region']='bin2';row['channel']='bin2_'+row['era']
     text=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
     model['card_sha256']=hashlib.sha256(text.encode()).hexdigest()
     return model,text
@@ -75,15 +77,28 @@ class ReviewTests(unittest.TestCase):
         model, text = window_example()
         old = copy.deepcopy(model)
         old['normalisations'] = {
-            name.replace('_Norm_', '_inSituNorm_'): spec
+            f'CMS_NPS26009_inSituNorm_{spec["process"]}_BJetOS_{spec["era"]}': spec
             for name, spec in model['normalisations'].items()
         }
+        for row in old['rows']:
+            row['region'] = {11.: 'L0000', 20.: 'L0001', 29.: 'SR', 31.: 'R0000'}[row['low']]
+            row['channel'] = f'bin_{row["era"]}_{row["region"]}'
         legacy = shared.card_text(old, normalisation_kappa=1.5, prefix='FS')
         self.assertIn('FS_QCDFitMode1_2018 param', legacy)
+        labels = fs.base.spectrum_channel_labels(legacy)
+        self.assertEqual(labels['bin_2018_R0000'], 'bin2_2018')
+        self.assertIn('CMS_NPS26009_MCstat_ttbar_bin2_2018 lnN', text)
+        self.assertIn('CMS_NPS26009_TTbarNorm_2018 lnN', text)
+        self.assertIn('CMS_NPS26009_DYNorm_2018 lnN', text)
         opt = fs.make_parser().parse_args(['--fit-layout', 'window'])
-        self.assertEqual(review.review_card(legacy, model, opt), text)
+        self.assertCountEqual(review.review_card(legacy, model, opt).splitlines(), text.splitlines())
+        old['normalisations'] = {name.replace('_inSituNorm_', '_Norm_'): spec
+                                 for name, spec in old['normalisations'].items()}
+        previous = shared.card_text(old, normalisation_kappa=1.5, prefix='FS')
+        self.assertIn('CMS_NPS26009_QCDStat_mode1_2018 param', previous)
+        self.assertCountEqual(review.review_card(previous, model, opt).splitlines(), text.splitlines())
         self.assertEqual(fs.base.spectrum_parameter_name('FS_QCDFitMode4_2018'),
-                         'CMS_NPS26009_QCDStat_mode4_2018')
+                         'CMS_NPS26009_QCDSSFitStat_eig4_2018')
 
     def test_preparation_reuses_saved_card_without_root_inputs(self):
         model,text=window_example()

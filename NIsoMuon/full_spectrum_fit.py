@@ -26,7 +26,7 @@ import sys
 import numpy as np
 import limit_workflow as base
 import limit_workflow_sideband_fit as shared
-from limit_workflow_sideband_fit import normalisation_name
+from limit_workflow import spectrum_normalisation_name as normalisation_name
 
 DOMAIN = (11., 80.)
 SCHEMA = 'NPS26009_full_spectrum_step1_v1'
@@ -369,6 +369,16 @@ def decorate_model(model, opt, windows):
             refine=opt.sideband_refine, fragment_fraction=opt.sideband_fragment_fraction,
             sr_nsigma=opt.sr_nsigma, status='proposal_requires_binning_stability_check')
     for era in model['eras']:
+        rows = sorted((r for r in model['rows'] if r['era'] == era), key=lambda r: r['low'])
+        sidebands = (r for r in rows if r['region'] != 'SR')
+        labels = {r['region']: f'bin{i}' for i, r in enumerate(sidebands)}
+        labels['SR'] = 'SR'
+        for row in rows:
+            row['region'] = labels[row['region']]
+            row['channel'] = f'{row["region"]}_{era}'
+        for audit in model.get('input_audits', []):
+            if audit['era'] == era:
+                audit['region'] = labels[audit['region']]
         info = model['eras'][era]
         if getattr(opt,'fit_layout','spectrum') == 'window':
             sr = [w for w in windows[era] if w['region'] == 'SR']
@@ -389,7 +399,7 @@ def decorate_model(model, opt, windows):
         row['nuisances'] = {k:v for k,v in row['nuisances'].items()
                             if not k.startswith('CMS_NPS26009_DYClosure_')}
         if dy_unc:
-            name = f'CMS_NPS26009_DYClosure_{row["era"]}_{row["region"]}'
+            name = f'CMS_NPS26009_DYClosure_{row["channel"]}'
             row['nuisances'][name] = {'DY': f'{1-dy_unc:.17g}/{1+dy_unc:.17g}'}
     if getattr(opt, 'dy_normalisation', 'prior') == 'free':
         for era in model['eras']:

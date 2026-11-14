@@ -345,8 +345,7 @@ def build_model(reader, args, opt, mass, files, windows_by_era=None):
     return assemble_model(args, opt, mass, parts, full_spectrum=windows_by_era is not None)
 
 
-def normalisation_name(process, era):
-    return f'CMS_NPS26009_Norm_{process}_BJetOS_{era}'
+normalisation_name = base.spectrum_normalisation_name
 
 
 def card_text(model, normalisation_kappa=None, prefix='SB'):
@@ -355,7 +354,11 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
     legacy_norms = any(n.startswith('CMS_NPS26009_inSituNorm_') for n in model.get('normalisations', {}))
     canonical = prefix == 'FS' and not legacy_norms
     parameter_prefix = 'CMS_NPS26009' if canonical else prefix
-    stat_mode = 'QCDStat_mode' if canonical else 'QCDFitMode'
+    previous_norms = any(n.startswith('CMS_NPS26009_Norm_') for n in model.get('normalisations', {}))
+    modern = canonical and not previous_norms
+    stat_mode = 'QCDFitMode'
+    if canonical:
+        stat_mode = 'QCDSSFitStat_eig' if modern else 'QCDStat_mode'
     rows, opt = model['rows'], model['settings']
     columns = [(r, p) for r in rows for p in base.PROCESSES]
     f = lambda x: format(float(x), '.17g')
@@ -384,7 +387,11 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
                 continue
             name = base.nuisance_global_name(local, row['era'])
             if local.endswith('_stat') or local == 'DY_LightJetStat':
-                name += '_'+row['region']  # disjoint template-source bins
+                if modern:
+                    source = name.removesuffix('_BJetOS_' + row['era'])
+                    name = f'{source}_{row["channel"]}'
+                else:
+                    name += '_'+row['region']
             lnn.setdefault(name, ['-']*len(columns))[index] = value
     lines.extend(name+' lnN '+' '.join(values) for name, values in sorted(lnn.items()))
     if normalisation_kappa is not None:
@@ -392,9 +399,10 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
             raise ValueError('Normalisation lnN kappa must exceed one.')
         for era in sorted({r['era'] for r in rows}):
             for process in ('QCD', 'DY', 'tt'):
-                name = normalisation_name(process, era)
-                if legacy_norms:
-                    name = name.replace('_Norm_', '_inSituNorm_', 1)
+                name = base.spectrum_normalisation_name(process, era)
+                if legacy_norms or previous_norms:
+                    tag = 'inSituNorm' if legacy_norms else 'Norm'
+                    name = f'CMS_NPS26009_{tag}_{process}_BJetOS_{era}'
                 specification = model.get('normalisations', {}).get(name, {})
                 if specification.get('kind') == 'rateParam':
                     lo, hi = specification['bounds']

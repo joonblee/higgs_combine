@@ -29,8 +29,8 @@ def example_model():
                 (11.,20.,1000.,120.,150.,.01), (20.,29.,200.,300.,350.,.2),
                 (29.,31.,20.,80.,100.,12.29), (31.,80.,40.,600.,1200.,0.)]):
             rates = dict(sig=sig, QCD=qcd, DY=dy, tt=tt, ST=3., Others=2.)
-            region = f'B{i:04d}'
-            rows.append(dict(era=era, region=region, channel=f'bin_{era}_{region}',
+            region = f'bin{i}'
+            rows.append(dict(era=era, region=region, channel=f'{region}_{era}',
                 low=lo, high=hi, rates=rates, asimov=sum(rates[p] for p in shared.BACKGROUNDS),
                 qcd_shape=.02*qcd, qcd_modes=[.01*qcd, (-1)**i*.01*qcd], dy_stat=.1*dy,
                 nuisances={'tt_stat': {'tt':'0.95/1.05'}, 'QCD_norm': {'QCD':'0.8/1.2'},
@@ -319,7 +319,7 @@ class CardTests(unittest.TestCase):
         for row in model['rows']:
             self.assertAlmostEqual(predictions[row['channel']],row['asimov'])
         lines=[line.split() for line in text.splitlines()]
-        norms=[line for line in lines if line and line[0].startswith('CMS_NPS26009_Norm_')]
+        norms=[line for line in lines if line and line[0] in model['normalisations']]
         self.assertEqual(len(norms),6)
         for line in norms:
             spec=model['normalisations'][line[0]]
@@ -332,8 +332,8 @@ class CardTests(unittest.TestCase):
         self.assertNotIn('NFModel',text)
         self.assertNotIn('bckgNorm_QCD',text)
         self.assertEqual(text.count('QCDscale_ren_ttbar lnN'),1)
-        self.assertEqual(text.count('CMS_NPS26009_QCDStat_mode0_2018 param'),1)
-        self.assertEqual(text.count('MCstat_ttbar_BJetOS_2018_B000'),4)
+        self.assertEqual(text.count('CMS_NPS26009_QCDSSFitStat_eig0_2018 param'),1)
+        self.assertIn('CMS_NPS26009_MCstat_ttbar_bin3_2018 lnN',text)
         self.assertIn('# alpha_internal_signal_yield = 25',text)
 
     def test_zero_dy_additive_uncertainty_has_norm_prior(self):
@@ -343,7 +343,7 @@ class CardTests(unittest.TestCase):
         row['rates']['DY']=0.
         row['nuisances']['DY_LightJetStat']['DY']='-'
         text=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
-        self.assertIn('CMS_NPS26009_DYYield_bin_2018_B0000 rateParam',text)
+        self.assertIn('CMS_NPS26009_DYYield_bin0_2018 rateParam',text)
         self.assertIn('max(0.,12*@0)',text)
         self.assertAlmostEqual(shared.nominal_predictions(text)[row['channel']],row['asimov'])
 

@@ -215,6 +215,15 @@ is reported per era; template smoothing or rebinning is not performed silently.
 MC finite-template statistics remain the existing independent process/bin terms.
 No `autoMCStats` line is added on top of those terms or the correlated QCD modes.
 
+New full-spectrum cards name channels in increasing mass within each era,
+e.g. `bin0_2018`, `bin1_2018`, … . The signal window is `SR_2018` and
+does not consume a sideband index. Read the boundaries from the corresponding
+mass hypothesis in `model.json`. Bin-local nuisances use the same suffix.
+`CMS_NPS26009_DYNorm_2018`, `QCDNorm` and `TTbarNorm` share each process
+normalisation across its era. `CMS_NPS26009_QCDSSFitStat_eig0_2018` through
+`eig4_2018` propagate the five fitted SS parameter covariance directions.
+`CMS_NPS26009_QCDShape_2018` represents the separate functional-form envelope.
+
 For workspace construction, each fit writes a copy of the protected card to
 `fit_r*/datacard.txt` with `shapes * * FAKE`. This selects Combine's simultaneous
 one-bin-shape representation, avoiding underflow from multiplying hundreds of
@@ -737,7 +746,7 @@ structure (replace the hash and use a reviewed alternative shape):
 
 ```json
 {"mass":30,"fit_card_sha256":"<exact saved fit-card hash>",
- "factors":{"bin_2018_SR":{"QCD":1.2,"DY":0.9}}}
+ "factors":{"SR_2018":{"QCD":1.2,"DY":0.9}}}
 ```
 
 Only the generator workspace gets these extra fixed-truth rate factors; toys

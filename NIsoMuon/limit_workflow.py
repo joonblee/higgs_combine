@@ -2915,18 +2915,58 @@ def read_dy_closure_inputs(reader, filename):
     return reader.validated_input(filename, ('dy_closure',), dy_closure_shape.read_inputs)
 
 
-def spectrum_parameter_name(name: str) -> str:
-    """Map a legacy full-spectrum parameter to the analysis naming convention."""
+def spectrum_channel_labels(card_text):
+    """Map historical channel names using the complete mass-specific datacard."""
+    channels = next((line.split()[1:] for line in card_text.splitlines()
+                     if line.split()[:1] == ["bin"]), [])
+    regions = {}
+    for channel in channels:
+        match = re.fullmatch(r"bin_(\w+?)_(SR|[BLR]\d+)", channel)
+        if match:
+            era, region = match.groups()
+            regions.setdefault(era, []).append(region)
+    labels = {}
+    for era, entries in regions.items():
+        sidebands = sorted((r for r in entries if r != "SR"),
+                           key=lambda r: (r[0], int(r[1:])))
+        for index, region in enumerate(sidebands):
+            labels[f"bin_{era}_{region}"] = f"bin{index}_{era}"
+        if "SR" in entries:
+            labels[f"bin_{era}_SR"] = f"SR_{era}"
+    return labels
+
+
+def spectrum_parameter_name(name: str, channels=None) -> str:
+    """Translate old card identifiers for review cards and impact plot labels."""
     if name == "CMS_NPS26009_DYClosureLinearShape":
         return "CMS_NPS26009_DYShape"
-    if name.startswith("CMS_NPS26009_inSituNorm_"):
-        return name.replace("_inSituNorm_", "_Norm_", 1)
-    if name.startswith("FS_QCDFitMode"):
-        return name.replace("FS_QCDFitMode", "CMS_NPS26009_QCDStat_mode", 1)
+    match = re.fullmatch(r"CMS_NPS26009_(?:inSituNorm|Norm)_(DY|QCD|tt)_BJetOS_(\w+)", name)
+    if match:
+        return spectrum_normalisation_name(*match.groups())
+    match = re.fullmatch(r"(?:FS_QCDFitMode|CMS_NPS26009_QCDStat_mode)(\d+)_(\w+)", name)
+    if match:
+        return f"CMS_NPS26009_QCDSSFitStat_eig{match[1]}_{match[2]}"
     for kind in ("QCDShape", "DYStat", "QCDYield", "DYYield"):
         if name.startswith(f"FS_{kind}_"):
-            return "CMS_NPS26009_" + name[3:]
+            name = "CMS_NPS26009_" + name[3:]
+            break
+    if channels:
+        if name in channels:
+            return channels[name]
+        match = re.fullmatch(r"(.*_)(bin_\w+_(?:SR|[BLR]\d+))", name)
+        if match and match[2] in channels:
+            return match[1] + channels[match[2]]
+        match = re.fullmatch(r"(CMS_NPS26009_(?:MCstat_\w+?|LightJetStat_DY)_BJetOS_|CMS_NPS26009_DYClosure_)(\w+?)_(SR|[BLR]\d+)", name)
+        if match:
+            channel = channels.get(f"bin_{match[2]}_{match[3]}")
+            if channel:
+                return match[1].replace("_BJetOS_", "_") + channel
     return name
+
+
+def spectrum_normalisation_name(process, era):
+    label = "TTbar" if process == "tt" else process
+    return f"CMS_NPS26009_{label}Norm_{era}"
 
 
 def nuisance_global_name(local: str, year: str) -> str:
@@ -4972,9 +5012,10 @@ def finish_impacts(args, card, target, label, mass, outdir, workspace, internal_
         "xsec": "#sigma [pb]",
     }[args.parameter]
     labels = {"r": poi_label}
+    channels = spectrum_channel_labels(Path(card).read_text())
     for parameter in payload_internal["params"]:
         name = parameter["name"]
-        label_name = spectrum_parameter_name(name)
+        label_name = spectrum_parameter_name(name, channels)
         if name != label_name:
             labels[name] = label_name
     translation.write_text(json.dumps(labels, indent=2) + "\n")

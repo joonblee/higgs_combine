@@ -24,8 +24,8 @@ import limit_workflow_sideband_fit as shared
 def review_card(text,model,opt):
     """Edit the audited source card, preserving every unrelated nuisance line."""
     # A new review model may derive from a hash-verified card with the old names.
-    text = re.sub(r'\b(?:(?:FS_|CMS_NPS26009_inSituNorm_)\w+|CMS_NPS26009_DYClosureLinearShape\b)',
-                  lambda match: base.spectrum_parameter_name(match.group()), text)
+    channels = base.spectrum_channel_labels(text)
+    text = re.sub(r'\b[A-Za-z_]\w*', lambda m: base.spectrum_parameter_name(m.group(), channels), text)
     lines=text.splitlines()
     tokenised=[line.split() for line in lines if line and not line.startswith('#')]
     channels=[line[1:] for line in tokenised if line[0]=='bin'][-1]
@@ -46,7 +46,7 @@ def review_card(text,model,opt):
                     lines.append(f'{name} rateParam {row["channel"]} DY 1 [0,{opt.dy_norm_max:.17g}]')
     if opt.dy_shape_uncertainty:
         for row in model['rows']:
-            name=f'CMS_NPS26009_DYClosure_{row["era"]}_{row["region"]}'
+            name=f'CMS_NPS26009_DYClosure_{row["channel"]}'
             if any(line.split()[:1]==[name] for line in lines):
                 raise ValueError('Source already has the requested closure nuisance.')
             response=f'{1-opt.dy_shape_uncertainty:.17g}/{1+opt.dy_shape_uncertainty:.17g}'

@@ -114,3 +114,35 @@ CMS_NPS26009_pdf_NNPDF31:
 'CMS_NPS26009_QCD_MCTransferStat_(Run2|Run3)':
   class: custom
   description: 'Standard Gaussian uncertainty of the MC transport ratio, propagated with an era-dependent yield coefficient; shared within each Run and independent between Run 2 and Run 3.'
+
+'CMS_NPS26009_(DY|QCD|TTbar)Norm_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Process normalisation shared by the SR and sidebands in one era.'
+
+'CMS_NPS26009_QCDSSFitStat_eig[0-4]_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Independent eigenmode of the same-sign QCD fit covariance, propagated coherently across mass bins in one era.'
+
+'CMS_NPS26009_QCDShape_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Functional-form uncertainty of the QCD prediction, shared across bins in one era.'
+
+'CMS_NPS26009_LightJetStat_DY_(bin[0-9]+|SR)_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Finite light-jet control sample for the DY prediction in one bin and era.'
+
+'CMS_NPS26009_MCstat_(signal|ttbar|singleTop|other)_(bin[0-9]+|SR)_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Finite simulated-sample statistics for one process, bin and era.'
+
+'CMS_NPS26009_DYStat_(bin[0-9]+|SR)_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Additive source-statistical uncertainty for a zero nominal DY yield.'
+
+'CMS_NPS26009_DYClosure_(bin[0-9]+|SR)_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
+  class: custom
+  description: 'Independent DY closure variation in the optional bin-by-bin study.'
+
+CMS_NPS26009_DYShape:
+  class: custom
+  description: 'Correlated DY shape variation from the linear closure study.'
