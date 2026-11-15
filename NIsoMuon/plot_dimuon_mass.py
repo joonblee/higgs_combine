@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import matplotlib
@@ -72,29 +73,99 @@ def template_projection(reader, model, rows, edges):
     return weights, notes
 
 
-def band(variables, means, transform, prediction, count, rng):
-    # A shared draw for all channels preserves correlations across processes and eras.
+def sample_points(variables, means, transform, count, rng):
     low = np.array([v.getMin() for v in variables])
     high = np.array([v.getMax() for v in variables])
-    draws = []
-    trials = 0
+    accepted = []
+    proposed = kept = 0
+    while kept < count and proposed < 100 * count:
+        values = means + rng.normal(size=(32, len(means))) @ transform.T
+        valid = values[np.all((values >= low) & (values <= high), axis=1)]
+        accepted.append(valid)
+        proposed += len(values)
+        kept += len(valid)
+    if kept < count:
+        raise ValueError("Too few joint Gaussian draws inside parameter ranges")
+    return np.concatenate(accepted)[:count], kept / proposed
+
+
+def evaluate_points(variables, means, points, prediction):
     try:
-        while len(draws) < count and trials < 100 * count:
-            z = rng.normal(size=(32, len(means)))
-            values = means + (z @ transform.T)
-            trials += len(values)
-            for point in values[np.all((values >= low) & (values <= high), axis=1)]:
-                for var, x in zip(variables, point):
-                    var.setVal(float(x))
-                draws.append(prediction())
-                if len(draws) == count:
-                    break
-        if len(draws) != count:
-            raise ValueError("Too few joint Gaussian draws inside parameter ranges")
-        return np.asarray(draws)
+        return np.array([evaluate_at(variables, point, prediction) for point in points])
     finally:
         for var, x in zip(variables, means):
             var.setVal(float(x))
+
+
+def evaluate_at(variables, point, prediction):
+    for var, x in zip(variables, point):
+        var.setVal(float(x))
+    return prediction()
+
+
+def audit_band(variables, means, points, matrix, prediction, post, full, norm_names,
+               freeze_pattern, acceptance, edges):
+    """Counterfactual yield evaluations on the same retained draws, without refitting."""
+    centre = post.sum(axis=1)
+    names = [v.GetName() for v in variables]
+    norms = np.array([name in norm_names for name in names])
+    if not norms.any():
+        raise ValueError("No floating saved normalisation parameters matched the workspace")
+
+    def total():
+        return prediction().sum(axis=1)
+
+    def summarise(values):
+        q = np.quantile(values, [0.16, 0.5, 0.84], axis=0)
+        below = (values < centre).mean(axis=0)
+        return dict(q16=q[0].tolist(), median=q[1].tolist(), q84=q[2].tolist(),
+                    mean_shift=(values.mean(axis=0) - centre).tolist(),
+                    fraction_below_best=below.tolist())
+
+    # First-order prediction at the best fit, evaluated on the identical draws.
+    # At a parameter bound use the available one-sided derivative.
+    deriv = np.zeros((len(means), len(centre)))
+    for i, (var, best, variance) in enumerate(zip(variables, means, matrix.diagonal())):
+        step = max(1.e-6, 1.e-3 * np.sqrt(variance))
+        low, high = max(var.getMin(), best-step), min(var.getMax(), best+step)
+        if high <= low:
+            raise ValueError(f"No derivative interval for {var.GetName()}")
+        try:
+            var.setVal(float(low))
+            minus = total()
+            var.setVal(float(high))
+            deriv[i] = (total()-minus)/(high-low)
+        finally:
+            var.setVal(float(best))
+
+    results = {"full": summarise(full.sum(axis=2)),
+               "linear": summarise(centre + (points-means) @ deriv)}
+    selections = {"norm_only": norms, "norm_fixed": ~norms}
+    matched = []
+    if freeze_pattern:
+        matched = [name for name in names if re.search(freeze_pattern, name)]
+        if not matched:
+            raise ValueError(f"No floating nuisance matched {freeze_pattern!r}")
+        selections["selected_fixed"] = ~np.isin(names, matched)
+    for label, active in selections.items():
+        subset = [v for v, use in zip(variables, active) if use]
+        values = evaluate_points(subset, means[active], points[:, active], total)
+        results[label] = summarise(values)
+
+    for i in sorted({0, len(centre)-1}):
+        if centre[i] <= 0:
+            continue
+        print(f"[BAND] {edges[i]:g}–{edges[i+1]:g} GeV, best = {centre[i]:.2f} events")
+        for label, item in results.items():
+            ratios = [item[k][i]/centre[i] for k in ("q16", "median", "q84")]
+            print(f"  {label:16s} q16/50/84 / best = {ratios[0]:.4f} {ratios[1]:.4f} "
+                  f"{ratios[2]:.4f}   P(y < best) = {item['fraction_below_best'][i]:.3f}")
+        shifts = (full[:, i].mean(axis=0)-post[i]) / centre[i] * 100
+        print("  Full mean shift (% of total best): " +
+              ", ".join(f"{proc} {shift:+.3f}%" for proc, shift in zip(PROCESSES, shifts)))
+    print(f"[BAND] Fraction of proposed joint draws inside parameter ranges: {acceptance:.4f}")
+    return dict(acceptance=acceptance, norm_names=[n for n in names if n in norm_names],
+                freeze_pattern=freeze_pattern, matched=matched, scenarios=results)
 
 
 def draw(edges, components, bounds, asimov, mass, stem, projected):
@@ -156,7 +227,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected):
     plt.close(fig)
 
 
-def plot_mass(ROOT, fitdir, mass, output, samples, binning):
+def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, freeze_pattern, seed):
     model = read(fitdir.parent / "model.json")
     summary = read(fitdir / "fit_summary.json")
     fitinfo = summary["fits"]["fit_b"]
@@ -217,7 +288,7 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning):
             funcs.append(channel)
         def prediction():
             return project(evaluate(funcs))
-        rng = np.random.default_rng(73100 + int(mass))
+        rng = np.random.default_rng(seed + int(mass))
         pars = list(fit.floatParsFinal())
         variables = [w.var(p.GetName()) for p in pars]
         means = np.array([p.getVal() for p in pars])
@@ -230,7 +301,8 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning):
         post = project(fitted)
         cov = fit.covarianceMatrix()
         matrix = np.array([[cov[i][j] for j in range(len(pars))] for i in range(len(pars))])
-        draws = band(variables, means, np.linalg.cholesky(matrix), prediction, samples, rng)
+        points, acceptance = sample_points(variables, means, np.linalg.cholesky(matrix), samples, rng)
+        draws = evaluate_points(variables, means, points, prediction)
         q16, median, q84 = np.quantile(draws.sum(axis=2), [0.16, 0.5, 0.84], axis=0)
         suffix = "_1GeV" if binning == "1gev" else ""
         stem = output / f"dimuon_mass_M{mass:g}_postfit_b{suffix}"
@@ -240,6 +312,11 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning):
                            q16=q16.tolist(), median=median.tolist(), q84=q84.tolist(),
                            mean_shift_by_process=dict(zip(PROCESSES, (draws.mean(axis=0)-post).T.tolist())),
                            projection_notes=notes)
+        if audit_requested:
+            diagnostics["band_audit"] = audit_band(
+                variables, means, points, matrix, prediction, post, draws,
+                fitinfo["normalisations"], freeze_pattern, acceptance, edges)
+        diagnostics["seed"] = seed + int(mass)
         stem.with_suffix(".json").write_text(json.dumps(diagnostics, indent=2, allow_nan=False)+"\n")
 
 
@@ -250,7 +327,21 @@ def main():
     parser.add_argument("--samples", type=int, default=1000)
     parser.add_argument("--binning", choices=("fit", "1gev"), default="fit",
                         help="Use common fit edges or project each process with fixed nominal template fractions.")
+    parser.add_argument("--audit-band", action="store_true",
+                        help="Compare full, linearised, normalisation-only and fixed-normalisation yields.")
+    parser.add_argument("--audit-freeze", metavar="REGEX",
+                        help="Also evaluate with matching nuisance parameters fixed at the best fit.")
+    parser.add_argument("--seed", type=int, default=73100, help="Random seed offset (mass is added).")
     args = parser.parse_args()
+    if args.seed < 0:
+        parser.error("--seed must be non-negative")
+    if args.audit_freeze:
+        if not args.audit_band:
+            parser.error("--audit-freeze requires --audit-band")
+        try:
+            re.compile(args.audit_freeze)
+        except re.error as exc:
+            parser.error(str(exc))
     if args.samples < 2:
         parser.error("--samples must be at least 2")
     import ROOT
@@ -262,7 +353,8 @@ def main():
         paths = list((args.batch / "results").glob(f"**/M{m}/fit_r0/fit_summary.json"))
         if len(paths) != 1:
             raise SystemExit(f"M{m}: expected one collected fit_summary.json, found {len(paths)}")
-        plot_mass(ROOT, paths[0].parent, m, output, args.samples, args.binning)
+        plot_mass(ROOT, paths[0].parent, m, output, args.samples, args.binning,
+                  args.audit_band, args.audit_freeze, args.seed)
 
 
 if __name__ == "__main__":
