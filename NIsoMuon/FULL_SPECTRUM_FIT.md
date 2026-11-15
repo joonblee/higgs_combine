@@ -1306,9 +1306,34 @@ For a new fit-only batch that only needs background scales and constraints,
 add `--fit-output norms` to `full_spectrum_fit.py`. RooFitResult, covariance and
 normalisation extraction/audits remain enabled; `--saveShapes` and
 `--saveWithUncertainties` are omitted. The default `--fit-output full` preserves
-existing output. Shape plots require full output. This option does not change
+existing output. This option does not change
 the model signature, likelihood or nuisances. Use a new batch directory when
 changing diagnostic output; do not overwrite active results.
+
+## Blinded postfit dimuon mass distribution
+
+From `NIsoMuon`, plot a collected background-only batch:
+
+```bash
+batch=full_spectrum_outputs/condor/central_noWJets_window_Bonly_M12_M40_M70
+OPENBLAS_NUM_THREADS=1 python3 plot_dimuon_mass.py "$batch" --masses 12 40 70 --band combine --samples 5000
+```
+
+The PDF, PNG and JSON for each mass are written to `$batch/dimuon_mass_plots/combine/`.
+The points are the background-only Asimov counts. The stack is the fitted background
+at fixed `r=0`. The default display bins sum complete fit bins across all eight eras.
+The band uses the FitDiagnostics uncertainty about the best fit. With the optional
+`--fit-output overall` in a new fit, the plot reads `shapes_fit_b/overall_total_covar`.
+For existing fits without that histogram it uses the saved RooFitResult and workspace.
+Each joint nuisance draw gives a new yield in every process and channel. The squared
+deviation of their sum from its best-fit value is averaged over draws in each display
+bin. This includes correlations between eras and processes. The JSON records the source,
+central yields, bounds and yield covariance in event units.
+
+Add `--binning 1gev` for a display using fixed nominal template fractions inside each
+fit bin. This projection requires the original templates and uses joint draws because
+each process can have different fractions. `--band quantile` and `--audit-band`
+remain available for the 16th-to-84th percentile study.
 
 ## Dense expected limits without redundant FitDiagnostics
 

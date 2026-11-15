@@ -92,8 +92,9 @@ def make_parser():
                    help='Compute expected limits, and observed limits in unblind mode; Condor writes tables and a limits-only plot.')
     p.add_argument('--fit-components', choices=('both','b-only','s-only','none'), default='both',
                    help='Select diagnostic fits; none builds workspace and limits without FitDiagnostics (requires --expected-limits).')
-    p.add_argument('--fit-output', choices=('full','norms'), default='full',
-                   help='norms: save fit/covariance/normalisations without shapes or sampled shape uncertainties.')
+    p.add_argument('--fit-output', choices=('full','norms','overall'), default='full',
+                   help='full saves per-channel shapes; overall also saves the cross-channel yield covariance; '
+                        'norms saves only the fit/covariance/normalisations.')
     p.add_argument('--fit-strategy', type=int, choices=(0,1,2), default=1)
     p.add_argument('--fit-robust-hesse', action='store_true',
                    help='Opt-in covariance audit: robustHesse, with no parameter removal and a positive-definite full covariance required.')
@@ -469,8 +470,11 @@ def fit_commands(opt, mass, directory, fit_kind=None):
         for name in ('-t','--expectSignal'):
             i=commands[1].index(name)
             del commands[1][i:i+2]
-    if getattr(opt,'fit_output','full') == 'full':
+    fit_output = getattr(opt,'fit_output','full')
+    if fit_output in ('full','overall'):
         commands[1] += ['--saveShapes','--saveWithUncertainties']
+    if fit_output == 'overall':
+        commands[1].append('--saveOverallShapes')
     if getattr(opt,'fit_strategy',1) != 1:
         commands[1] += ['--setRobustFitStrategy',str(opt.fit_strategy)]
     if getattr(opt,'fit_tolerance',None) is not None:

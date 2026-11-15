@@ -168,7 +168,59 @@ def audit_band(variables, means, points, matrix, prediction, post, full, norm_na
                 freeze_pattern=freeze_pattern, matched=matched, scenarios=results)
 
 
-def draw(edges, components, bounds, asimov, mass, stem, projected):
+def saved_yield_covariance(directory, rows, fitted, groups):
+    """Read the FitDiagnostics B-only density covariance in labelled one-bin channels."""
+    cov = directory.Get("shapes_fit_b/overall_total_covar")
+    if not cov:
+        return None
+    width = directory.Get("shapes_fit_b/total_bin_width")
+    bkg = directory.Get("shapes_fit_b/total_background")
+    if not width or not bkg:
+        raise ValueError("Incomplete shapes_fit_b overall histograms")
+
+    # FitDiagnostics labels the first observable bin of a channel "<channel>_0".
+    labels = [r["channel"] + "_0" for r in rows]
+    def indices(axis):
+        by_name = {str(axis.GetBinLabel(i)): i for i in range(1, axis.GetNbins()+1)}
+        if axis.GetNbins() != len(labels) or set(by_name) != set(labels):
+            raise ValueError("Overall histogram labels do not match the fitted one-bin channels")
+        return [by_name[name] for name in labels]
+
+    dx = np.array([width.GetBinContent(i) for i in indices(width.GetXaxis())])
+    if not np.all(np.isfinite(dx) & (dx > 0)):
+        raise ValueError("Invalid FitDiagnostics observable bin widths")
+    bi = indices(bkg.GetXaxis())
+    centre = np.array([bkg.GetBinContent(i) for i in bi]) * dx
+    np.testing.assert_allclose(centre, fitted.sum(axis=1), rtol=1.e-5, atol=1.e-6)
+    ix, iy = indices(cov.GetXaxis()), indices(cov.GetYaxis())
+    matrix = np.array([[cov.GetBinContent(i, j) for j in iy] for i in ix]) * np.outer(dx, dx)
+    # At r=0 the total and total background are identical, including their errors.
+    err = np.array([bkg.GetBinError(i) for i in bi]) * dx
+    np.testing.assert_allclose(matrix.diagonal(), err**2, rtol=2.e-5, atol=1.e-8)
+    np.testing.assert_allclose(matrix, matrix.T, rtol=1.e-9, atol=1.e-10)
+    merge = np.zeros((len(groups), len(rows)))
+    for i, group in enumerate(groups):
+        merge[i, group] = 1.
+    return merge @ matrix @ merge.T
+
+
+def replay_yield_covariance(fit, parameters, prediction, centre, count):
+    """FitDiagnostics v10.6 getNormalizations: second moment about the best fit.
+
+    Each model row is one counting bin. Evaluate its process expectations on
+    the same joint RooFit draw across all eras, then form the display-bin sums.
+    """
+    deltas = np.empty((count, len(centre)))
+    try:
+        for i in range(count):
+            parameters.assignValueOnly(fit.randomizePars())
+            deltas[i] = prediction().sum(axis=1) - centre
+    finally:
+        parameters.assignValueOnly(fit.floatParsFinal())
+    return deltas.T @ deltas / count
+
+
+def draw(edges, components, bounds, asimov, mass, stem, projected, band_label):
     widths = np.diff(edges)
     total = components.sum(axis=1)
     lower, upper = bounds / widths
@@ -200,7 +252,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected):
             transform=ax.transAxes, va="top",
             linespacing=1.45, fontsize=11)
     ax.legend([points] + handles[::-1] + [band_patch],
-              ["Asimov"] + list(LABELS[::-1]) + ["Postfit bkg (16–84%)"],
+              ["Asimov"] + list(LABELS[::-1]) + [band_label],
               loc="upper right", frameon=False, fontsize=10, handlelength=2.4,
               borderaxespad=0.7, labelspacing=0.28)
 
@@ -227,7 +279,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected):
     plt.close(fig)
 
 
-def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, freeze_pattern, seed):
+def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, freeze_pattern, seed, band):
     model = read(fitdir.parent / "model.json")
     summary = read(fitdir / "fit_summary.json")
     fitinfo = summary["fits"]["fit_b"]
@@ -270,8 +322,10 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
     asimov = (project(nominal).sum(axis=1) if binning == "1gev" else
               np.array([observations[indices].sum() for indices in groups]))
     np.testing.assert_allclose(asimov.sum(), observations.sum())
-    with ROOT.TFile.Open(str(fitdir / "workspace.root")) as wf, ROOT.TFile.Open(
-        str(fitdir / "fit_b" / "fitDiagnostics.FullSpectrum.root")) as ff:
+    result = fitdir / "fit_b" / "fitDiagnostics.FullSpectrum.root"
+    if not result.is_file():
+        result = fitdir / "fitDiagnostics.FullSpectrum.root"
+    with ROOT.TFile.Open(str(fitdir / "workspace.root")) as wf, ROOT.TFile.Open(str(result)) as ff:
         w, fit = wf.Get("w"), ff.Get("fit_b")
         if not w or not fit or fit.status() != fitinfo["status"] or fit.covQual() != fitinfo["covQual"]:
             raise ValueError("Workspace or saved RooFitResult does not match fit summary")
@@ -288,8 +342,9 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
             funcs.append(channel)
         def prediction():
             return project(evaluate(funcs))
-        rng = np.random.default_rng(seed + int(mass))
         pars = list(fit.floatParsFinal())
+        if any(p.GetName() == "r" for p in pars):
+            raise ValueError("Expected a background-only RooFitResult with fixed r")
         variables = [w.var(p.GetName()) for p in pars]
         means = np.array([p.getVal() for p in pars])
         for var, x in zip(variables, means):
@@ -299,24 +354,49 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
         fitted = evaluate(funcs)
         np.testing.assert_allclose(fitted, native, rtol=1.e-5, atol=1.e-6)
         post = project(fitted)
-        cov = fit.covarianceMatrix()
-        matrix = np.array([[cov[i][j] for j in range(len(pars))] for i in range(len(pars))])
-        points, acceptance = sample_points(variables, means, np.linalg.cholesky(matrix), samples, rng)
-        draws = evaluate_points(variables, means, points, prediction)
-        q16, median, q84 = np.quantile(draws.sum(axis=2), [0.16, 0.5, 0.84], axis=0)
+        centre = post.sum(axis=1)
         suffix = "_1GeV" if binning == "1gev" else ""
         stem = output / f"dimuon_mass_M{mass:g}_postfit_b{suffix}"
-        draw(np.array(edges), post, np.array([q16, q84]), asimov, mass, stem, binning == "1gev")
-        diagnostics = dict(binning=binning, samples=samples, edges=list(edges),
-                           asimov=asimov.tolist(), central=post.sum(axis=1).tolist(),
-                           q16=q16.tolist(), median=median.tolist(), q84=q84.tolist(),
-                           mean_shift_by_process=dict(zip(PROCESSES, (draws.mean(axis=0)-post).T.tolist())),
+        diagnostics = dict(binning=binning, band=band, edges=list(edges),
+                           asimov=asimov.tolist(), central=centre.tolist(),
                            projection_notes=notes)
-        if audit_requested:
-            diagnostics["band_audit"] = audit_band(
-                variables, means, points, matrix, prediction, post, draws,
-                fitinfo["normalisations"], freeze_pattern, acceptance, edges)
-        diagnostics["seed"] = seed + int(mass)
+        if band == "combine":
+            # Within a native bin a 1 GeV projection has different fractions
+            # for each process, so a total-background covariance cannot be split.
+            matrix = saved_yield_covariance(ff, rows, fitted, groups) if binning == "fit" else None
+            if matrix is None:
+                ROOT.RooRandom.randomGenerator().SetSeed(seed + mass)
+                matrix = replay_yield_covariance(fit, w.allVars(), prediction, centre, samples)
+                source = "RooFitResult.randomizePars"
+                diagnostics.update(seed=seed + mass, samples=samples)
+            else:
+                source = "shapes_fit_b/overall_total_covar"
+            if not np.all(np.isfinite(matrix)) or np.any(matrix.diagonal() < 0):
+                raise ValueError("Invalid display-bin yield covariance")
+            sigma = np.sqrt(matrix.diagonal())
+            bounds = np.array([centre - sigma, centre + sigma])
+            diagnostics.update(source=source, yield_covariance=matrix.tolist(), sigma=sigma.tolist())
+            band_label = r"Postfit bkg ($\pm1\sigma$)"
+            print(f"[BAND] M{mass} {source}, [{edges[0]:g}, {edges[1]:g}) GeV: "
+                  f"{centre[0]:.2f} +/- {sigma[0]:.2f} events")
+        else:
+            rng = np.random.default_rng(seed + mass)
+            cov = fit.covarianceMatrix()
+            matrix = np.array([[cov[i][j] for j in range(len(pars))] for i in range(len(pars))])
+            points, acceptance = sample_points(variables, means, np.linalg.cholesky(matrix), samples, rng)
+            draws = evaluate_points(variables, means, points, prediction)
+            q16, median, q84 = np.quantile(draws.sum(axis=2), [0.16, 0.5, 0.84], axis=0)
+            bounds = np.array([q16, q84])
+            band_label = "Postfit bkg (16–84%)"
+            diagnostics.update(seed=seed + mass, samples=samples, q16=q16.tolist(),
+                               median=median.tolist(), q84=q84.tolist(),
+                               mean_shift_by_process=dict(zip(PROCESSES, (draws.mean(axis=0)-post).T.tolist())))
+            if audit_requested:
+                diagnostics["band_audit"] = audit_band(
+                    variables, means, points, matrix, prediction, post, draws,
+                    fitinfo["normalisations"], freeze_pattern, acceptance, edges)
+        diagnostics.update(lower=bounds[0].tolist(), upper=bounds[1].tolist())
+        draw(np.array(edges), post, bounds, asimov, mass, stem, binning == "1gev", band_label)
         stem.with_suffix(".json").write_text(json.dumps(diagnostics, indent=2, allow_nan=False)+"\n")
 
 
@@ -325,6 +405,9 @@ def main():
     parser.add_argument("batch", type=Path)
     parser.add_argument("--masses", type=int, nargs="+", default=[12, 40, 70])
     parser.add_argument("--samples", type=int, default=1000)
+    parser.add_argument("--band", choices=("combine", "quantile"),
+                        help="Default: FitDiagnostics uncertainty about the best fit. "
+                             "Use quantile for the 16–84%% diagnostic.")
     parser.add_argument("--binning", choices=("fit", "1gev"), default="fit",
                         help="Use common fit edges or project each process with fixed nominal template fractions.")
     parser.add_argument("--audit-band", action="store_true",
@@ -333,6 +416,9 @@ def main():
                         help="Also evaluate with matching nuisance parameters fixed at the best fit.")
     parser.add_argument("--seed", type=int, default=73100, help="Random seed offset (mass is added).")
     args = parser.parse_args()
+    band = args.band or ("quantile" if args.audit_band else "combine")
+    if args.audit_band and band != "quantile":
+        parser.error("--audit-band studies quantiles; use --band quantile with this option")
     if args.seed < 0:
         parser.error("--seed must be non-negative")
     if args.audit_freeze:
@@ -348,13 +434,15 @@ def main():
     ROOT.gROOT.SetBatch(True)
     ROOT.gSystem.Load("libHiggsAnalysisCombinedLimit")
     output = args.batch / "dimuon_mass_plots"
-    output.mkdir(exist_ok=True)
+    if band == "combine":
+        output = output / "combine"
+    output.mkdir(parents=True, exist_ok=True)
     for m in args.masses:
         paths = list((args.batch / "results").glob(f"**/M{m}/fit_r0/fit_summary.json"))
         if len(paths) != 1:
             raise SystemExit(f"M{m}: expected one collected fit_summary.json, found {len(paths)}")
         plot_mass(ROOT, paths[0].parent, m, output, args.samples, args.binning,
-                  args.audit_band, args.audit_freeze, args.seed)
+                  args.audit_band, args.audit_freeze, args.seed, band)
 
 
 if __name__ == "__main__":
