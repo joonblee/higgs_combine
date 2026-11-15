@@ -386,11 +386,14 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
             if value == '-':
                 continue
             name = base.nuisance_global_name(local, row['era'])
-            if local.endswith('_stat') or local == 'DY_LightJetStat':
+            if local.endswith('_stat') or local in ('DY_SourceStat', 'DY_LightJetStat'):
                 if modern:
-                    source = name.removesuffix('_BJetOS_' + row['era'])
+                    source = ('CMS_NPS26009_DYStat' if local == 'DY_SourceStat'
+                              else name.removesuffix('_BJetOS_' + row['era']))
                     name = f'{source}_{row["channel"]}'
                 else:
+                    if local == 'DY_SourceStat':
+                        name = f'CMS_NPS26009_DYStat_BJetOS_{row["era"]}'
                     name += '_'+row['region']
             lnn.setdefault(name, ['-']*len(columns))[index] = value
     lines.extend(name+' lnN '+' '.join(values) for name, values in sorted(lnn.items()))

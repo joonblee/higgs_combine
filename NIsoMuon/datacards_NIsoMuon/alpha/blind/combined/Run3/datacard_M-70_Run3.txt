@@ -27,7 +27,7 @@ rate                3.008794721         1.000000000         2.664208482         
 # b tagging = BTV fixed-WP comb_bc/incl_light x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)
 # data-driven QCD: QCD_norm is lnN; QCD_shape and QCD_stat are additive Gaussians on the absolute yield
 # QCD_stat: common transport uses era-local low-NF+fit bounds plus a shared MC shift; legacy methods use full NF+fit bounds
-# data-driven DY: light-jet data source x aMC NF; positive source: LightJetStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: LightJetStat=additive Gaussian, NFStat/NFModel disabled
+# data-driven DY: light-jet data source x aMC NF; positive source: DYStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: DYStat=additive Gaussian, NFStat/NFModel disabled
 # DY boundary: integrate signed LightJetSource first; nonpositive windows use nominal 0 with the unchanged source Sumw2 error
 # PDF set = NNPDF31_nnlo_as_0118_mc_hessian_pdfas; PDFError0..99 use symmetric-Hessian quadrature
 # generator scale: separate paired muF/muR nuisances; no 7-point envelope
@@ -68,8 +68,8 @@ CMS_NPS26009_bckgNorm_QCD_BJetOS_2022 lnN                 -                   0.
 CMS_NPS26009_bckgNorm_QCD_BJetOS_2022EE lnN                 -                   -                   -                   -                   -                   -                   -                   0.964884/1.03639    -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
 CMS_NPS26009_bckgNorm_QCD_BJetOS_2023 lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.704612/1.41922    -                   -                   -                   -                   -                   -                   -                   -                   -                   -
 CMS_NPS26009_bckgNorm_QCD_BJetOS_2023BPix lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   0.823398/1.21448    -                   -                   -                   -
-CMS_NPS26009_LightJetStat_DY_BJetOS_2022 lnN                 -                   -                   -                   -                   1e-06/2.5269        -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
-CMS_NPS26009_LightJetStat_DY_BJetOS_2022EE lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   1e-06/2.2618        -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
+CMS_NPS26009_DYStat_SR_2022 lnN                 -                   -                   -                   -                   1e-06/2.5269        -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
+CMS_NPS26009_DYStat_SR_2022EE lnN                 -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   1e-06/2.2618        -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
 CMS_NPS26009_NFModel_DY_BJetOS_13p6TeV lnN                 -                   -                   -                   -                   0.920653/1.07935    -                   -                   -                   -                   -                   0.826072/1.17393    -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
 CMS_NPS26009_MCstat_signal_BJetOS_2022 lnN                 0.96997/1.03003     -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
 CMS_NPS26009_MCstat_signal_BJetOS_2022EE lnN                 -                   -                   -                   -                   -                   -                   0.970721/1.02928    -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -                   -
@@ -98,11 +98,11 @@ CMS_NPS26009_NFStat_DY_BJetOS_2022 rateParam bin_2022 DY 0.069651210 [0,0.195604
 CMS_NPS26009_NFStat_DY_BJetOS_2022 param 0.069651210 0.012595288
 CMS_NPS26009_NFStat_DY_BJetOS_2022EE rateParam bin_2022EE DY 0.073803661 [0,0.154904530]
 CMS_NPS26009_NFStat_DY_BJetOS_2022EE param 0.073803661 0.008110087
-# Additive Gaussian DY LightJetStat for zero central source
-CMS_NPS26009_LightJetStat_DY_BJetOS_2023 rateParam bin_2023 DY 0 [0,0.000779284]
-CMS_NPS26009_LightJetStat_DY_BJetOS_2023 param 0 7.792843547e-05
-CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix rateParam bin_2023BPix DY 0 [0,0.108339605]
-CMS_NPS26009_LightJetStat_DY_BJetOS_2023BPix param 0 0.010833961
+# Additive Gaussian DY DYStat for zero central source
+CMS_NPS26009_DYStat_SR_2023 rateParam bin_2023 DY 0 [0,0.000779284]
+CMS_NPS26009_DYStat_SR_2023 param 0 7.792843547e-05
+CMS_NPS26009_DYStat_SR_2023BPix rateParam bin_2023BPix DY 0 [0,0.108339605]
+CMS_NPS26009_DYStat_SR_2023BPix param 0 0.010833961
 # QCD yield = max(0, shape-yield parameter + era-local statistical shift + common MC shift)
 # QCD common transport Run3: 29fef3d063dfc9633af09ab4411ca11cbe42fb810d0f814a3bd3a3265b4d2aff
 CMS_NPS26009_QCD_MCTransferStat_Run3 param 0 1
@@ -128,7 +128,7 @@ CMS_NPS26009_yield_QCD_BJetOS_2023BPix rateParam bin_2023BPix QCD max(0.0,@0+@1+
 # - 2022: jes/tt has both Down and Up ratios on the same side of unity (0.993305/0.999674) in 2022; no automatic symmetrisation was applied.
 # - 2022: jes/Others has both Down and Up ratios on the same side of unity (1.00003/1.00969) in 2022; no automatic symmetrisation was applied.
 # - 2022: pu/Others has a pathological lnN factor (2.16268/1e-06) in 2022; an additive or template-based treatment may be required for a nearly zero nominal rate.
-# - 2022: DY_LightJetStat/DY has a pathological lnN factor (1e-06/2.5269) in 2022; an additive or template-based treatment may be required for a nearly zero nominal rate.
+# - 2022: DYStat/DY has a pathological lnN factor (1e-06/2.5269) in 2022; an additive or template-based treatment may be required for a nearly zero nominal rate.
 # - 2022: ST_stat/ST has a pathological lnN factor (1e-06/2) in 2022; an additive or template-based treatment may be required for a nearly zero nominal rate.
 # - 2022: Others_stat/Others has a pathological lnN factor (1e-06/5.98565) in 2022; an additive or template-based treatment may be required for a nearly zero nominal rate.
 # - 2022EE: jer/sig has both Down and Up ratios on the same side of unity (1.00125/1.00063) in 2022EE; no automatic symmetrisation was applied.
@@ -137,7 +137,7 @@ CMS_NPS26009_yield_QCD_BJetOS_2023BPix rateParam bin_2023BPix QCD max(0.0,@0+@1+
 # - 2022EE: pu/tt has both Down and Up ratios on the same side of unity (1.00868/1.01928) in 2022EE; no automatic symmetrisation was applied.
 # - 2022EE: pu/Others has both Down and Up ratios on the same side of unity (0.985497/0.964603) in 2022EE; no automatic symmetrisation was applied.
 # - 2022EE: mu_scale/Others has both Down and Up ratios on the same side of unity (1.00162/1.00003) in 2022EE; no automatic symmetrisation was applied.
-# - 2022EE: DY_LightJetStat/DY has a pathological lnN factor (1e-06/2.2618) in 2022EE; an additive or template-based treatment may be required for a nearly zero nominal rate.
+# - 2022EE: DYStat/DY has a pathological lnN factor (1e-06/2.2618) in 2022EE; an additive or template-based treatment may be required for a nearly zero nominal rate.
 # - 2023: jes/sig has both Down and Up ratios on the same side of unity (0.999321/0.999866) in 2023; no automatic symmetrisation was applied.
 # - 2023: jes/tt has both Down and Up ratios on the same side of unity (1.00015/1.01452) in 2023; no automatic symmetrisation was applied.
 # - 2023: jes/Others has both Down and Up ratios on the same side of unity (1.00018/1.0005) in 2023; no automatic symmetrisation was applied.

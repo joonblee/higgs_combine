@@ -55,7 +55,7 @@ Uncertainty policy in this revision
   and cards for this storage format. Older ROOT files/cards are rejected.
 * Data-driven DY uses a constant aMC@NLO B/light normalization factor
   measured in 11--80 GeV and applied to the background-subtracted light-jet
-  data source.  LightJetStat comes from that source Sumw2 error; the full aMC
+  data source.  DYStat comes from that source Sumw2 error; the full aMC
   finite-MC NF uncertainty is a Gaussian-constrained rateParam; and the
   symmetric aMC@NLO-vs-MG-LO NF difference is a separate modelling nuisance.
   No generic DY_stat term is constructed.
@@ -708,7 +708,7 @@ def qcd_root_window_statistics(inputs, low, high, nominal=None):
 BACKGROUND_CONTRACT = "SKPlotMaker-NF-SS-20261011-v6-SignedDYWindowCommonQCDTransport"
 DY_NF_RATEPARAM_NSIGMA = 10.0
 DATA_DRIVEN_DY_NUISANCES: Tuple[str, ...] = (
-    "DY_LightJetStat", "DY_NFModel"
+    "DY_SourceStat", "DY_NFModel"
 )
 
 # PDF configuration used by the simulated tt and single-top samples.
@@ -2057,7 +2057,7 @@ def _audit_dy_background_inputs(
     """Validate signed NF inputs before the physical counting-window boundary.
 
     These are input-integrity checks, not additional nuisance parameters.
-    NFStat is common to every mass window of one era; LightJetStat is the
+    NFStat is common to every mass window of one era; DYStat is the
     quadrature Sumw2 uncertainty of Data-QCD-Top-Others in the selected window.
     """
     for label, result in (("LightJetSource", source), ("NF_aMC", nf_amc), ("NF_MG", nf_mg)):
@@ -2086,7 +2086,7 @@ def _audit_dy_background_inputs(
     _background_check(
         args, audit, warnings, "background/DY_source_error", year,
         nominal is not None and _background_close(nominal.error, source.error * nf_amc.value),
-        "The nominal DY histogram error must contain LightJetStat only; "
+        "The nominal DY histogram error must contain DYStat only; "
         "NFStat must remain separate in DYAux/NF_aMC.",
     )
 
@@ -2242,7 +2242,7 @@ def _validate_background_card(args, card):
             has_rate = any(len(row) >= 5 and row[:4] == [nf_name, "rateParam", bin_name, "DY"] for row in rows)
             has_constraint = any(len(row) >= 4 and row[:2] == [nf_name, "param"] for row in rows)
             if not (has_rate and has_constraint):
-                light_name = nuisance_global_name("DY_LightJetStat", year)
+                light_name = nuisance_global_name("DY_SourceStat", year)
                 has_zero_rate = any(
                     len(row) >= 5 and row[:4] == [light_name, "rateParam", bin_name, "DY"]
                     for row in rows
@@ -2258,7 +2258,7 @@ def _validate_background_card(args, card):
                 if not ((has_zero_rate and has_zero_constraint) or fixed_zero):
                     raise WorkflowError(
                         f"{card}: DY needs either NFStat rateParam+param or zero-source "
-                        f"additive LightJetStat rateParam+param (or a fixed zero rate) for {year}."
+                        f"additive DYStat rateParam+param (or a fixed zero rate) for {year}."
                     )
     if args.qcd_method == "data-driven":
         if any(len(row) > 1 and row[1] == "lnN" and "_MCstat_QCD_" in row[0] for row in rows):
@@ -2384,7 +2384,7 @@ def build_channels_for_mass(
                         print(
                             f"[DY WINDOW] {year} M-{label}: signed source={source.value:.6g}, "
                             f"source error={dy_lightjet_error:.6g}, nominal=0, "
-                            f"additive LightJetStat={dy_nf_amc*dy_lightjet_error:.6g}"
+                            f"additive DYStat={dy_nf_amc*dy_lightjet_error:.6g}"
                         )
 
                     # Central/error closure and the full DYAux schema were
@@ -2604,11 +2604,11 @@ def build_channels_for_mass(
 
         # Data-driven DY:
         #   final yield = pre-NF background-subtracted light-jet data * aMC NF.
-        # LightJetStat is the source Sumw2 term in this counting window.
+        # DYStat is the source Sumw2 term in this counting window.
         # NFStat is emitted below as a Gaussian-constrained positive rateParam.
         # NFModel is the symmetric aMC@NLO-vs-MG-LO NF difference.
         if args.dy_method == "data-driven":
-            light_name = "DY_LightJetStat"
+            light_name = "DY_SourceStat"
             nuis[light_name] = {p: "-" for p in PROCESSES}
             source_yield = dy_lightjet_yield or 0.0
             source_error = dy_lightjet_error or 0.0
@@ -2954,18 +2954,20 @@ def spectrum_parameter_name(name: str, channels=None) -> str:
         if name.startswith(f"FS_{kind}_"):
             name = "CMS_NPS26009_" + name[3:]
             break
+    name = name.replace("CMS_NPS26009_LightJetStat_DY_", "CMS_NPS26009_DYStat_")
     if channels:
         if name in channels:
             return channels[name]
         match = re.fullmatch(r"(.*_)(bin_\w+_(?:SR|[BLR]\d+))", name)
         if match and match[2] in channels:
             return match[1] + channels[match[2]]
-        match = re.fullmatch(r"(CMS_NPS26009_(?:MCstat_\w+?|LightJetStat_DY)_BJetOS_|CMS_NPS26009_DYClosure_)(\w+?)_(SR|[BLR]\d+)", name)
+        match = re.fullmatch(r"(CMS_NPS26009_(?:MCstat_\w+?|DYStat)_BJetOS_|CMS_NPS26009_DYClosure_)(\w+?)_(SR|[BLR]\d+)", name)
         if match:
             channel = channels.get(f"bin_{match[2]}_{match[3]}")
             if channel:
                 return match[1].replace("_BJetOS_", "_") + channel
-    return name
+    return re.sub(r"^CMS_NPS26009_DYStat_BJetOS_(\w+)$",
+                  r"CMS_NPS26009_DYStat_SR_\1", name)
 
 
 def spectrum_normalisation_name(process, era):
@@ -3048,7 +3050,9 @@ def nuisance_global_name(local: str, year: str) -> str:
         return f"CMS_NPS26009_stat_QCD_BJetOS_{year}"
     if local == "DY_NFStat":
         return f"CMS_NPS26009_NFStat_DY_BJetOS_{year}"
-    if local == "DY_LightJetStat":
+    if local == "DY_SourceStat":
+        return f"CMS_NPS26009_DYStat_SR_{year}"
+    if local == "DY_LightJetStat":  # Saved pre-rename model input.
         return f"CMS_NPS26009_LightJetStat_DY_BJetOS_{year}"
     if local == "DY_NFModel":
         energy = "13TeV" if year in RUN2_ERAS else "13p6TeV"
@@ -3235,7 +3239,7 @@ def write_datacard(
         "# b tagging = BTV fixed-WP comb_bc/incl_light x correlated/uncorrelated multi-era scheme (correlated within Run 2 or Run 3)",
         "# data-driven QCD: QCD_norm is lnN; QCD_shape and QCD_stat are additive Gaussians on the absolute yield",
         "# QCD_stat: common transport uses era-local low-NF+fit bounds plus a shared MC shift; legacy methods use full NF+fit bounds",
-        "# data-driven DY: light-jet data source x aMC NF; positive source: LightJetStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: LightJetStat=additive Gaussian, NFStat/NFModel disabled",
+        "# data-driven DY: light-jet data source x aMC NF; positive source: DYStat=lnN, NFStat=Gaussian rateParam, NFModel=lnN; zero source: DYStat=additive Gaussian, NFStat/NFModel disabled",
         "# DY boundary: integrate signed LightJetSource first; nonpositive windows use nominal 0 with the unchanged source Sumw2 error",
         f"# PDF set = {PDF_SET_NAME}; PDFError0..99 use symmetric-Hessian quadrature",
         "# generator scale: separate paired muF/muR nuisances; no 7-point envelope",
@@ -3298,7 +3302,7 @@ def write_datacard(
                 f"{format_number(nf)} {format_number(nf_error)}"
             )
 
-    # Zero-source DY LightJetStat: absolute Gaussian uncertainty.  The DY
+    # Zero-source DYStat: absolute Gaussian uncertainty.  The DY
     # process has base rate=1 only for these channels, so this rateParam is the
     # absolute DY yield.  NFStat and NFModel are deliberately absent here.
     if args.dy_method == "data-driven":
@@ -3313,7 +3317,7 @@ def write_datacard(
             if sigma <= 0.0 or not math.isfinite(sigma):
                 continue
             upper = max(10.0 * sigma, 1.0e-6)
-            nuisance_name = nuisance_global_name("DY_LightJetStat", channel.year)
+            nuisance_name = nuisance_global_name("DY_SourceStat", channel.year)
             bin_name = f"bin_{channel.year}"
             additive_dy_lines.append(
                 f"{nuisance_name} rateParam {bin_name} DY 0 [0,{format_number(upper)}]"
@@ -3322,7 +3326,7 @@ def write_datacard(
                 f"{nuisance_name} param 0 {format_number(sigma)}"
             )
         if additive_dy_lines:
-            lines.append("# Additive Gaussian DY LightJetStat for zero central source")
+            lines.append("# Additive Gaussian DYStat for zero central source")
             lines.extend(additive_dy_lines)
 
     # One yield modifier adds shape and statistical shifts, rather than
@@ -6357,7 +6361,7 @@ def print_configuration(args: argparse.Namespace) -> None:
     print(f"[CONFIG] search_mass_window=[{SEARCH_MASS_MIN:g},{SEARCH_MASS_MAX:g}] GeV")
     print(f"[CONFIG] QCD={args.qcd_method}, DY={args.dy_method}")
     if args.dy_method == "data-driven":
-        print("[CONFIG] DY=constant NF; DY_NFStat + DY_LightJetStat; DY_stat=disabled")
+        print("[CONFIG] DY=constant NF; DY_NFStat + DY_SourceStat; DY_stat=disabled")
     if args.qcd_method == "data-driven":
         print("[CONFIG] data-driven QCD_stat=era-local low-NF+SS-fit bound + common MC shift within Run (legacy: full NF+fit bound)")
     print(

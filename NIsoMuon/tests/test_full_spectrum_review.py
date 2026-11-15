@@ -100,6 +100,33 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(fs.base.spectrum_parameter_name('FS_QCDFitMode4_2018'),
                          'CMS_NPS26009_QCDSSFitStat_eig4_2018')
 
+    def test_dy_source_stat_names_cover_positive_and_zero_bins(self):
+        model, unused = window_example()
+        row = model['rows'][0]
+        row['rates']['DY'] = 0.
+        row['dy_stat'] = 2.
+        row['nuisances']['DY_SourceStat']['DY'] = '-'
+        row['asimov'] = sum(row['rates'][p] for p in shared.BACKGROUNDS)
+        text = shared.card_text(model, normalisation_kappa=1.5, prefix='FS')
+        self.assertIn('CMS_NPS26009_DYStat_'+row['channel']+' param 0 1', text)
+        positive = model['rows'][1]
+        self.assertIn('CMS_NPS26009_DYStat_'+positive['channel']+' lnN', text)
+        self.assertNotIn('LightJetStat', text)
+        self.assertEqual(shared.nominal_predictions(text)[row['channel']], row['asimov'])
+
+    def test_dy_stat_label_translation_preserves_independent_channels(self):
+        labels = {'bin_2018_L0000': 'bin0_2018', 'bin_2018_SR': 'SR_2018'}
+        names = {
+            'FS_DYStat_bin_2018_L0000': 'CMS_NPS26009_DYStat_bin0_2018',
+            'CMS_NPS26009_DYStat_bin_2018_L0000': 'CMS_NPS26009_DYStat_bin0_2018',
+            'CMS_NPS26009_LightJetStat_DY_BJetOS_2018_L0000': 'CMS_NPS26009_DYStat_bin0_2018',
+            'CMS_NPS26009_LightJetStat_DY_SR_2018': 'CMS_NPS26009_DYStat_SR_2018',
+            'CMS_NPS26009_LightJetStat_DY_BJetOS_2018': 'CMS_NPS26009_DYStat_SR_2018',
+            'CMS_NPS26009_DYStat_SR_2018': 'CMS_NPS26009_DYStat_SR_2018',
+        }
+        for original, expected in names.items():
+            self.assertEqual(fs.base.spectrum_parameter_name(original, labels), expected)
+
     def test_preparation_reuses_saved_card_without_root_inputs(self):
         model,text=window_example()
         with tempfile.TemporaryDirectory() as directory:

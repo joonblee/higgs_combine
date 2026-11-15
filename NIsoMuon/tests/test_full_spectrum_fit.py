@@ -34,7 +34,7 @@ def example_model():
                 low=lo, high=hi, rates=rates, asimov=sum(rates[p] for p in shared.BACKGROUNDS),
                 qcd_shape=.02*qcd, qcd_modes=[.01*qcd, (-1)**i*.01*qcd], dy_stat=.1*dy,
                 nuisances={'tt_stat': {'tt':'0.95/1.05'}, 'QCD_norm': {'QCD':'0.8/1.2'},
-                           'DY_NFModel': {'DY':'0.9/1.1'}, 'DY_LightJetStat': {'DY':'0.9/1.1'},
+                           'DY_NFModel': {'DY':'0.9/1.1'}, 'DY_SourceStat': {'DY':'0.9/1.1'},
                            'PDF_scale_tt_muR': {'tt':'0.9/1.1'}}))
     return dict(schema_version=fs.SCHEMA, blind=True, fit_kind='full_spectrum',
         mass=30., target=opt.target, rows=rows, eras={'2018':{},'2023':{}},
@@ -341,7 +341,7 @@ class CardTests(unittest.TestCase):
         row=model['rows'][0]
         row['asimov']-=row['rates']['DY']
         row['rates']['DY']=0.
-        row['nuisances']['DY_LightJetStat']['DY']='-'
+        row['nuisances']['DY_SourceStat']['DY']='-'
         text=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
         self.assertIn('CMS_NPS26009_DYYield_bin0_2018 rateParam',text)
         self.assertIn('max(0.,12*@0)',text)

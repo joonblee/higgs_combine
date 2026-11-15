@@ -79,10 +79,6 @@ QCDscale_ren_ttbar:
   class: custom
   description: 'Statistical uncertainty in the normalization factor used for the data-driven Drell-Yan prediction, treated independently by data-taking era.'
 
-'CMS_NPS26009_LightJetStat_DY_BJetOS_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
-  class: custom
-  description: 'Finite-statistics uncertainty of the light-jet control-region input to the data-driven Drell-Yan prediction, treated independently by data-taking era.'
-
 'CMS_NPS26009_NFModel_DY_BJetOS_(13TeV|13p6TeV)':
   class: custom
   description: 'Model uncertainty in the data-driven Drell-Yan normalization factor, correlated within Run 2 or Run 3 and decorrelated between the two Runs.'
@@ -127,17 +123,13 @@ CMS_NPS26009_pdf_NNPDF31:
   class: custom
   description: 'Functional-form uncertainty of the QCD prediction, shared across bins in one era.'
 
-'CMS_NPS26009_LightJetStat_DY_(bin[0-9]+|SR)_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
-  class: custom
-  description: 'Finite light-jet control sample for the DY prediction in one bin and era.'
-
 'CMS_NPS26009_MCstat_(signal|ttbar|singleTop|other)_(bin[0-9]+|SR)_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: custom
   description: 'Finite simulated-sample statistics for one process, bin and era.'
 
 'CMS_NPS26009_DYStat_(bin[0-9]+|SR)_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: custom
-  description: 'Additive source-statistical uncertainty for a zero nominal DY yield.'
+  description: 'Statistical uncertainty of the background-subtracted light-jet DY source in one bin and era; log-normal for a positive nominal yield and additive Gaussian for a zero nominal yield.'
 
 'CMS_NPS26009_DYClosure_(bin[0-9]+|SR)_(2016preVFP|2016postVFP|2017|2018|2022|2022EE|2023|2023BPix)':
   class: custom

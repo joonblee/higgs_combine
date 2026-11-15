@@ -26,7 +26,7 @@ def example_model():
                              rates=rates, asimov=sum(rates[p] for p in sb.BACKGROUNDS),
                              qcd_shape=qcd*.03, qcd_modes=[qcd*.02, dy*.01], dy_stat=dy*.1,
                              nuisances={'tt_stat': {'tt': '0.95/1.05'}, 'QCD_norm': {'QCD': '0.8/1.2'},
-                                        'DY_NFModel': {'DY': '0.9/1.1'}, 'DY_LightJetStat': {'DY': '0.9/1.1'},
+                                        'DY_NFModel': {'DY': '0.9/1.1'}, 'DY_SourceStat': {'DY': '0.9/1.1'},
                                         'PDF_scale_tt_muR': {'tt': '0.9/1.1'}}))
     opt = sb.make_parser().parse_args(['--masses', '22'])
     return dict(schema_version=1, blind=True, observation='nominal_background_Asimov', mass=22., target='Run2Run3',
@@ -119,7 +119,7 @@ class StatisticalTests(unittest.TestCase):
         row=model['rows'][0]
         row['asimov']-=row['rates']['DY']
         row['rates']['DY']=0.
-        row['nuisances']['DY_LightJetStat']['DY']='-'
+        row['nuisances']['DY_SourceStat']['DY']='-'
         text=sb.card_text(model)
         self.assertIn('max(0.,2*@0)',text)
         with tempfile.TemporaryDirectory() as directory:
