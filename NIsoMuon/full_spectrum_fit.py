@@ -60,8 +60,8 @@ def make_parser():
     p.add_argument('--resolution-map')
     p.add_argument('--region', default=base.DEFAULT_REGION)
     p.add_argument('--trigger', default='')
-    p.add_argument('--fit-layout', choices=('spectrum', 'window'), default='spectrum',
-                   help='spectrum: existing resolution bins; window: one SR count plus coarse sidebands.')
+    p.add_argument('--fit-layout', choices=('spectrum', 'window', 'fixed'), default='spectrum',
+                   help='spectrum: resolution bins; window: one SR count plus coarse sidebands; fixed: 20 central bins without an SR split.')
     p.add_argument('--sr-nsigma', type=shared.finite_positive, default=5.)
     p.add_argument('--sideband-binning', choices=tuple(SIDEBAND_PRESETS), default='central',
                    help='Window-layout sidebands: central has 20 reference bins, fine 40, '
@@ -166,6 +166,10 @@ def configuration(opt):
         validate_sideband_options(opt)
         if getattr(opt, 'fast_mode', False) or opt.bin_sigma != 1.:
             raise ValueError('Window layout uses --sideband-edges/--sideband-refine, not --fast-mode/--bin-sigma.')
+    if getattr(opt, 'fit_layout', 'spectrum') == 'fixed':
+        if (opt.bin_sigma != 1. or opt.fast_mode or opt.sideband_edges is not None
+                or opt.sideband_binning != 'central' or opt.sideband_refine != 1):
+            raise ValueError('Fixed layout uses the 20 central mass bins without refinement.')
     if opt.norm_prior <= 1:
         raise ValueError('--norm-prior must exceed one.')
     dy_unc = getattr(opt, 'dy_shape_uncertainty', 0.)
@@ -293,7 +297,9 @@ def model_directory(opt, mass):
         code = hashlib.sha256(json.dumps(geometry).encode()).hexdigest()[:10]
         tag = f'{opt.target}_window{base.mass_label(opt.sr_nsigma)}sigma_sb{code}_lnN{base.mass_label(opt.norm_prior)}'
         return Path(opt.output_base).resolve()/(tag+('_signalSR25_v1' if getattr(opt,'signal_counting_version',1)>=2 else '')+dy_study_tag(opt))/f'M{base.mass_label(mass)}'
-    tag = f'{opt.target}_binsigma{base.mass_label(effective_bin_sigma(opt))}_lnN{base.mass_label(opt.norm_prior)}'
+    geometry = ('fixed20' if getattr(opt, 'fit_layout', 'spectrum') == 'fixed'
+                else 'binsigma' + base.mass_label(effective_bin_sigma(opt)))
+    tag = f'{opt.target}_{geometry}_lnN{base.mass_label(opt.norm_prior)}'
     if getattr(opt, 'fast_mode', False):
         tag += '_fast'
     return Path(opt.output_base).resolve()/(tag+dy_study_tag(opt))/f'M{base.mass_label(mass)}'
@@ -325,6 +331,8 @@ def signature(opt):
         result['interpolate_signal'] = True
         if getattr(opt,'signal_counting_version',1)>=2:
             result['signal_interpolation_method'] = 'counting_v2'
+    if getattr(opt, 'fit_layout', 'spectrum') == 'fixed':
+        result.update(fit_layout='fixed', fixed_edges=list(SIDEBAND_EDGES))
     # Preserve compatibility with existing full-resolution saved models.
     if getattr(opt, 'fast_mode', False):
         result['fast_mode'] = True
@@ -362,6 +370,8 @@ def decorate_model(model, opt, windows):
                  uncertainty_model=('Step 1: broad QCD/DY/tt normalisations; inherited template '
                     'responses, SS covariance and envelope, DY source and MC statistics. '
                     'Additional DY closure/QCD transport shape studies remain separate.'))
+    if getattr(opt, 'fit_layout', 'spectrum') == 'fixed':
+        model.update(fit_kind='fixed_bin_spectrum', effective_bin_sigma=None)
     if getattr(opt,'fit_layout','spectrum') == 'window':
         model['fit_kind'] = 'window_count_with_sidebands'
         model['effective_bin_sigma'] = None
@@ -749,6 +759,13 @@ def prepare_inputs(reader, args, opt):
                 bins = window_bins(edges,low,high,sideband_reference(opt),opt.sideband_refine,opt.sideband_fragment_fraction)
                 windows[base.mass_label(mass)][era] = bins
                 print(f'[BINS] {era} M{mass:g}: 1 SR + {len(bins)-1} sideband bins over 11--80 GeV', flush=True)
+        elif getattr(opt, 'fit_layout', 'spectrum') == 'fixed':
+            missing = set(SIDEBAND_EDGES) - {round(float(edge), 8) for edge in edges}
+            if missing:
+                raise ValueError(f'{era}: fixed fit edges missing from native histograms: {sorted(missing)}')
+            windows[era] = [dict(region=f'B{i:04d}', low=low, high=high)
+                            for i, (low, high) in enumerate(zip(SIDEBAND_EDGES, SIDEBAND_EDGES[1:]))]
+            print(f'[BINS] {era}: 20 fixed bins, no SR split, edges={list(SIDEBAND_EDGES)}', flush=True)
         else:
             windows[era] = resolution_bins(edges,
                 lambda m, era=era: m*base.relative_resolution(args, era, m), effective_bin_sigma(opt))
