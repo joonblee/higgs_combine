@@ -5,16 +5,12 @@ import json
 import re
 from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 
 from full_spectrum_component_uncertainties import RUN2, RUN3, common_groups
 
 PROCESSES = ("Others", "ST", "tt", "QCD", "DY")
-LABELS = ("Others", "single top", r"$t\bar{t}$", "QCD (SS data)", "DY (light-jet data)")
-COLOURS = ("#99ff33", "#cc66ff", "#ffcc33", "#99ccff", "#999999")
+LABELS = ("Others", "single top", "t#bar{t}", "QCD (SS data)", "DY (light-jet data)")
 
 
 def read(path):
@@ -221,62 +217,149 @@ def replay_yield_covariance(fit, parameters, prediction, centre, count):
 
 
 def draw(edges, components, bounds, asimov, mass, stem, projected, band_label):
+    """Use the ROOT presentation of SKPlotMaker/plotter.py's Run2+3 OS b-jet spectrum."""
+    from array import array
+    import ROOT
+
+    style = ROOT.gStyle
+    style.SetOptStat(0)
+    style.SetOptTitle(0)
+    style.SetPadTickX(1)
+    style.SetPadTickY(1)
+    style.SetEndErrorSize(0)
+    for axis in ("X", "Y"):
+        style.SetLabelFont(42, axis)
+        style.SetTitleFont(42, axis)
+        style.SetTitleOffset(1.05, axis)
+        style.SetNdivisions(510, axis)
+    ROOT.TGaxis.SetMaxDigits(3)
+
+    canvas = ROOT.TCanvas("dimuon_canvas", "", 900, 850)
+    upper = ROOT.TPad("dimuon_upper", "", 0., 0.30, 1., 1.)
+    ratio = ROOT.TPad("dimuon_ratio", "", 0., 0., 1., 0.30)
+    for pad, top, bottom in ((upper, 0.100, 0.030), (ratio, 0.040, 0.350)):
+        pad.SetLeftMargin(0.120)
+        pad.SetRightMargin(0.050)
+        pad.SetTopMargin(top)
+        pad.SetBottomMargin(bottom)
+        pad.SetTicks(1, 1)
+        pad.Draw()
+    upper.SetLogy()
     widths = np.diff(edges)
-    total = components.sum(axis=1)
-    lower, upper = bounds / widths
-    fig, (ax, ratio) = plt.subplots(2, 1, sharex=True, figsize=(8, 7.4),
-                                    gridspec_kw={"height_ratios": [3.2, 1], "hspace": 0.055})
-    fig.subplots_adjust(left=0.13, right=0.97, bottom=0.10, top=0.92)
-    bottom = np.zeros(len(widths))
-    handles = []
-    for values, colour, label in zip(components.T / widths, COLOURS, LABELS):
-        top = bottom + values
-        patch = ax.stairs(top, edges, baseline=bottom, fill=True, facecolor=colour,
-                          edgecolor="black", linewidth=0.65, label=label)
-        handles.append(patch)
-        bottom = top
-
-    band_style = dict(fill=True, facecolor="#cccccc", edgecolor="#555555", linewidth=0.6)
-    band_patch = ax.stairs(upper, edges, baseline=lower, **band_style)
-    ax.stairs(bottom, edges, baseline=None, color="black", linewidth=1)
     centres = (edges[1:] + edges[:-1]) / 2
-    points, = ax.plot(centres, asimov / widths, "ko", ms=3.0, zorder=5)
-    ax.set_yscale("log")
-    ax.set_ylim(0.01, max(bottom.max(), upper.max(), 1.) * 120.)
-    ax.set_ylabel("Events / GeV", loc="top", fontsize=13)
-    ax.text(0, 1.015, r"$\bf{CMS}$  $\it{Preliminary}$", transform=ax.transAxes, fontsize=15)
-    ax.text(1, 1.018, r"138 fb$^{-1}$ (13 TeV) + 62 fb$^{-1}$ (13.6 TeV)",
-            transform=ax.transAxes, ha="right", fontsize=11)
-    ax.text(0.035, 0.95, "Run 2+3, OS, b-jet\nBlinded, background-only Asimov\n"
-            + rf"Postfit ($r=0$), $M={mass:g}$ GeV" + ("\n1 GeV template projection" if projected else ""),
-            transform=ax.transAxes, va="top",
-            linespacing=1.45, fontsize=11)
-    ax.legend([points] + handles[::-1] + [band_patch],
-              ["Asimov"] + list(LABELS[::-1]) + [band_label],
-              loc="upper right", frameon=False, fontsize=10, handlelength=2.4,
-              borderaxespad=0.7, labelspacing=0.28)
+    total = components.sum(axis=1)
 
-    # Show the relative model band over the same bins. Empty predictions have no ratio.
-    relative = np.divide(bounds, total, out=np.full_like(bounds, np.nan), where=total > 0)
-    ratio.stairs(relative[1], edges, baseline=relative[0], **band_style)
-    ratio.axhline(1, color="black", linestyle="--", linewidth=0.85)
-    point_ratio = np.divide(asimov, total, out=np.full_like(total, np.nan), where=total > 0)
-    ratio.plot(centres, point_ratio, "ko", ms=3.0, zorder=5)
-    visible = np.concatenate((relative.ravel(), point_ratio))
-    finite = visible[np.isfinite(visible)]
-    span = max(0.5, 1.08 * np.max(np.abs(finite - 1))) if finite.size else 0.5
-    ratio.set_ylim(max(0, 1 - span), 1 + span)
-    ratio.set_ylabel("Asimov / postfit bkg", fontsize=11)
-    ratio.set_xlabel(r"$m_{\mu^{+}\mu^{-}}$ [GeV]", loc="right", fontsize=13)
-    ratio.set_xlim(edges[0], edges[-1])
-    for axis in (ax, ratio):
-        axis.minorticks_on()
-        axis.tick_params(which="both", direction="in", top=True, right=True)
+    def frame(name):
+        hist = ROOT.TH1D(name, "", len(widths), array("d", edges))
+        hist.SetDirectory(0)
+        return hist
+
+    def graphs(scale):
+        # A percentile band can lie entirely above the stack. Give E2 its
+        # interval midpoint so the renderer draws either prescription exactly.
+        band = ROOT.TGraphAsymmErrors()
+        points = ROOT.TGraphAsymmErrors()
+        for i in np.flatnonzero(scale > 0):
+            lo, hi = bounds[:, i] / scale[i]
+            middle = (lo + hi) / 2
+            j = band.GetN()
+            half = widths[i] / 2
+            band.SetPoint(j, centres[i], middle)
+            band.SetPointError(j, half, half, middle - lo, hi - middle)
+            points.SetPoint(j, centres[i], asimov[i] / scale[i])
+            points.SetPointError(j, half, half, 0., 0.)
+        band.SetFillStyle(1001)
+        band.SetFillColorAlpha(ROOT.kGray + 1, 0.30)
+        band.SetLineColor(ROOT.kGray + 2)
+        band.SetLineWidth(1)
+        points.SetMarkerStyle(24)
+        points.SetMarkerSize(0.7)
+        points.SetMarkerColor(ROOT.kBlack)
+        points.SetLineColor(ROOT.kBlack)
+        points.SetLineWidth(1)
+        return band, points
+
+    def label(x, y, text, size=0.040, font=42, align=12, angle=0):
+        latex = ROOT.TLatex()
+        latex.SetNDC()
+        latex.SetTextFont(font)
+        latex.SetTextSize(size)
+        latex.SetTextAlign(align)
+        latex.SetTextAngle(angle)
+        latex.DrawLatex(x, y, text)
+
+    upper.cd()
+    main_frame = frame("mass_axis")
+    main_frame.SetMinimum(0.01)
+    main_frame.SetMaximum(80. * max(np.max(bounds[1] / widths), np.max(asimov / widths), 1.))
+    main_frame.GetYaxis().SetLabelSize(0.045)
+    main_frame.GetXaxis().SetLabelSize(0.)
+    main_frame.GetXaxis().SetTitleSize(0.)
+    main_frame.Draw("AXIS")
+
+    # Cumulative TH1s painted back to front, as in plotter.py.
+    palette = (ROOT.kSpring - 9, ROOT.kViolet - 4, ROOT.kOrange - 2, ROOT.kAzure - 9, ROOT.kGray + 1)
+    stack = []
+    for name, colour, heights in zip(PROCESSES, palette, np.cumsum(components, axis=1).T / widths):
+        hist = frame("mass_" + name)
+        hist.SetFillColor(colour)
+        hist.SetLineColor(ROOT.kBlack)
+        hist.SetLineWidth(1)
+        for i, y in enumerate(heights, start=1):
+            hist.SetBinContent(i, float(y))
+        stack.append(hist)
+    for hist in reversed(stack):
+        hist.Draw("HIST SAME")
+    band, points = graphs(widths)
+    band.Draw("E2 SAME")
+    points.Draw("PZ SAME")
+
+    leg = ROOT.TLegend(0.56, 0.53, 0.93, 0.86)
+    leg.SetBorderSize(0)
+    leg.SetFillStyle(0)
+    leg.SetTextFont(42)
+    leg.SetTextSize(0.040)
+    leg.AddEntry(points, "Bkg Asimov", "pe")
+    for hist, name in reversed(list(zip(stack, LABELS))):
+        leg.AddEntry(hist, name, "f")
+    leg.AddEntry(band, band_label, "f")
+    leg.Draw()
+
+    label(0.145, 0.925, "CMS", 0.055, 61, 11)
+    label(0.240, 0.925, "Preliminary", 0.040, 52, 11)
+    label(0.95, 0.925, "138 fb^{-1} (13 TeV) + 62 fb^{-1} (13.6 TeV)", align=31)
+    label(0.155, 0.85, "Run2+3, OS, b-jet", align=13)
+    label(0.155, 0.78, f"B-only postfit, M = {mass:g} GeV", align=13)
+    if projected:
+        label(0.155, 0.72, "1 GeV template projection", align=13)
+    label(0.04, 0.65, "Events / GeV", 0.045, angle=90)
+    upper.RedrawAxis()
+
+    ratio.cd()
+    ratio_frame = frame("ratio_axis")
+    ratio_frame.SetMinimum(0.5)
+    ratio_frame.SetMaximum(1.5)
+    ratio_frame.GetXaxis().SetTitle("m_{#mu^{+}#mu^{-}} [GeV]")
+    ratio_frame.GetXaxis().SetTitleSize(0.12)
+    ratio_frame.GetXaxis().SetLabelSize(0.10)
+    ratio_frame.GetYaxis().SetLabelSize(0.10)
+    ratio_frame.GetYaxis().SetNdivisions(505)
+    ratio_frame.Draw("AXIS")
+    label(0.04, 0.655, "Asimov / Bkg", 0.11, align=22, angle=90)
+    ratio_band, ratio_points = graphs(total)
+    ratio_band.Draw("E2 SAME")
+    line = ROOT.TLine(edges[0], 1., edges[-1], 1.)
+    line.SetLineStyle(2)
+    line.Draw("SAME")
+    ratio_points.Draw("PZ SAME")
+    ratio.RedrawAxis()
+
+    canvas.cd()
     for ext in ("pdf", "png"):
         path = stem.with_suffix("." + ext)
-        fig.savefig(path, dpi=160)
+        canvas.SaveAs(str(path))
         print(path)
-    plt.close(fig)
+    canvas.Close()
 
 
 def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, freeze_pattern, seed, band):
@@ -376,7 +459,7 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
             sigma = np.sqrt(matrix.diagonal())
             bounds = np.array([centre - sigma, centre + sigma])
             diagnostics.update(source=source, yield_covariance=matrix.tolist(), sigma=sigma.tolist())
-            band_label = r"Postfit bkg ($\pm1\sigma$)"
+            band_label = "Postfit bkg stat #oplus syst unc."
             print(f"[BAND] M{mass} {source}, [{edges[0]:g}, {edges[1]:g}) GeV: "
                   f"{centre[0]:.2f} +/- {sigma[0]:.2f} events")
         else:
@@ -387,7 +470,7 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
             draws = evaluate_points(variables, means, points, prediction)
             q16, median, q84 = np.quantile(draws.sum(axis=2), [0.16, 0.5, 0.84], axis=0)
             bounds = np.array([q16, q84])
-            band_label = "Postfit bkg (16–84%)"
+            band_label = "Postfit bkg (16-84%)"
             diagnostics.update(seed=seed + mass, samples=samples, q16=q16.tolist(),
                                median=median.tolist(), q84=q84.tolist(),
                                mean_shift_by_process=dict(zip(PROCESSES, (draws.mean(axis=0)-post).T.tolist())))
@@ -408,8 +491,8 @@ def main():
     parser.add_argument("--band", choices=("combine", "quantile"),
                         help="Default: FitDiagnostics uncertainty about the best fit. "
                              "Use quantile for the 16–84%% diagnostic.")
-    parser.add_argument("--binning", choices=("fit", "1gev"), default="fit",
-                        help="Use common fit edges or project each process with fixed nominal template fractions.")
+    parser.add_argument("--binning", choices=("fit", "1gev"), default="1gev",
+                        help="Default: AN 1 GeV display bins within the fitted range. Use fit to sum complete fit bins.")
     parser.add_argument("--audit-band", action="store_true",
                         help="Compare full, linearised, normalisation-only and fixed-normalisation yields.")
     parser.add_argument("--audit-freeze", metavar="REGEX",

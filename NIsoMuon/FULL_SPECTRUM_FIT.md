@@ -1321,8 +1321,10 @@ OPENBLAS_NUM_THREADS=1 python3 plot_dimuon_mass.py "$batch" --masses 12 40 70 --
 
 The PDF, PNG and JSON for each mass are written to `$batch/dimuon_mass_plots/combine/`.
 The points are the background-only Asimov counts. The stack is the fitted background
-at fixed `r=0`. The default display bins sum complete fit bins across all eight eras.
-The band uses the FitDiagnostics uncertainty about the best fit. With the optional
+at fixed `r=0`. The default display uses the AN's 1 GeV bins over the fitted range of 11–80 GeV.
+The black open circles are Asimov yields. The axes, stack and ratio panel follow
+the Run2+3 OS b-jet figure drawn with SKPlotMaker/plotter.py.
+The band uses the FitDiagnostics uncertainty about the best fit. For `--binning fit` with the optional
 `--fit-output overall` in a new fit, the plot reads `shapes_fit_b/overall_total_covar`.
 For existing fits without that histogram it uses the saved RooFitResult and workspace.
 Each joint nuisance draw gives a new yield in every process and channel. The squared
@@ -1330,9 +1332,10 @@ deviation of their sum from its best-fit value is averaged over draws in each di
 bin. This includes correlations between eras and processes. The JSON records the source,
 central yields, bounds and yield covariance in event units.
 
-Add `--binning 1gev` for a display using fixed nominal template fractions inside each
-fit bin. This projection requires the original templates and uses joint draws because
-each process can have different fractions. `--band quantile` and `--audit-band`
+The default projection uses the original templates to distribute each fitted process
+yield inside its fit bin with fixed nominal fractions. It uses joint draws because
+the fractions can differ by process. Projected filenames end in `_1GeV`.
+Use `--binning fit` to sum whole fit bins without template projection. `--band quantile` and `--audit-band`
 remain available for the 16th-to-84th percentile study.
 
 ## Dense expected limits without redundant FitDiagnostics
