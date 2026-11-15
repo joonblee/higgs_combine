@@ -337,8 +337,8 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label):
 
     ratio.cd()
     ratio_frame = frame("ratio_axis")
-    ratio_frame.SetMinimum(0.5)
-    ratio_frame.SetMaximum(1.5)
+    ratio_frame.SetMinimum(0.7)
+    ratio_frame.SetMaximum(1.3)
     ratio_frame.GetXaxis().SetTitle("m_{#mu^{+}#mu^{-}} [GeV]")
     ratio_frame.GetXaxis().SetTitleSize(0.12)
     ratio_frame.GetXaxis().SetLabelSize(0.10)
