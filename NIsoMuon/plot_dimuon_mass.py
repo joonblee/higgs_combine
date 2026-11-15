@@ -1,4 +1,4 @@
-"""Draw blinded Run 2+3 mass distributions from a collected NIsoMuon B-only fit."""
+"""Draw postfit blinded Run 2+3 mass distributions from a collected NIsoMuon B-only fit."""
 import argparse
 import hashlib
 import json
@@ -9,11 +9,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from full_spectrum_component_uncertainties import RUN2, RUN3, common_groups, nuisance_priors
+from full_spectrum_component_uncertainties import RUN2, RUN3, common_groups
 
-PROCESSES = ("Others", "ST", "tt", "DY", "QCD")
-LABELS = ("Other", "Single top", r"$t\bar{t}$", "Drell–Yan", "Multijet")
-COLOURS = ("#b4a8cd", "#75a6d3", "#5173aa", "#eeb758", "#80b69d")
+PROCESSES = ("Others", "ST", "tt", "QCD", "DY")
+LABELS = ("Others", "single top", r"$t\bar{t}$", "QCD (SS data)", "DY (light-jet data)")
+COLOURS = ("#99ff33", "#cc66ff", "#ffcc33", "#99ccff", "#999999")
 
 
 def read(path):
@@ -36,7 +36,7 @@ def band(variables, means, transform, evaluate_total, count, rng):
     try:
         while len(draws) < count and trials < 100 * count:
             z = rng.normal(size=(32, len(means)))
-            values = means + (z * transform if transform.ndim == 1 else z @ transform.T)
+            values = means + (z @ transform.T)
             trials += len(values)
             for point in values[np.all((values >= low) & (values <= high), axis=1)]:
                 for var, x in zip(variables, point):
@@ -52,30 +52,53 @@ def band(variables, means, transform, evaluate_total, count, rng):
             var.setVal(float(x))
 
 
-def draw(edges, stages, mass, output):
+def draw(edges, components, bounds, mass, output):
     widths = np.diff(edges)
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.9), sharey=True)
-    for ax, (stage, components, bounds) in zip(axes, stages):
-        bottom = np.zeros(len(widths))
-        for y, colour, label in zip(components.T / widths, COLOURS, LABELS):
-            ax.bar(edges[:-1], y, width=widths, bottom=bottom, align="edge",
-                   color=colour, linewidth=0, label=label)
-            bottom += y
-        lower, upper = bounds / widths
-        ax.stairs(upper, edges, baseline=lower, fill=True, hatch="////",
-                  facecolor="none", edgecolor="#333333", linewidth=0.65, label="68% model band")
-        ax.stairs(bottom, edges, color="#222222", linewidth=1)
-        ax.set_title(stage)
-        ax.set_xlim(edges[0], edges[-1])
-        ax.set_ylim(bottom=0)
-        ax.set_xlabel(r"$m_{\mu\mu}$ [GeV]")
-    axes[0].set_ylabel("Events / GeV")
-    fig.suptitle(f"Run 2+3   |   Blinded, background-only Asimov   |   M = {mass:g} GeV")
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False)
-    fig.tight_layout(rect=(0, 0.11, 1, 0.95))
+    total = components.sum(axis=1)
+    lower, upper = bounds / widths
+    fig, (ax, ratio) = plt.subplots(2, 1, sharex=True, figsize=(8, 7.4),
+                                    gridspec_kw={"height_ratios": [3.2, 1], "hspace": 0.055})
+    fig.subplots_adjust(left=0.13, right=0.97, bottom=0.10, top=0.92)
+    bottom = np.zeros(len(widths))
+    handles = []
+    for values, colour, label in zip(components.T / widths, COLOURS, LABELS):
+        top = bottom + values
+        patch = ax.stairs(top, edges, baseline=bottom, fill=True, facecolor=colour,
+                          edgecolor="black", linewidth=0.65, label=label)
+        handles.append(patch)
+        bottom = top
+
+    band_style = dict(fill=True, facecolor="#cccccc", edgecolor="#555555", linewidth=0.6)
+    band_patch = ax.stairs(upper, edges, baseline=lower, **band_style)
+    ax.stairs(bottom, edges, baseline=None, color="black", linewidth=1)
+    ax.set_yscale("log")
+    ax.set_ylim(0.01, max(bottom.max(), upper.max(), 1.) * 120.)
+    ax.set_ylabel("Events / GeV", loc="top", fontsize=13)
+    ax.text(0, 1.015, r"$\bf{CMS}$  $\it{Preliminary}$", transform=ax.transAxes, fontsize=15)
+    ax.text(1, 1.018, r"138 fb$^{-1}$ (13 TeV) + 62 fb$^{-1}$ (13.6 TeV)",
+            transform=ax.transAxes, ha="right", fontsize=11)
+    ax.text(0.035, 0.95, "Run 2+3, OS, b-jet\nBlinded, background-only Asimov\n"
+            + rf"Postfit ($r=0$), $M={mass:g}$ GeV", transform=ax.transAxes, va="top",
+            linespacing=1.45, fontsize=11)
+    ax.legend(handles[::-1] + [band_patch], list(LABELS[::-1]) + ["Bkg stat ⊕ syst unc."],
+              loc="upper right", frameon=False, fontsize=10, handlelength=2.4,
+              borderaxespad=0.7, labelspacing=0.28)
+
+    # Show the relative model band over the same bins. Empty predictions have no ratio.
+    relative = np.divide(bounds, total, out=np.full_like(bounds, np.nan), where=total > 0)
+    ratio.stairs(relative[1], edges, baseline=relative[0], **band_style)
+    ratio.axhline(1, color="black", linestyle="--", linewidth=0.85)
+    finite = relative[np.isfinite(relative)]
+    span = max(0.5, 1.08 * np.max(np.abs(finite - 1))) if finite.size else 0.5
+    ratio.set_ylim(max(0, 1 - span), 1 + span)
+    ratio.set_ylabel("Bkg / postfit central", fontsize=11)
+    ratio.set_xlabel(r"$m_{\mu^{+}\mu^{-}}$ [GeV]", loc="right", fontsize=13)
+    ratio.set_xlim(edges[0], edges[-1])
+    for axis in (ax, ratio):
+        axis.minorticks_on()
+        axis.tick_params(which="both", direction="in", top=True, right=True)
     for ext in ("pdf", "png"):
-        path = output / f"dimuon_mass_M{mass:g}_prefit_postfit_b.{ext}"
+        path = output / f"dimuon_mass_M{mass:g}_postfit_b.{ext}"
         fig.savefig(path, dpi=160)
         print(path)
     plt.close(fig)
@@ -95,9 +118,6 @@ def plot_mass(ROOT, fitdir, mass, output, samples):
             and hashlib.sha256(card.read_bytes()).hexdigest() == summary["fit_card_sha256"]):
         raise ValueError(f"Incompatible or unvalidated B-only result in {fitdir}")
     rows, edges, groups = common_groups(model["rows"], (*RUN2, *RUN3))
-    priors, free = nuisance_priors(card.read_text())
-    if free - priors.keys():
-        raise ValueError(f"Missing prefit prior width for {free - priors.keys()}")
     with ROOT.TFile.Open(str(fitdir / "workspace.root")) as wf, ROOT.TFile.Open(
         str(fitdir / "fit_b" / "fitDiagnostics.FullSpectrum.root")) as ff:
         w, fit = wf.Get("w"), ff.Get("fit_b")
@@ -117,18 +137,6 @@ def plot_mass(ROOT, fitdir, mass, output, samples):
         def total():
             return evaluate(funcs, groups).sum(axis=1)
         rng = np.random.default_rng(73100 + int(mass))
-        stages = []
-        variables, means, widths = [], [], []
-        for name, (mean, width) in priors.items():
-            var = w.var(name)
-            if var and not var.isConstant():
-                var.setVal(mean)
-                variables.append(var)
-                means.append(mean)
-                widths.append(width)
-        nominal = evaluate(funcs, groups)
-        preband = band(variables, np.array(means), np.array(widths), total, samples, rng)
-        stages.append(("Prefit", nominal, preband))
         pars = list(fit.floatParsFinal())
         variables = [w.var(p.GetName()) for p in pars]
         means = np.array([p.getVal() for p in pars])
@@ -141,8 +149,7 @@ def plot_mass(ROOT, fitdir, mass, output, samples):
         cov = fit.covarianceMatrix()
         matrix = np.array([[cov[i][j] for j in range(len(pars))] for i in range(len(pars))])
         postband = band(variables, means, np.linalg.cholesky(matrix), total, samples, rng)
-        stages.append(("Postfit, B-only", post, postband))
-        draw(np.array(edges), stages, mass, output)
+        draw(np.array(edges), post, postband, mass, output)
 
 
 def main():
