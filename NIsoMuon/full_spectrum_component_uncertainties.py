@@ -226,8 +226,13 @@ def draw_spectra(payload, directory, period, stage, selected=None):
         # Reserve space in inches for the legend so extra rows never cover the data.
         entries = len(names) + (2 if stage == 'prefit' else 0)
         header = 1.00 + .23 * math.ceil(entries / 2)
+        qcd_zoom = proc == 'QCD'
         height = 5.15 + header
-        fig, ax = plt.subplots(figsize=(10, height))
+        fig, panels = plt.subplots(1, 2 if qcd_zoom else 1, squeeze=False, figsize=(10, height))
+        axes = panels[0]
+        ax = axes[-1]
+        if qcd_zoom:
+            fig.subplots_adjust(wspace=.32)
         fig.subplots_adjust(left=.12, right=.96, bottom=.73/height, top=1-header/height)
 
         if stage == 'prefit':
@@ -237,7 +242,8 @@ def draw_spectra(payload, directory, period, stage, selected=None):
                 upper = 100*np.asarray(series['up'], dtype=float)
                 lower = -100*np.asarray(series['down'], dtype=float)
                 curves.extend((lower, upper))
-                ax.stairs(upper, edges, baseline=lower, fill=True, color=colour, label=label)
+                for panel in axes:
+                    panel.stairs(upper, edges, baseline=lower, fill=True, color=colour, label=label)
         colours = ('#D62728', '#1F77B4', '#009E73', '#007D7E', '#B8860B',
                    '#9467BD', '#CC79A7', '#E66101', '#6B6B00', '#333333')
         for i, name in enumerate(names):
@@ -250,8 +256,9 @@ def draw_spectra(payload, directory, period, stage, selected=None):
                     shifts = np.asarray(result['responses'][name][side])
                     relative = np.divide(100*shifts,n,out=np.full(n.shape,np.nan),where=n>0)
                 curves.append(relative)
-                ax.stairs(relative, edges, baseline=None, color=colour, linewidth=1.25,
-                          label=name.removeprefix('CMS_NPS26009_') if side=='up' else None)
+                for panel in axes:
+                    panel.stairs(relative, edges, baseline=None, color=colour, linewidth=1.25,
+                                label=name.removeprefix('CMS_NPS26009_') if side=='up' else None)
         for curve in curves:
             finite = curve[np.isfinite(curve)]
             if finite.size:
@@ -259,12 +266,30 @@ def draw_spectra(payload, directory, period, stage, selected=None):
         lo, hi = min(bounds), max(bounds)
         pad = .08 * (hi-lo) if hi > lo else 1.
         ax.set_ylim(lo-pad, hi+pad)
-        ax.axhline(0,color='0.45',linewidth=.7,zorder=0)
-        ax.tick_params(which='both', direction='in', top=True, right=True, labelsize=12)
-        ax.minorticks_on()
-        ax.set(xlim=(edges[0],edges[-1]))
-        ax.set_xlabel(r'$m_{\mu^{+}\mu^{-}}$ [GeV]', loc='right', fontsize=15)
-        ax.set_ylabel('Relative yield shift [%]', fontsize=15)
+        for panel in axes:
+            panel.axhline(0,color='0.45',linewidth=.7,zorder=0)
+            panel.tick_params(which='both', direction='in', top=True, right=True, labelsize=12)
+            panel.minorticks_on()
+            panel.set_xlim(edges[0],edges[-1])
+            panel.set_xlabel(r'$m_{\mu^{+}\mu^{-}}$ [GeV]', loc='right', fontsize=15)
+        axes[0].set_ylabel('Relative yield shift [%]', fontsize=15)
+        if qcd_zoom:
+            zoom = axes[0]
+            zoom.set(xlim=(11, 30), xticks=[11,15,20,25,30], ylim=(-50, 50), yticks=[-50,-25,0,25,50],
+                     title='Low mass, linear zoom')
+            ax.set_yscale('symlog', linthresh=50, linscale=1)
+            # Pad in display coordinates to keep both signs visible for asymmetric tails.
+            transform = ax.yaxis.get_transform()
+            bottom, top = transform.transform([lo, hi])
+            margin = .08 * (top-bottom) if top > bottom else 1.
+            ax.set_ylim(*transform.inverted().transform([bottom-margin, top+margin]))
+            ymin, ymax = ax.get_ylim()
+            extent = max(abs(ymin), abs(ymax))
+            if extent >= 100:
+                decades = [10.**k for k in range(2, 1+math.ceil(math.log10(extent)))]
+                ticks = [-t for t in reversed(decades) if -t >= ymin] + [0.] + [t for t in decades if t <= ymax]
+                ax.set_yticks(ticks)
+            ax.set_title('Full range, symmetric log scale')
         lumi = {'Run2+3': r'138 fb$^{-1}$ (13 TeV) + 62 fb$^{-1}$ (13.6 TeV)',
                 'Run2': r'138 fb$^{-1}$ (13 TeV)', 'Run3': r'62 fb$^{-1}$ (13.6 TeV)'}.get(period)
         if lumi is None:
