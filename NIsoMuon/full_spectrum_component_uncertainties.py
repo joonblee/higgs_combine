@@ -225,8 +225,8 @@ def draw_spectra(payload, directory, period, stage, selected=None):
             names = selected[proc]
         # Reserve space in inches for the legend so extra rows never cover the data.
         entries = len(names) + (2 if stage == 'prefit' else 0)
-        header = 1.00 + .23 * math.ceil(entries / 2)
         qcd_zoom = proc == 'QCD'
+        header = .80 + .19 * math.ceil(entries / 2) + (.25 if qcd_zoom else 0.)
         height = 5.15 + header
         fig, panels = plt.subplots(1, 2 if qcd_zoom else 1, squeeze=False, figsize=(10, height))
         axes = panels[0]
@@ -304,9 +304,17 @@ def draw_spectra(payload, directory, period, stage, selected=None):
                  fontsize=12)
         handles, labels = ax.get_legend_handles_labels()
         if handles:
-            fig.legend(handles, labels, loc='upper left', bbox_to_anchor=(.12, 1-.71/height, .84, 0),
-                       ncol=2, mode='expand', frameon=False, borderaxespad=0, fontsize=10,
-                       handlelength=3, labelspacing=.32)
+            legend = fig.legend(handles, labels, loc='upper center',
+                                bbox_to_anchor=(.54, 1-.65/height), ncol=2,
+                                frameon=False, borderaxespad=0, fontsize=10,
+                                columnspacing=1.6, handlelength=3, labelspacing=.32)
+            # Account for the actual legend and QCD panel titles when setting the gap.
+            fig.canvas.draw()
+            renderer = fig.canvas.get_renderer()
+            panel_top = max(panel.get_tightbbox(renderer).y1 for panel in axes)
+            gap = .09 * fig.dpi
+            offset = legend.get_window_extent(renderer).y0 - gap - panel_top
+            fig.subplots_adjust(top=fig.subplotpars.top + offset / fig.bbox.height)
         for ext in ('pdf','png'):
             fig.savefig(directory/f'{prefix}_{period}_{proc}.{ext}')
         plt.close(fig)
