@@ -89,6 +89,12 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
         hist.SetDirectory(0)
         return hist
 
+    def style_band(graph):
+        graph.SetFillStyle(1001)
+        graph.SetFillColorAlpha(ROOT.kGray + 1, 0.30)
+        graph.SetLineColor(ROOT.kGray + 2)
+        graph.SetLineWidth(1)
+
     def graphs(scale):
         # A percentile band can lie entirely above the stack. Give E2 its
         # interval midpoint so the renderer draws either prescription exactly.
@@ -103,10 +109,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
             band.SetPointError(j, half, half, middle - lo, hi - middle)
             points.SetPoint(j, centres[i], asimov[i] / scale[i])
             points.SetPointError(j, half, half, 0., 0.)
-        band.SetFillStyle(1001)
-        band.SetFillColorAlpha(ROOT.kGray + 1, 0.30)
-        band.SetLineColor(ROOT.kGray + 2)
-        band.SetLineWidth(1)
+        style_band(band)
         points.SetMarkerStyle(24)
         points.SetMarkerSize(0.7)
         points.SetMarkerColor(ROOT.kBlack)
@@ -121,9 +124,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
             graph.SetPoint(j, CONTROL_EDGES[i] + 0.5, control_total[i] / scale[i])
             error = control_sigma[i] / scale[i]
             graph.SetPointError(j, 0.5, 0.5, error, error)
-        graph.SetFillColor(ROOT.kGray + 2)
-        graph.SetFillStyle(3354)
-        graph.SetLineColor(ROOT.kGray + 2)
+        style_band(graph)
         return graph
 
     def label(x, y, text, size=0.040, font=42, align=12, angle=0):
@@ -195,7 +196,6 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
     for hist, name in reversed(list(zip(stack, LABELS))):
         leg.AddEntry(hist, name, "f")
     leg.AddEntry(band, band_label, "f")
-    leg.AddEntry(low_band, "Extrapolated unc. (5#minus9 GeV)", "f")
     leg.Draw()
 
     label(0.145, 0.925, "CMS", 0.055, 61, 11)
