@@ -10,8 +10,24 @@ from plot_dimuon_mass import PROCESSES, LABELS, evaluate, template_projection
 CONTROL_EDGES = np.arange(5., 10.)
 
 
-def control_counts(ROOT, settings, eras):
-    """Sum only whole observed OS bins within [5, 9) from each fitted era."""
+def control_yields(ROOT, filename, key):
+    """Integrate whole input bins within [5, 9) only."""
+    with ROOT.TFile.Open(str(filename)) as source:
+        hist = source.Get(key)
+        if not hist or hist.GetDimension() != 1:
+            raise ValueError(f"Missing dimuon mass histogram {filename}:{key}")
+        axis = hist.GetXaxis()
+        indices = [axis.FindFixBin(float(edge) + 1.e-7) for edge in CONTROL_EDGES]
+        for edge, index in zip(CONTROL_EDGES, indices):
+            if not 1 <= index <= hist.GetNbinsX() + 1 or abs(axis.GetBinLowEdge(index) - edge) > 1.e-7:
+                raise ValueError(f"Control bin boundary {edge:g} unavailable in {filename}:{key}")
+        values = np.array([hist.Integral(first, stop - 1) for first, stop in zip(indices, indices[1:])])
+        if not np.isfinite(values).all():
+            raise ValueError(f"Invalid control yields in {filename}:{key}")
+        return values
+
+
+def control_spectrum(ROOT, settings, eras, template_dir):
     import limit_workflow as base
 
     args = base.build_parser().parse_args([])
@@ -19,26 +35,23 @@ def control_counts(ROOT, settings, eras):
     args.trigger = settings["trigger"]
     key = base.hist_path(settings["region"])
     counts = np.zeros(len(CONTROL_EDGES) - 1, dtype=int)
+    components = np.zeros((len(counts), len(PROCESSES)))
     for era in eras:
         filename = Path(base.root_dir(args, era)) / "data.root"
-        with ROOT.TFile.Open(str(filename)) as source:
-            hist = source.Get(key)
-            if not hist or hist.GetDimension() != 1:
-                raise ValueError(f"Missing dimuon mass histogram {filename}:{key}")
-            axis = hist.GetXaxis()
-            indices = [axis.FindFixBin(float(edge) + 1.e-7) for edge in CONTROL_EDGES]
-            for edge, index in zip(CONTROL_EDGES, indices):
-                if not 1 <= index <= hist.GetNbinsX() + 1 or abs(axis.GetBinLowEdge(index) - edge) > 1.e-7:
-                    raise ValueError(f"Observed bin boundary {edge:g} unavailable in {filename}:{key}")
-            for i, (first, stop) in enumerate(zip(indices, indices[1:])):
-                count = hist.Integral(first, stop - 1)
-                if not np.isfinite(count) or count < 0 or not count.is_integer():
-                    raise ValueError(f"Invalid observed event count in {filename}:{key}")
-                counts[i] += int(count)
-    return counts
+        observed = control_yields(ROOT, filename, key)
+        if np.any(observed < 0) or np.any(observed != np.floor(observed)):
+            raise ValueError(f"Invalid observed event count in {filename}:{key}")
+        counts += observed.astype(int)
+        for j, proc in enumerate(PROCESSES):
+            filename = Path(base.file_for_process(args, era, proc, "", "nominal"))
+            if template_dir is not None:
+                filename = template_dir / filename.relative_to(args.base_dir)
+            # The OS nominal histograms already contain the QCD and DY transfer factors.
+            components[:, j] += control_yields(ROOT, filename, key)
+    return counts, components
 
 
-def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, counts, fit_layout=None):
+def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, counts, control, fit_layout=None):
     """Use the ROOT presentation of SKPlotMaker/plotter.py's Run2+3 OS b-jet spectrum."""
     from array import array
     import ROOT
@@ -114,7 +127,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
     display_edges = np.concatenate((CONTROL_EDGES, edges))
     main_frame = frame("mass_axis", display_edges)
     main_frame.SetMinimum(0.01)
-    main_frame.SetMaximum(80. * max(np.max(bounds[1] / widths), np.max(asimov / widths), counts.max(), 1.))
+    main_frame.SetMaximum(80. * max(np.max(bounds[1] / widths), np.max(asimov / widths), counts.max(), control.sum(axis=1).max(), 1.))
     main_frame.GetYaxis().SetLabelSize(0.045)
     main_frame.GetXaxis().SetLabelSize(0.)
     main_frame.GetXaxis().SetTitleSize(0.)
@@ -123,8 +136,9 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
     # Cumulative TH1s painted back to front, as in plotter.py.
     palette = (ROOT.kSpring - 9, ROOT.kViolet - 4, ROOT.kOrange - 2, ROOT.kAzure - 9, ROOT.kGray + 1)
     stack = []
-    for name, colour, heights in zip(PROCESSES, palette, np.cumsum(components, axis=1).T / widths):
-        hist = frame("mass_" + name)
+    display_components = np.vstack((control, np.zeros((1, len(PROCESSES))), components))
+    for name, colour, heights in zip(PROCESSES, palette, np.cumsum(display_components, axis=1).T / np.diff(display_edges)):
+        hist = frame("mass_" + name, display_edges)
         hist.SetFillColor(colour)
         hist.SetLineColor(ROOT.kBlack)
         hist.SetLineWidth(1)
@@ -138,6 +152,8 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
     points.Draw("PZ SAME")
 
     observed = ROOT.TGraphAsymmErrors()
+    observed_ratio = ROOT.TGraphAsymmErrors()
+    control_total = control.sum(axis=1)
     tail = (1. - 0.682689492137) / 2.
     for i, value in enumerate(counts):
         n = int(value)
@@ -145,6 +161,12 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
         high = ROOT.Math.gamma_quantile_c(tail, n + 1, 1.)
         observed.SetPoint(i, CONTROL_EDGES[i] + 0.5, n)
         observed.SetPointError(i, 0.5, 0.5, n - low, high - n)
+        if control_total[i] > 0:
+            j = observed_ratio.GetN()
+            observed_ratio.SetPoint(j, CONTROL_EDGES[i] + 0.5, n / control_total[i])
+            observed_ratio.SetPointError(j, 0.5, 0.5, (n-low) / control_total[i], (high-n) / control_total[i])
+    observed_ratio.SetMarkerStyle(20)
+    observed_ratio.SetMarkerSize(0.8)
     observed.SetMarkerStyle(20)
     observed.SetMarkerSize(0.8)
     observed.Draw("PZ SAME")
@@ -182,13 +204,14 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
     ratio_frame.GetYaxis().SetLabelSize(0.10)
     ratio_frame.GetYaxis().SetNdivisions(505)
     ratio_frame.Draw("AXIS")
-    label(0.04, 0.655, "Asimov / Bkg", 0.11, align=22, angle=90)
+    label(0.04, 0.655, "(Data or Asimov) / Bkg", 0.11, align=22, angle=90)
     ratio_band, ratio_points = graphs(total)
     ratio_band.Draw("E2 SAME")
     line = ROOT.TLine(edges[0], 1., edges[-1], 1.)
     line.SetLineStyle(2)
     line.Draw("SAME")
     ratio_points.Draw("PZ SAME")
+    observed_ratio.Draw("PZ SAME")
     ratio.RedrawAxis()
 
     canvas.cd()
@@ -207,7 +230,7 @@ def plot(ROOT, path, output, mass, samples, template_dir, binning, use_current_t
     if not model["blind"] or model["mass"] != mass:
         raise ValueError("Expected a matching blinded model")
     rows, native_edges, groups = common_groups(model["rows"], (*RUN2, *RUN3))
-    counts = control_counts(ROOT, model["settings"], sorted({row["era"] for row in rows}))
+    counts, control = control_spectrum(ROOT, model["settings"], sorted({row["era"] for row in rows}), template_dir)
     if binning == "fit":
         edges = np.asarray(native_edges)
         weights = np.zeros((len(groups), len(rows), len(PROCESSES)))
@@ -254,9 +277,10 @@ def plot(ROOT, path, output, mass, samples, template_dir, binning, use_current_t
     suffix = "_1GeV" if binning == "1gev" else ""
     stem = output / f"dimuon_mass_M{mass}_prefit_b{suffix}"
     draw(edges, components, np.array([central-sigma, central+sigma]), central, mass, stem, binning == "1gev",
-         "Prefit bkg stat #oplus syst unc.", counts, model["settings"].get("fit_layout"))
+         "Prefit bkg stat #oplus syst unc. (11#minus80 GeV)", counts, control, model["settings"].get("fit_layout"))
     stem.with_suffix(".json").write_text(json.dumps(dict(edges=edges.tolist(), central=central.tolist(),
-        control_data=dict(edges=CONTROL_EDGES.tolist(), counts=counts.tolist()),
+        control_data=dict(edges=CONTROL_EDGES.tolist(), counts=counts.tolist(),
+                          background={proc: control[:, j].tolist() for j, proc in enumerate(PROCESSES)}),
         sigma=sigma.tolist(), yield_covariance=covariance.tolist(), projection_notes=notes,
         samples=samples, seed=73100+mass, stage="prefit", source="workspace nuisance constraints"),
         indent=2, allow_nan=False) + "\n")
