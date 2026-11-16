@@ -7,7 +7,38 @@ import numpy as np
 from full_spectrum_component_uncertainties import RUN2, RUN3, common_groups
 from plot_dimuon_mass import PROCESSES, LABELS, evaluate, template_projection
 
-def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, fit_layout=None):
+CONTROL_EDGES = np.arange(5., 10.)
+
+
+def control_counts(ROOT, settings, eras):
+    """Sum only whole observed OS bins within [5, 9) from each fitted era."""
+    import limit_workflow as base
+
+    args = base.build_parser().parse_args([])
+    args.base_dir = settings["base_dir"]
+    args.trigger = settings["trigger"]
+    key = base.hist_path(settings["region"])
+    counts = np.zeros(len(CONTROL_EDGES) - 1, dtype=int)
+    for era in eras:
+        filename = Path(base.root_dir(args, era)) / "data.root"
+        with ROOT.TFile.Open(str(filename)) as source:
+            hist = source.Get(key)
+            if not hist or hist.GetDimension() != 1:
+                raise ValueError(f"Missing dimuon mass histogram {filename}:{key}")
+            axis = hist.GetXaxis()
+            indices = [axis.FindFixBin(float(edge) + 1.e-7) for edge in CONTROL_EDGES]
+            for edge, index in zip(CONTROL_EDGES, indices):
+                if not 1 <= index <= hist.GetNbinsX() + 1 or abs(axis.GetBinLowEdge(index) - edge) > 1.e-7:
+                    raise ValueError(f"Observed bin boundary {edge:g} unavailable in {filename}:{key}")
+            for i, (first, stop) in enumerate(zip(indices, indices[1:])):
+                count = hist.Integral(first, stop - 1)
+                if not np.isfinite(count) or count < 0 or not count.is_integer():
+                    raise ValueError(f"Invalid observed event count in {filename}:{key}")
+                counts[i] += int(count)
+    return counts
+
+
+def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, counts, fit_layout=None):
     """Use the ROOT presentation of SKPlotMaker/plotter.py's Run2+3 OS b-jet spectrum."""
     from array import array
     import ROOT
@@ -40,8 +71,8 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
     centres = (edges[1:] + edges[:-1]) / 2
     total = components.sum(axis=1)
 
-    def frame(name):
-        hist = ROOT.TH1D(name, "", len(widths), array("d", edges))
+    def frame(name, bins=edges):
+        hist = ROOT.TH1D(name, "", len(bins) - 1, array("d", bins))
         hist.SetDirectory(0)
         return hist
 
@@ -80,9 +111,10 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
         latex.DrawLatex(x, y, text)
 
     upper.cd()
-    main_frame = frame("mass_axis")
+    display_edges = np.concatenate((CONTROL_EDGES, edges))
+    main_frame = frame("mass_axis", display_edges)
     main_frame.SetMinimum(0.01)
-    main_frame.SetMaximum(80. * max(np.max(bounds[1] / widths), np.max(asimov / widths), 1.))
+    main_frame.SetMaximum(80. * max(np.max(bounds[1] / widths), np.max(asimov / widths), counts.max(), 1.))
     main_frame.GetYaxis().SetLabelSize(0.045)
     main_frame.GetXaxis().SetLabelSize(0.)
     main_frame.GetXaxis().SetTitleSize(0.)
@@ -105,11 +137,24 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
     band.Draw("E2 SAME")
     points.Draw("PZ SAME")
 
+    observed = ROOT.TGraphAsymmErrors()
+    tail = (1. - 0.682689492137) / 2.
+    for i, value in enumerate(counts):
+        n = int(value)
+        low = ROOT.Math.gamma_quantile(tail, n, 1.) if n else 0.
+        high = ROOT.Math.gamma_quantile_c(tail, n + 1, 1.)
+        observed.SetPoint(i, CONTROL_EDGES[i] + 0.5, n)
+        observed.SetPointError(i, 0.5, 0.5, n - low, high - n)
+    observed.SetMarkerStyle(20)
+    observed.SetMarkerSize(0.8)
+    observed.Draw("PZ SAME")
+
     leg = ROOT.TLegend(0.56, 0.53, 0.93, 0.86)
     leg.SetBorderSize(0)
     leg.SetFillStyle(0)
     leg.SetTextFont(42)
     leg.SetTextSize(0.040)
+    leg.AddEntry(observed, "Data (5#minus9 GeV)", "pe")
     leg.AddEntry(points, "Bkg Asimov", "pe")
     for hist, name in reversed(list(zip(stack, LABELS))):
         leg.AddEntry(hist, name, "f")
@@ -128,7 +173,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
     upper.RedrawAxis()
 
     ratio.cd()
-    ratio_frame = frame("ratio_axis")
+    ratio_frame = frame("ratio_axis", display_edges)
     ratio_frame.SetMinimum(0.7)
     ratio_frame.SetMaximum(1.3)
     ratio_frame.GetXaxis().SetTitle("m_{#mu^{+}#mu^{-}} [GeV]")
@@ -162,6 +207,7 @@ def plot(ROOT, path, output, mass, samples, template_dir, binning, use_current_t
     if not model["blind"] or model["mass"] != mass:
         raise ValueError("Expected a matching blinded model")
     rows, native_edges, groups = common_groups(model["rows"], (*RUN2, *RUN3))
+    counts = control_counts(ROOT, model["settings"], sorted({row["era"] for row in rows}))
     if binning == "fit":
         edges = np.asarray(native_edges)
         weights = np.zeros((len(groups), len(rows), len(PROCESSES)))
@@ -208,8 +254,9 @@ def plot(ROOT, path, output, mass, samples, template_dir, binning, use_current_t
     suffix = "_1GeV" if binning == "1gev" else ""
     stem = output / f"dimuon_mass_M{mass}_prefit_b{suffix}"
     draw(edges, components, np.array([central-sigma, central+sigma]), central, mass, stem, binning == "1gev",
-         "Prefit bkg stat #oplus syst unc.", model["settings"].get("fit_layout"))
+         "Prefit bkg stat #oplus syst unc.", counts, model["settings"].get("fit_layout"))
     stem.with_suffix(".json").write_text(json.dumps(dict(edges=edges.tolist(), central=central.tolist(),
+        control_data=dict(edges=CONTROL_EDGES.tolist(), counts=counts.tolist()),
         sigma=sigma.tolist(), yield_covariance=covariance.tolist(), projection_notes=notes,
         samples=samples, seed=73100+mass, stage="prefit", source="workspace nuisance constraints"),
         indent=2, allow_nan=False) + "\n")
