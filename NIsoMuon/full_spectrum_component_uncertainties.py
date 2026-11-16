@@ -31,7 +31,7 @@ import json
 import math
 from pathlib import Path
 
-from limit_workflow import spectrum_channel_labels, spectrum_parameter_name
+from limit_workflow import LUMI_FB, spectrum_channel_labels, spectrum_parameter_name
 
 PROCESSES = ('QCD', 'DY', 'tt')
 CATEGORIES = ('Statistics', 'Normalisation', 'Modelling', 'Renormalisation scale',
@@ -215,36 +215,73 @@ def draw_spectra(payload, directory, period, stage, selected=None):
     for proc, result in payload['processes'].items():
         n = np.asarray(result['nominal'])
         edges = payload['edges']
-        fig, ax = plt.subplots(figsize=(10,5.6), constrained_layout=True)
-        if stage == 'prefit':
-            series = result['relative']['Total']
-            band = [100*np.asarray(series[side],dtype=float) for side in ('down','up')]
-            ax.stairs(band[1], edges, baseline=-band[0], fill=True, color='0.9', label='All prior sources')
-            stat = result['relative']['Statistics']
-            ax.stairs(100*np.asarray(stat['up'],dtype=float), edges,
-                      baseline=-100*np.asarray(stat['down'],dtype=float), fill=True, color='0.78', label='Source statistics')
+        curves = []
+        bounds = [0.]
         if grouped:
-            # The two grey bands already display the total and statistical envelopes.
             names = [name for name, sides in result['relative'].items()
                      if name not in ('Total', 'Statistics') and
                      any(x for values in sides.values() for x in values if x is not None)]
         else:
             names = selected[proc]
-        palette = plt.get_cmap('tab10' if len(names) <= 10 else 'tab20')
+        # Reserve space in inches for the legend so extra rows never cover the data.
+        entries = len(names) + (2 if stage == 'prefit' else 0)
+        header = 1.00 + .23 * math.ceil(entries / 2)
+        height = 5.15 + header
+        fig, ax = plt.subplots(figsize=(10, height))
+        fig.subplots_adjust(left=.12, right=.96, bottom=.73/height, top=1-header/height)
+
+        if stage == 'prefit':
+            for group, colour, label in [('Total', '0.88', 'Stat. + syst. unc.'),
+                                         ('Statistics', '0.73', 'Stat. unc.')]:
+                series = result['relative'][group]
+                upper = 100*np.asarray(series['up'], dtype=float)
+                lower = -100*np.asarray(series['down'], dtype=float)
+                curves.extend((lower, upper))
+                ax.stairs(upper, edges, baseline=lower, fill=True, color=colour, label=label)
+        colours = ('#D62728', '#1F77B4', '#009E73', '#007D7E', '#B8860B',
+                   '#9467BD', '#CC79A7', '#E66101', '#6B6B00', '#333333')
         for i, name in enumerate(names):
-            for side, style in [('up','-'),('down','--')]:
+            colour = colours[i] if i < len(colours) else plt.get_cmap('tab20')(i % 20)
+            for side in ('up','down'):
                 if grouped:
                     magnitude = np.asarray(result['relative'][name][side],dtype=float)
                     relative = (100 if side == 'up' else -100) * magnitude
                 else:
                     shifts = np.asarray(result['responses'][name][side])
                     relative = np.divide(100*shifts,n,out=np.full(n.shape,np.nan),where=n>0)
-                ax.stairs(relative,edges,color=palette(i % palette.N),linestyle=style,
+                curves.append(relative)
+                ax.stairs(relative, edges, baseline=None, color=colour, linewidth=1.25,
                           label=name.removeprefix('CMS_NPS26009_') if side=='up' else None)
-        ax.axhline(0,color='0.4',linewidth=.6)
-        ax.set(xlabel=r'$m_{\mu\mu}$ [GeV]', ylabel='Relative yield shift [%]',xlim=(edges[0],edges[-1]),
-               title=f"{period}   {proc}   {stage}   M = {payload['mass']:g} GeV")
-        ax.legend(loc='center left',bbox_to_anchor=(1,0.5),fontsize=8,title=('Upper / lower envelope' if grouped else 'Solid: up     Dashed: down'))
+        for curve in curves:
+            finite = curve[np.isfinite(curve)]
+            if finite.size:
+                bounds.extend((float(finite.min()), float(finite.max())))
+        lo, hi = min(bounds), max(bounds)
+        pad = .08 * (hi-lo) if hi > lo else 1.
+        ax.set_ylim(lo-pad, hi+pad)
+        ax.axhline(0,color='0.45',linewidth=.7,zorder=0)
+        ax.tick_params(which='both', direction='in', top=True, right=True, labelsize=12)
+        ax.minorticks_on()
+        ax.set(xlim=(edges[0],edges[-1]))
+        ax.set_xlabel(r'$m_{\mu^{+}\mu^{-}}$ [GeV]', loc='right', fontsize=15)
+        ax.set_ylabel('Relative yield shift [%]', fontsize=15)
+        lumi = {'Run2+3': r'138 fb$^{-1}$ (13 TeV) + 62 fb$^{-1}$ (13.6 TeV)',
+                'Run2': r'138 fb$^{-1}$ (13 TeV)', 'Run3': r'62 fb$^{-1}$ (13.6 TeV)'}.get(period)
+        if lumi is None:
+            energy = '13' if period in RUN2 else '13.6'
+            lumi = rf'{LUMI_FB[period]:g} fb$^{{-1}}$ ({energy} TeV)'
+        fig.text(.12, 1-.30/height, 'CMS', fontsize=20, fontweight='bold', va='baseline')
+        fig.text(.205, 1-.30/height, 'Preliminary', fontsize=14, style='italic')
+        fig.text(.96, 1-.30/height, lumi, ha='right', fontsize=13)
+        process = {'TotalBkg':'Total background','tt':r'$t\bar{t}$'}.get(proc, proc)
+        fig.text(.12, 1-.58/height,
+                 f"{period}, OS, b-jet   {process}, {stage} uncertainties   M = {payload['mass']:g} GeV",
+                 fontsize=12)
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            fig.legend(handles, labels, loc='upper left', bbox_to_anchor=(.12, 1-.71/height, .84, 0),
+                       ncol=2, mode='expand', frameon=False, borderaxespad=0, fontsize=10,
+                       handlelength=3, labelspacing=.32)
         for ext in ('pdf','png'):
             fig.savefig(directory/f'{prefix}_{period}_{proc}.{ext}')
         plt.close(fig)
