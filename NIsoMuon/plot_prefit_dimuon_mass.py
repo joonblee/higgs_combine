@@ -155,19 +155,26 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
 
 
 
-def plot(ROOT, path, output, mass, samples, template_dir):
+def plot(ROOT, path, output, mass, samples, template_dir, binning, use_current_templates):
     from limit_workflow_sideband_fit import BlindedReader
 
     model = json.loads((path.parent.parent / "model.json").read_text())
     if not model["blind"] or model["mass"] != mass:
         raise ValueError("Expected a matching blinded model")
-    rows, native_edges, _ = common_groups(model["rows"], (*RUN2, *RUN3))
-    edges = np.arange(native_edges[0], native_edges[-1] + 1., 1.)
-    reader = BlindedReader()
-    try:
-        weights, notes = template_projection(reader, model, rows, edges, template_dir)
-    finally:
-        reader.close()
+    rows, native_edges, groups = common_groups(model["rows"], (*RUN2, *RUN3))
+    if binning == "fit":
+        edges = np.asarray(native_edges)
+        weights = np.zeros((len(groups), len(rows), len(PROCESSES)))
+        for i, group in enumerate(groups):
+            weights[i, group, :] = 1.
+        notes = []
+    else:
+        edges = np.arange(native_edges[0], native_edges[-1] + 1., 1.)
+        reader = BlindedReader()
+        try:
+            weights, notes = template_projection(reader, model, rows, edges, template_dir, use_current_templates)
+        finally:
+            reader.close()
     nominal = np.array([[row["rates"][proc] for proc in PROCESSES] for row in rows])
     np.testing.assert_allclose(nominal.sum(axis=1), [row["asimov"] for row in rows], atol=1e-8)
     components = np.einsum("brp,rp->bp", weights, nominal)
@@ -198,8 +205,9 @@ def plot(ROOT, path, output, mass, samples, template_dir):
             residuals[i] = np.einsum("brp,rp->b", weights, evaluate(funcs)) - central
     covariance = residuals.T @ residuals / samples
     sigma = np.sqrt(covariance.diagonal())
-    stem = output / f"dimuon_mass_M{mass}_prefit_b_1GeV"
-    draw(edges, components, np.array([central-sigma, central+sigma]), central, mass, stem, True,
+    suffix = "_1GeV" if binning == "1gev" else ""
+    stem = output / f"dimuon_mass_M{mass}_prefit_b{suffix}"
+    draw(edges, components, np.array([central-sigma, central+sigma]), central, mass, stem, binning == "1gev",
          "Prefit bkg stat #oplus syst unc.", model["settings"].get("fit_layout"))
     stem.with_suffix(".json").write_text(json.dumps(dict(edges=edges.tolist(), central=central.tolist(),
         sigma=sigma.tolist(), yield_covariance=covariance.tolist(), projection_notes=notes,
@@ -212,18 +220,24 @@ if __name__ == "__main__":
     parser.add_argument("batch", type=Path)
     parser.add_argument("--masses", type=int, nargs="+", default=[12, 40, 70])
     parser.add_argument("--samples", type=int, default=5000)
+    parser.add_argument("--binning", choices=("fit", "1gev"), default="1gev")
+    parser.add_argument("--use-current-templates", action="store_true", help="Verify current template integrals before using their within-bin shapes.")
     parser.add_argument("--template-dir", type=Path)
     args = parser.parse_args()
+    if args.binning == "fit" and (args.template_dir or args.use_current_templates):
+        parser.error("Template options require --binning 1gev")
     if args.samples < 2:
         parser.error("--samples must be at least 2")
     import ROOT
     ROOT.gROOT.SetBatch(True)
     ROOT.gSystem.Load("libHiggsAnalysisCombinedLimit")
     output = args.batch / "dimuon_mass_plots" / "prefit"
+    if args.use_current_templates:
+        output = output / "current_templates"
     output.mkdir(parents=True, exist_ok=True)
     for mass in args.masses:
         paths = list((args.batch / "results").glob(f"**/M{mass}/fit_r0/workspace.root"))
         if len(paths) != 1:
             raise SystemExit(f"M{mass}: expected one workspace.root, found {len(paths)}")
-        plot(ROOT, paths[0], output, mass, args.samples, args.template_dir)
+        plot(ROOT, paths[0], output, mass, args.samples, args.template_dir, args.binning, args.use_current_templates)
 

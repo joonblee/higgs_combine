@@ -24,7 +24,7 @@ def evaluate(functions):
     return native
 
 
-def template_projection(reader, model, rows, edges, template_dir=None):
+def template_projection(reader, model, rows, edges, template_dir=None, use_current_templates=False):
     """Nominal within-bin fractions. Keep each fitted process/channel yield on every draw."""
     import limit_workflow as base
     from full_spectrum_condor import stamp
@@ -55,11 +55,15 @@ def template_projection(reader, model, rows, edges, template_dir=None):
                 if template_dir is not None and not recorded:
                     raise ValueError(f"No production input stamp for archived template {original}")
                 actual = stamp(filename) if Path(filename).is_file() else "missing"
-                if recorded and actual != recorded:
+                if recorded and actual != recorded and not use_current_templates:
                     raise ValueError(f"Input for {row['channel']} {proc} differs from production: "
                                      f"{filename}; saved {recorded}, current {actual}. "
                                      "Use --template-dir with the matching archived inputs.")
-                checked[filename] = recorded
+                if recorded and actual != recorded:
+                    if actual == "missing":
+                        raise FileNotFoundError(filename)
+                    notes.append(dict(template=filename, production_stamp=recorded, projection_stamp=actual))
+                checked[filename] = actual
             key = base.DY_AUX_SOURCE_PATH if proc == "DY" else base.hist_path(args.region)
             values = []
             for a, b in zip(lo[overlap], hi[overlap]):
@@ -389,7 +393,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
 
 
 def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, freeze_pattern, seed, band,
-              template_dir=None):
+              template_dir=None, use_current_templates=False):
     model = read(fitdir.parent / "model.json")
     summary = read(fitdir / "fit_summary.json")
     fitinfo = summary["fits"]["fit_b"]
@@ -408,7 +412,7 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
         edges = np.arange(edges[0], edges[-1] + 1., 1.)
         reader = BlindedReader()
         try:
-            weights, notes = template_projection(reader, model, rows, edges, template_dir)
+            weights, notes = template_projection(reader, model, rows, edges, template_dir, use_current_templates)
         finally:
             reader.close()
     else:
@@ -517,6 +521,7 @@ def main():
                              "Use quantile for the 16–84%% diagnostic.")
     parser.add_argument("--binning", choices=("fit", "1gev"), default="1gev",
                         help="Default: AN 1 GeV display bins within the fitted range. Use fit to sum complete fit bins.")
+    parser.add_argument("--use-current-templates", action="store_true", help="Use current within-bin shapes after checking their integrated yields against the saved model.")
     parser.add_argument("--template-dir", type=Path,
                         help="Archived copy of the production template directory, with the era "
                              "subdirectories and original file sizes and timestamps (1gev display).")
@@ -529,7 +534,7 @@ def main():
     band = args.band or ("quantile" if args.audit_band else "combine")
     if args.audit_band and band != "quantile":
         parser.error("--audit-band studies quantiles; use --band quantile with this option")
-    if args.template_dir is not None and args.binning != "1gev":
+    if (args.template_dir is not None or args.use_current_templates) and args.binning != "1gev":
         parser.error("--template-dir is only used for --binning 1gev")
     if args.seed < 0:
         parser.error("--seed must be non-negative")
@@ -548,13 +553,15 @@ def main():
     output = args.batch / "dimuon_mass_plots"
     if band == "combine":
         output = output / "combine"
+    if args.use_current_templates:
+        output = output / "current_templates"
     output.mkdir(parents=True, exist_ok=True)
     for m in args.masses:
         paths = list((args.batch / "results").glob(f"**/M{m}/fit_r0/fit_summary.json"))
         if len(paths) != 1:
             raise SystemExit(f"M{m}: expected one collected fit_summary.json, found {len(paths)}")
         plot_mass(ROOT, paths[0].parent, m, output, args.samples, args.binning,
-                  args.audit_band, args.audit_freeze, args.seed, band, args.template_dir)
+                  args.audit_band, args.audit_freeze, args.seed, band, args.template_dir, args.use_current_templates)
 
 
 if __name__ == "__main__":
