@@ -24,21 +24,42 @@ def evaluate(functions):
     return native
 
 
-def template_projection(reader, model, rows, edges):
+def template_projection(reader, model, rows, edges, template_dir=None):
     """Nominal within-bin fractions. Keep each fitted process/channel yield on every draw."""
     import limit_workflow as base
+    from full_spectrum_condor import stamp
 
     args = base.build_parser().parse_args([])
     for key in ("base_dir", "region", "trigger"):
         setattr(args, key, model["settings"][key])
     weights = np.zeros((len(edges) - 1, len(rows), len(PROCESSES)))
     notes = []
+    checked = {}
+    manifest = model.get("batch_inputs", {})
+    production_dir = Path(args.base_dir)
     for i, row in enumerate(rows):
         lo = np.maximum(edges[:-1], row["low"])
         hi = np.minimum(edges[1:], row["high"])
         overlap = hi > lo + 1.e-8
+        if np.count_nonzero(overlap) == 1:
+            # This entire native yield (including each postfit variation) stays in one bin.
+            weights[overlap, i, :] = 1.
+            continue
         for j, proc in enumerate(PROCESSES):
             filename = base.file_for_process(args, row["era"], proc, "", "nominal")
+            original = Path(filename)
+            if template_dir is not None:
+                filename = str(Path(template_dir) / original.relative_to(production_dir))
+            if filename not in checked:
+                recorded = manifest.get(str(original)) or manifest.get(str(original.resolve()))
+                if template_dir is not None and not recorded:
+                    raise ValueError(f"No production input stamp for archived template {original}")
+                actual = stamp(filename) if Path(filename).is_file() else "missing"
+                if recorded and actual != recorded:
+                    raise ValueError(f"Input for {row['channel']} {proc} differs from production: "
+                                     f"{filename}; saved {recorded}, current {actual}. "
+                                     "Use --template-dir with the matching archived inputs.")
+                checked[filename] = recorded
             key = base.DY_AUX_SOURCE_PATH if proc == "DY" else base.hist_path(args.region)
             values = []
             for a, b in zip(lo[overlap], hi[overlap]):
@@ -52,6 +73,7 @@ def template_projection(reader, model, rows, edges):
             expected = max(0., signed.sum()) * scale
             if not np.isclose(expected, row["rates"][proc], atol=1.e-7, rtol=2.e-6):
                 raise ValueError(f"Nominal template differs from saved {row['channel']} {proc}: "
+                                 f"[{row['low']:g}, {row['high']:g}) GeV, {filename}:{key}: "
                                  f"{expected} versus {row['rates'][proc]}")
             fraction = np.maximum(signed, 0.)
             if fraction.sum() == 0:
@@ -65,6 +87,9 @@ def template_projection(reader, model, rows, edges):
             if policy and overlap.sum() > 1:
                 notes.append(dict(channel=row["channel"], process=proc, allocation=policy))
             weights[overlap, i, j] = fraction / fraction.sum()
+    for filename, recorded in checked.items():
+        if recorded and stamp(filename) != recorded:
+            raise ValueError(f"Template changed during projection: {filename}")
     np.testing.assert_allclose(weights.sum(axis=0), 1.)
     return weights, notes
 
@@ -362,7 +387,8 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label):
     canvas.Close()
 
 
-def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, freeze_pattern, seed, band):
+def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, freeze_pattern, seed, band,
+              template_dir=None):
     model = read(fitdir.parent / "model.json")
     summary = read(fitdir / "fit_summary.json")
     fitinfo = summary["fits"]["fit_b"]
@@ -378,16 +404,10 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
     rows, edges, groups = common_groups(model["rows"], (*RUN2, *RUN3))
     if binning == "1gev":
         from limit_workflow_sideband_fit import BlindedReader
-        from full_spectrum_condor import stamp
         edges = np.arange(edges[0], edges[-1] + 1., 1.)
         reader = BlindedReader()
         try:
-            weights, notes = template_projection(reader, model, rows, edges)
-            for filename in reader.files:
-                path = str(Path(filename).resolve())
-                recorded = model.get("batch_inputs", {}).get(path)
-                if recorded and stamp(path) != recorded:
-                    raise ValueError(f"Template changed since model production: {path}")
+            weights, notes = template_projection(reader, model, rows, edges, template_dir)
         finally:
             reader.close()
     else:
@@ -443,6 +463,8 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
         diagnostics = dict(binning=binning, band=band, edges=list(edges),
                            asimov=asimov.tolist(), central=centre.tolist(),
                            projection_notes=notes)
+        if template_dir is not None:
+            diagnostics["template_dir"] = str(Path(template_dir).resolve())
         if band == "combine":
             # Within a native bin a 1 GeV projection has different fractions
             # for each process, so a total-background covariance cannot be split.
@@ -493,6 +515,9 @@ def main():
                              "Use quantile for the 16–84%% diagnostic.")
     parser.add_argument("--binning", choices=("fit", "1gev"), default="1gev",
                         help="Default: AN 1 GeV display bins within the fitted range. Use fit to sum complete fit bins.")
+    parser.add_argument("--template-dir", type=Path,
+                        help="Archived copy of the production template directory, with the era "
+                             "subdirectories and original file sizes and timestamps (1gev display).")
     parser.add_argument("--audit-band", action="store_true",
                         help="Compare full, linearised, normalisation-only and fixed-normalisation yields.")
     parser.add_argument("--audit-freeze", metavar="REGEX",
@@ -502,6 +527,8 @@ def main():
     band = args.band or ("quantile" if args.audit_band else "combine")
     if args.audit_band and band != "quantile":
         parser.error("--audit-band studies quantiles; use --band quantile with this option")
+    if args.template_dir is not None and args.binning != "1gev":
+        parser.error("--template-dir is only used for --binning 1gev")
     if args.seed < 0:
         parser.error("--seed must be non-negative")
     if args.audit_freeze:
@@ -525,7 +552,7 @@ def main():
         if len(paths) != 1:
             raise SystemExit(f"M{m}: expected one collected fit_summary.json, found {len(paths)}")
         plot_mass(ROOT, paths[0].parent, m, output, args.samples, args.binning,
-                  args.audit_band, args.audit_freeze, args.seed, band)
+                  args.audit_band, args.audit_freeze, args.seed, band, args.template_dir)
 
 
 if __name__ == "__main__":
