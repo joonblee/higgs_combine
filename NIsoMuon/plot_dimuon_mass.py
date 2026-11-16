@@ -241,7 +241,7 @@ def replay_yield_covariance(fit, parameters, prediction, centre, count):
     return deltas.T @ deltas / count
 
 
-def draw(edges, components, bounds, asimov, mass, stem, projected, band_label):
+def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, fit_layout=None):
     """Use the ROOT presentation of SKPlotMaker/plotter.py's Run2+3 OS b-jet spectrum."""
     from array import array
     import ROOT
@@ -354,7 +354,8 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label):
     label(0.240, 0.925, "Preliminary", 0.040, 52, 11)
     label(0.95, 0.925, "138 fb^{-1} (13 TeV) + 62 fb^{-1} (13.6 TeV)", align=31)
     label(0.155, 0.85, "Run2+3, OS, b-jet", align=13)
-    label(0.155, 0.78, f"B-only postfit, M = {mass:g} GeV", align=13)
+    fit_label = "Fixed binning (no signal window)" if fit_layout == "fixed" else f"B-only postfit, M = {mass:g} GeV"
+    label(0.155, 0.78, fit_label, align=13)
     if projected:
         label(0.155, 0.72, "1 GeV template projection", align=13)
     label(0.04, 0.65, "Events / GeV", 0.045, angle=90)
@@ -501,7 +502,8 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
                     variables, means, points, matrix, prediction, post, draws,
                     fitinfo["normalisations"], freeze_pattern, acceptance, edges)
         diagnostics.update(lower=bounds[0].tolist(), upper=bounds[1].tolist())
-        draw(np.array(edges), post, bounds, asimov, mass, stem, binning == "1gev", band_label)
+        draw(np.array(edges), post, bounds, asimov, mass, stem, binning == "1gev", band_label,
+             fit_layout=model["settings"].get("fit_layout"))
         stem.with_suffix(".json").write_text(json.dumps(diagnostics, indent=2, allow_nan=False)+"\n")
 
 
