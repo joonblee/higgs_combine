@@ -3,6 +3,8 @@
 
 Run python3 plot_signal_interpolation.py from NIsoMuon or pass --models (the
 directory containing M12/model.json etc.) and --scan (expected_limits.csv).
+The default compares the production log-linear interpolation with log-yield PCHIP
+(requires SciPy). Use --method log-linear to draw the production method alone.
 No fit or input ROOT histograms are required. The signal MC uncertainties are
 recovered at the precision of the stored sig_stat up factors (1 + Sumw2 error/yield).
 """
@@ -15,6 +17,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 
 from limit_workflow import (
     YEARS, YieldResult, canonical_target, interpolate_signal_yield, lumi_label,
@@ -63,29 +66,78 @@ def combined(anchors, mass, left, right, eras=YEARS):
     return sum(y.value for y in yields), math.sqrt(sum(y.error**2 for y in yields))
 
 
-def plot(anchors, grid, alpha, output, target="Run2Run3"):
+def pchip_yield(anchors, masses, eras, evaluate_at, with_error=False):
+    """Interpolate log yields in each era, then sum. MC inputs are independent."""
+    from scipy.interpolate import PchipInterpolator
+
+    samples = [[anchors[m][era] for era in eras] for m in masses]
+    logs = np.log([[y.value for y in row] for row in samples])
+
+    def evaluate(log_yields):
+        curve = PchipInterpolator(masses, log_yields, axis=0, extrapolate=False)
+        return np.exp(curve(evaluate_at))
+
+    prediction = evaluate(logs)
+    total = prediction.sum(axis=-1)
+    if not with_error:
+        return total
+
+    # First-order propagation through the cubic, including its anchor-dependent
+    # slopes. Columns are independent eras, so their gradients can be evaluated together.
+    variance = np.zeros_like(prediction)
+    step = 1e-5
+    for i, row in enumerate(samples):
+        shift = np.zeros_like(logs)
+        shift[i] = step
+        derivative = (evaluate(logs + shift) - evaluate(logs - shift)) / (2 * step)
+        relative_errors = np.array([y.error / y.value for y in row])
+        variance += (derivative * relative_errors)**2
+    return total, np.sqrt(variance.sum(axis=-1))
+
+
+def plot(anchors, grid, alpha, output, target="Run2Run3", method="both"):
     eras = target_years(target)
     label = {"Run2": "Run 2", "Run3": "Run 3", "Run2Run3": "Run 2+3"}.get(target, target)
     print(label)
     masses = sorted(anchors)
     native = [combined(anchors, m, m, m, eras) for m in masses]
-    scan = [combined(anchors, m, *signal_bracket(masses, m), eras=eras)[0] * alpha for m in grid]
-    ratios, errors = [], []
-    for i in range(1, len(masses)-1):
-        pred, pred_err = combined(anchors, masses[i], masses[i-1], masses[i+1], eras)
-        truth, truth_err = native[i]
-        ratio = pred / truth
-        ratios.append(ratio)
-        errors.append(ratio * math.hypot(pred_err / pred, truth_err / truth))
-        print(f"{masses[i]:g} GeV: predicted / simulated = {ratio:.4f} +/- {errors[-1]:.4f} (MC stat.)")
-
+    styles = {
+        "log-linear": ("Log-linear (nominal)", "#2475a8", "-", "o"),
+        "pchip": ("PCHIP (log yield)", "#bd581b", "--", "s"),
+    }
+    methods = list(styles) if method == "both" else [method]
     fig, (top, bottom) = plt.subplots(2, 1, figsize=(8, 6.8), sharex=True,
                                      gridspec_kw={"height_ratios": [2.4, 1]})
     fig.subplots_adjust(left=.15, right=.97, bottom=.12, top=.88, hspace=.07)
     fig.text(.15, .945, "CMS", weight="bold", fontsize=18)
     fig.text(.25, .945, "Simulation Preliminary", style="italic", fontsize=12)
     fig.text(.97, .945, lumi_label(target).replace("^{-1}", "$^{-1}$"), ha="right", fontsize=11)
-    top.plot(grid, scan, color="#2475a8", label="Interpolated signal yield")
+    for name in methods:
+        legend, colour, line, marker = styles[name]
+        if name == "pchip":
+            scan = pchip_yield(anchors, masses, eras, grid)
+        else:
+            scan = np.array([combined(anchors, m, *signal_bracket(masses, m), eras=eras)[0] for m in grid])
+        top.plot(grid, alpha * scan, color=colour, linestyle=line, label=legend)
+        ratios, errors = [], []
+        for i, mass in enumerate(masses[1:-1], start=1):
+            if name == "pchip":
+                retained = masses[:i] + masses[i+1:]
+                pred, pred_err = pchip_yield(anchors, retained, eras, mass, with_error=True)
+            else:
+                pred, pred_err = combined(anchors, mass, masses[i-1], masses[i+1], eras)
+            truth, truth_err = native[i]
+            ratio = pred / truth
+            error = ratio * math.hypot(pred_err / pred, truth_err / truth)
+            ratios.append(ratio)
+            errors.append(error)
+            print(f"{name} {mass:g} GeV: predicted / simulated = {ratio:.4f} +/- {error:.4f} (MC stat.)")
+        residual = 100 * (np.array(ratios) - 1)
+        worst = int(np.argmax(abs(residual)))
+        print(f"{name}: RMS = {np.sqrt(np.mean(residual**2)):.2f}%, "
+              f"largest residual = {residual[worst]:+.2f}% at {masses[1+worst]:g} GeV")
+        bottom.errorbar(masses[1:-1], ratios, yerr=errors, fmt=marker, color=colour,
+                        markerfacecolor="white" if name == "pchip" else colour, ms=4, capsize=2)
     top.errorbar(masses, [y*alpha for y, _ in native], yerr=[e*alpha for _, e in native],
                  fmt="o", color="black", ms=4, capsize=2, label="Generated signal samples")
     top.set_yscale("log")
@@ -98,7 +150,6 @@ def plot(anchors, grid, alpha, output, target="Run2Run3"):
         alpha_label = power if mantissa == "1" else rf"{mantissa} \times {power}"
     top.set_title(rf"{label}, OS, b-jet     $\alpha_{{qZ^\prime}}={alpha_label}$", loc="left", fontsize=11)
     bottom.axhline(1, color="0.5", lw=1)
-    bottom.errorbar(masses[1:-1], ratios, yerr=errors, fmt="o", color="#2475a8", ms=4, capsize=3)
     bottom.set_ylabel("Leave-one-out\npredicted / simulated")
     bottom.set_xlabel(r"Signal mass [GeV]", loc="right")
     for ax in (top, bottom):
@@ -116,6 +167,8 @@ def main():
     parser.add_argument("--alpha", type=float, default=1e-5, help="Fixed signal strength for the yield panel")
     parser.add_argument("--target", type=canonical_target, default="full",
                         help="One era, Run2, Run3, Run2+3 (default), eras, runs, or all")
+    parser.add_argument("--method", choices=("both", "log-linear", "pchip"), default="both",
+                        help="Interpolation methods to plot (default: both)")
     outputs = parser.add_mutually_exclusive_group()
     outputs.add_argument("--output", type=Path, help="Output file for a single target")
     outputs.add_argument("--output-dir", type=Path, default=Path("."), help="Directory for named plots")
@@ -133,7 +186,7 @@ def main():
     for target in targets:
         suffix = "" if target == "Run2Run3" else f"_{target}"
         output = args.output or args.output_dir / f"signal_window_interpolation{suffix}.pdf"
-        plot(anchors, grid, args.alpha, output, target)
+        plot(anchors, grid, args.alpha, output, target, args.method)
 
 
 if __name__ == "__main__":
