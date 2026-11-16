@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot the Run 2+3 signal-window interpolation and leave-one-out MC closure.
+"""Plot the signal-window interpolation and leave-one-out MC closure by era or run.
 
 Run python3 plot_signal_interpolation.py from NIsoMuon or pass --models (the
 directory containing M12/model.json etc.) and --scan (expected_limits.csv).
@@ -16,7 +16,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from limit_workflow import YEARS, YieldResult, interpolate_signal_yield, signal_bracket
+from limit_workflow import (
+    YEARS, YieldResult, canonical_target, interpolate_signal_yield, lumi_label,
+    selected_targets, signal_bracket, target_years,
+)
 
 HERE = Path(__file__).resolve().parent
 REVIEW = HERE / "review_results"
@@ -54,19 +57,22 @@ def anchors_from_models(directory):
     return anchors
 
 
-def combined(anchors, mass, left, right):
+def combined(anchors, mass, left, right, eras=YEARS):
     yields = [interpolate_signal_yield(mass, left, anchors[left][era], right, anchors[right][era])
-              for era in YEARS]
+              for era in eras]
     return sum(y.value for y in yields), math.sqrt(sum(y.error**2 for y in yields))
 
 
-def plot(anchors, grid, alpha, output):
+def plot(anchors, grid, alpha, output, target="Run2Run3"):
+    eras = target_years(target)
+    label = {"Run2": "Run 2", "Run3": "Run 3", "Run2Run3": "Run 2+3"}.get(target, target)
+    print(label)
     masses = sorted(anchors)
-    native = [combined(anchors, m, m, m) for m in masses]
-    scan = [combined(anchors, m, *signal_bracket(masses, m))[0] * alpha for m in grid]
+    native = [combined(anchors, m, m, m, eras) for m in masses]
+    scan = [combined(anchors, m, *signal_bracket(masses, m), eras=eras)[0] * alpha for m in grid]
     ratios, errors = [], []
     for i in range(1, len(masses)-1):
-        pred, pred_err = combined(anchors, masses[i], masses[i-1], masses[i+1])
+        pred, pred_err = combined(anchors, masses[i], masses[i-1], masses[i+1], eras)
         truth, truth_err = native[i]
         ratio = pred / truth
         ratios.append(ratio)
@@ -78,7 +84,7 @@ def plot(anchors, grid, alpha, output):
     fig.subplots_adjust(left=.15, right=.97, bottom=.12, top=.88, hspace=.07)
     fig.text(.15, .945, "CMS", weight="bold", fontsize=18)
     fig.text(.25, .945, "Simulation Preliminary", style="italic", fontsize=12)
-    fig.text(.97, .945, r"138 fb$^{-1}$ (13 TeV) + 62 fb$^{-1}$ (13.6 TeV)", ha="right", fontsize=11)
+    fig.text(.97, .945, lumi_label(target).replace("^{-1}", "$^{-1}$"), ha="right", fontsize=11)
     top.plot(grid, scan, color="#2475a8", label="Interpolated signal yield")
     top.errorbar(masses, [y*alpha for y, _ in native], yerr=[e*alpha for _, e in native],
                  fmt="o", color="black", ms=4, capsize=2, label="Generated signal samples")
@@ -90,7 +96,7 @@ def plot(anchors, grid, alpha, output):
         mantissa, exponent = alpha_label.split("e")
         power = rf"10^{{{int(exponent)}}}"
         alpha_label = power if mantissa == "1" else rf"{mantissa} \times {power}"
-    top.set_title(rf"Run 2+3, OS, b-jet     $\alpha_{{qZ^\prime}}={alpha_label}$", loc="left", fontsize=11)
+    top.set_title(rf"{label}, OS, b-jet     $\alpha_{{qZ^\prime}}={alpha_label}$", loc="left", fontsize=11)
     bottom.axhline(1, color="0.5", lw=1)
     bottom.errorbar(masses[1:-1], ratios, yerr=errors, fmt="o", color="#2475a8", ms=4, capsize=3)
     bottom.set_ylabel("Leave-one-out\npredicted / simulated")
@@ -108,16 +114,26 @@ def main():
     parser.add_argument("--models", type=Path, default=DEFAULT_MODELS)
     parser.add_argument("--scan", type=Path, default=CENTRAL / "blind_limits/expected_limits.csv")
     parser.add_argument("--alpha", type=float, default=1e-5, help="Fixed signal strength for the yield panel")
-    parser.add_argument("--output", type=Path, default=Path("signal_window_interpolation.pdf"))
+    parser.add_argument("--target", type=canonical_target, default="full",
+                        help="One era, Run2, Run3, Run2+3 (default), eras, runs, or all")
+    outputs = parser.add_mutually_exclusive_group()
+    outputs.add_argument("--output", type=Path, help="Output file for a single target")
+    outputs.add_argument("--output-dir", type=Path, default=Path("."), help="Directory for named plots")
     args = parser.parse_args()
     if not math.isfinite(args.alpha) or args.alpha <= 0:
         parser.error("--alpha must be finite and positive")
+    targets = selected_targets(args.target)
+    if args.output and len(targets) != 1:
+        parser.error("Use --output-dir when plotting multiple targets")
     anchors = anchors_from_models(args.models)
     with args.scan.open() as stream:
         grid = sorted({float(r["mass"]) for r in csv.DictReader(stream) if r["target"] == "Run2Run3"})
     if not anchors.keys() <= set(grid):
         parser.error("Run2Run3 scan must include every generated anchor")
-    plot(anchors, grid, args.alpha, args.output)
+    for target in targets:
+        suffix = "" if target == "Run2Run3" else f"_{target}"
+        output = args.output or args.output_dir / f"signal_window_interpolation{suffix}.pdf"
+        plot(anchors, grid, args.alpha, output, target)
 
 
 if __name__ == "__main__":
