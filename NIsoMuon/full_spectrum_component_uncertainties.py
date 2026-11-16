@@ -31,8 +31,13 @@ import json
 import math
 from pathlib import Path
 
+from limit_workflow import spectrum_channel_labels, spectrum_parameter_name
+
 PROCESSES = ('QCD', 'DY', 'tt')
-CATEGORIES = ('Statistics', 'Normalisation', 'Modelling', 'Other')
+CATEGORIES = ('Statistics', 'Normalisation', 'Modelling', 'Renormalisation scale',
+              'Factorisation scale', 'PDF', 'Strong coupling', 'Top mass', 'b tagging',
+              'Jet energy scale', 'Jet energy resolution', 'Muon efficiencies',
+              'Muon momentum scale', 'Pileup', 'L1 prefiring', 'Luminosity', 'Other')
 RUN2 = ('2016preVFP','2016postVFP','2017','2018')
 RUN3 = ('2022','2022EE','2023','2023BPix')
 
@@ -57,6 +62,14 @@ def category(name, model):
     key = name.lower()
     if any(x in key for x in ('mcstat','mc_stat','_stat','stat_','fitmode','ssfitstat')): return 'Statistics'
     if any(x in key for x in ('qcdshape','bckgshape','closurelinear','dyclosure','dyshape','transportshape')): return 'Modelling'
+    for token, group in (
+        ('qcdscale_ren_', 'Renormalisation scale'), ('qcdscale_fac_', 'Factorisation scale'),
+        ('pdf_alphas', 'Strong coupling'), ('pdf_', 'PDF'), ('topmass_', 'Top mass'),
+        ('btag_', 'b tagging'), ('cms_scale_j_', 'Jet energy scale'), ('cms_res_j_', 'Jet energy resolution'),
+        ('eff_m_', 'Muon efficiencies'), ('cms_scale_m_', 'Muon momentum scale'),
+        ('cms_pileup_', 'Pileup'), ('l1_prefiring_', 'L1 prefiring'), ('lumi_', 'Luminosity')):
+        if token in key:
+            return group
     return 'Other'
 
 
@@ -138,33 +151,13 @@ def evaluate_workspace(workspace, model, priors, free, eras, *, include_total=Fa
         workspace.loadSnapshot('component_uncertainties_initial')
 
 
-def draw(ROOT, payload, stem, period):
-    colours={'Statistics':ROOT.kBlue+1,'Normalisation':ROOT.kOrange+7,'Modelling':ROOT.kGreen+2,'Other':ROOT.kMagenta+1,'Total':ROOT.kBlack}
-    for process,result in payload['processes'].items():
-        canvas=ROOT.TCanvas('relative_'+process,'',1000,800)
-        canvas.SetLeftMargin(.14); canvas.SetBottomMargin(.13); canvas.SetRightMargin(.04); canvas.SetTopMargin(.10)
-        valid=[v for series in result['relative'].values() for side in series.values() for v in side if v is not None]
-        frame=canvas.DrawFrame(11.,0.,80.,max(.6,max(valid,default=0.)*1.3))
-        frame.GetXaxis().SetTitle('m_{#mu#mu} [GeV]'); frame.GetYaxis().SetTitle('Relative prefit uncertainty')
-        for axis in (frame.GetXaxis(),frame.GetYaxis()):
-            axis.SetTitleSize(.045); axis.SetLabelSize(.039)
-        legend=ROOT.TLegend(.18,.62,.52,.88); legend.SetFillStyle(0); legend.SetBorderSize(0); legend.SetTextSize(.033)
-        keep=[frame,legend]
-        for name,series in result['relative'].items():
-            graph=ROOT.TGraph(); index=0
-            for low,high,up,down in zip(payload['edges'],payload['edges'][1:],series['up'],series['down']):
-                if up is None or down is None: continue
-                # Show the larger side; JSON retains both exact asymmetric responses.
-                for x in (low,high): graph.SetPoint(index,x,max(up,down)); index+=1
-            graph.SetLineColor(colours[name]); graph.SetLineWidth(3 if name == 'Total' else 2)
-            graph.Draw('L SAME'); legend.AddEntry(graph,name,'l'); keep.append(graph)
-        legend.Draw(); text=ROOT.TLatex(); text.SetNDC(); text.SetTextSize(.037)
-        text.DrawLatex(.14,.93,f'{period}, {process}: prefit prior responses')
-        if payload['unconstrained_parameters']:
-            text.SetTextSize(.026); text.DrawLatex(.16,.85,'Free normalisations have no prior width')
-        for ext in ('pdf','png'):
-            path=Path(str(stem)+f'_{period}_{process}.{ext}'); canvas.SaveAs(str(path)); print('[SAVED]',path)
-        canvas.Close()
+def label_payload(payload, names):
+    """Publish the same names as the current cards after evaluating the original workspace."""
+    for row in payload['nuisances']:
+        raw = row['name']
+        row.update(name=names[raw], workspace_name=raw)
+    for result in payload['processes'].values():
+        result['responses'] = {names[key]: value for key, value in result['responses'].items()}
 
 
 def read_impacts(path, model, priors, free):
@@ -212,13 +205,14 @@ def rank_sources(result, impacts, mode, count):
     return sorted(records,key=lambda r:(selected.index(r['name']) if r['selected'] else count,r['yield_rank']))
 
 
-def draw_ranked(payload, selected, directory, period, stage):
+def draw_spectra(payload, directory, period, stage, selected=None):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     import numpy as np
-    for proc, names in selected.items():
-        result = payload['processes'][proc]
+    grouped = selected is None
+    prefix = 'prefit_relative_uncertainties' if grouped else f'{stage}_ranked'
+    for proc, result in payload['processes'].items():
         n = np.asarray(result['nominal'])
         edges = payload['edges']
         fig, ax = plt.subplots(figsize=(10,5.6), constrained_layout=True)
@@ -229,18 +223,30 @@ def draw_ranked(payload, selected, directory, period, stage):
             stat = result['relative']['Statistics']
             ax.stairs(100*np.asarray(stat['up'],dtype=float), edges,
                       baseline=-100*np.asarray(stat['down'],dtype=float), fill=True, color='0.78', label='Source statistics')
-        for i,name in enumerate(names):
-            for side,style in [('up','-'),('down','--')]:
-                shifts = np.array(result['responses'][name][side])
-                relative = np.divide(100*shifts,n,out=np.full(n.shape,np.nan),where=n>0)
-                ax.stairs(relative,edges,color=plt.get_cmap('tab10')(i%10),linestyle=style,
+        if grouped:
+            # The two grey bands already display the total and statistical envelopes.
+            names = [name for name, sides in result['relative'].items()
+                     if name not in ('Total', 'Statistics') and
+                     any(x for values in sides.values() for x in values if x is not None)]
+        else:
+            names = selected[proc]
+        palette = plt.get_cmap('tab10' if len(names) <= 10 else 'tab20')
+        for i, name in enumerate(names):
+            for side, style in [('up','-'),('down','--')]:
+                if grouped:
+                    magnitude = np.asarray(result['relative'][name][side],dtype=float)
+                    relative = (100 if side == 'up' else -100) * magnitude
+                else:
+                    shifts = np.asarray(result['responses'][name][side])
+                    relative = np.divide(100*shifts,n,out=np.full(n.shape,np.nan),where=n>0)
+                ax.stairs(relative,edges,color=palette(i % palette.N),linestyle=style,
                           label=name.removeprefix('CMS_NPS26009_') if side=='up' else None)
         ax.axhline(0,color='0.4',linewidth=.6)
         ax.set(xlabel=r'$m_{\mu\mu}$ [GeV]', ylabel='Relative yield shift [%]',xlim=(edges[0],edges[-1]),
                title=f"{period}   {proc}   {stage}   M = {payload['mass']:g} GeV")
-        ax.legend(loc='center left',bbox_to_anchor=(1,0.5),fontsize=8,title='Solid: up     Dashed: down')
+        ax.legend(loc='center left',bbox_to_anchor=(1,0.5),fontsize=8,title=('Upper / lower envelope' if grouped else 'Solid: up     Dashed: down'))
         for ext in ('pdf','png'):
-            fig.savefig(directory/f'{stage}_ranked_{period}_{proc}.{ext}')
+            fig.savefig(directory/f'{prefix}_{period}_{proc}.{ext}')
         plt.close(fig)
 
 
@@ -261,7 +267,13 @@ def main(argv=None):
     work=args.workspace or args.model.parent/'fit_r0/workspace.root'
     card=work.parent/'datacard.txt'
     if not card.exists(): raise ValueError('Missing compiled-workspace datacard '+str(card))
-    priors,free=nuisance_priors(card.read_text())
+    card_source = card.read_text()
+    priors,free=nuisance_priors(card_source)
+    channels = spectrum_channel_labels(card_source)
+    names = {raw: spectrum_parameter_name(raw, channels) for raw in priors}
+    if len(set(names.values())) != len(names):
+        raise ValueError('Distinct workspace parameters have the same display name')
+
     impacts = None
     if args.impacts:
         impacts = read_impacts(args.impacts, model, priors, free)
@@ -285,22 +297,25 @@ def main(argv=None):
             if any(era not in model['eras'] for era in eras):
                 raise ValueError('Requested eras are absent from this joint model: '+period)
             payload=evaluate_workspace(workspace,model,priors,free,eras,include_total=True)
+            label_payload(payload, names)
+            labelled_impacts = {names[key]: value for key,value in impacts.items()} if impacts else None
             chosen = {}
             for proc, result in payload['processes'].items():
-                ranking = rank_sources(result, impacts, args.rank_by, args.top)
+                ranking = rank_sources(result, labelled_impacts, args.rank_by, args.top)
                 chosen[proc] = [r['name'] for r in ranking if r['selected']]
                 result['ranking'] = ranking
             payload['impact_file'] = str(args.impacts) if args.impacts else None
             payload['mass'] = model['mass']
             path=output/f'prefit_relative_uncertainties_{period}.json'
             path.write_text(json.dumps(payload,indent=2,allow_nan=False)+'\n'); print('[SAVED]',path)
-            draw(ROOT,payload,output/'prefit_relative_uncertainties',period)
-            draw_ranked(payload, chosen, output, period, 'prefit')
+            draw_spectra(payload, output, period, 'prefit')
+            draw_spectra(payload, output, period, 'prefit', chosen)
             if args.postfit:
                 post = evaluate_workspace(workspace,model,priors,free,eras,include_total=True,fitted=impacts)
+                label_payload(post, names)
                 post.update(mass=model['mass'], selected=chosen, impact_file=str(args.impacts))
                 (output/f'postfit_responses_{period}.json').write_text(json.dumps(post,allow_nan=False)+'\n')
-                draw_ranked(post, chosen, output, period, 'postfit')
+                draw_spectra(post, output, period, 'postfit', chosen)
     finally: handle.Close()
     return 0
 
