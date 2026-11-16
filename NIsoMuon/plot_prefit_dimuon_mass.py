@@ -51,7 +51,7 @@ def control_spectrum(ROOT, settings, eras, template_dir):
     return counts, components
 
 
-def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, counts, control, fit_layout=None):
+def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, counts, control, control_sigma, fit_layout=None):
     """Use the ROOT presentation of SKPlotMaker/plotter.py's Run2+3 OS b-jet spectrum."""
     from array import array
     import ROOT
@@ -114,6 +114,18 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
         points.SetLineWidth(1)
         return band, points
 
+    def extrapolated_band(scale):
+        graph = ROOT.TGraphAsymmErrors()
+        for i in np.flatnonzero(scale > 0):
+            j = graph.GetN()
+            graph.SetPoint(j, CONTROL_EDGES[i] + 0.5, control_total[i] / scale[i])
+            error = control_sigma[i] / scale[i]
+            graph.SetPointError(j, 0.5, 0.5, error, error)
+        graph.SetFillColor(ROOT.kGray + 2)
+        graph.SetFillStyle(3354)
+        graph.SetLineColor(ROOT.kGray + 2)
+        return graph
+
     def label(x, y, text, size=0.040, font=42, align=12, angle=0):
         latex = ROOT.TLatex()
         latex.SetNDC()
@@ -124,10 +136,11 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
         latex.DrawLatex(x, y, text)
 
     upper.cd()
+    control_total = control.sum(axis=1)
     display_edges = np.concatenate((CONTROL_EDGES, edges))
     main_frame = frame("mass_axis", display_edges)
     main_frame.SetMinimum(0.01)
-    main_frame.SetMaximum(80. * max(np.max(bounds[1] / widths), np.max(asimov / widths), counts.max(), control.sum(axis=1).max(), 1.))
+    main_frame.SetMaximum(80. * max(np.max(bounds[1] / widths), np.max(asimov / widths), counts.max(), (control_total + control_sigma).max(), 1.))
     main_frame.GetYaxis().SetLabelSize(0.045)
     main_frame.GetXaxis().SetLabelSize(0.)
     main_frame.GetXaxis().SetTitleSize(0.)
@@ -149,11 +162,12 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
         hist.Draw("HIST SAME")
     band, points = graphs(widths)
     band.Draw("E2 SAME")
+    low_band = extrapolated_band(np.diff(CONTROL_EDGES))
+    low_band.Draw("E2 SAME")
     points.Draw("PZ SAME")
 
     observed = ROOT.TGraphAsymmErrors()
     observed_ratio = ROOT.TGraphAsymmErrors()
-    control_total = control.sum(axis=1)
     tail = (1. - 0.682689492137) / 2.
     for i, value in enumerate(counts):
         n = int(value)
@@ -171,7 +185,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
     observed.SetMarkerSize(0.8)
     observed.Draw("PZ SAME")
 
-    leg = ROOT.TLegend(0.56, 0.53, 0.93, 0.86)
+    leg = ROOT.TLegend(0.53, 0.49, 0.95, 0.86)
     leg.SetBorderSize(0)
     leg.SetFillStyle(0)
     leg.SetTextFont(42)
@@ -181,6 +195,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
     for hist, name in reversed(list(zip(stack, LABELS))):
         leg.AddEntry(hist, name, "f")
     leg.AddEntry(band, band_label, "f")
+    leg.AddEntry(low_band, "Extrapolated unc. (5#minus9 GeV)", "f")
     leg.Draw()
 
     label(0.145, 0.925, "CMS", 0.055, 61, 11)
@@ -196,17 +211,19 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, c
 
     ratio.cd()
     ratio_frame = frame("ratio_axis", display_edges)
-    ratio_frame.SetMinimum(0.7)
-    ratio_frame.SetMaximum(1.3)
+    ratio_frame.SetMinimum(0.5)
+    ratio_frame.SetMaximum(1.5)
     ratio_frame.GetXaxis().SetTitle("m_{#mu^{+}#mu^{-}} [GeV]")
     ratio_frame.GetXaxis().SetTitleSize(0.12)
     ratio_frame.GetXaxis().SetLabelSize(0.10)
     ratio_frame.GetYaxis().SetLabelSize(0.10)
-    ratio_frame.GetYaxis().SetNdivisions(505)
+    ratio_frame.GetYaxis().SetNdivisions(502, False)
     ratio_frame.Draw("AXIS")
-    label(0.04, 0.655, "(Data or Asimov) / Bkg", 0.11, align=22, angle=90)
+    label(0.036, 0.655, "#splitline{Data or Asimov}{/ Bkg}", 0.075, align=22, angle=90)
     ratio_band, ratio_points = graphs(total)
     ratio_band.Draw("E2 SAME")
+    low_ratio_band = extrapolated_band(control_total)
+    low_ratio_band.Draw("E2 SAME")
     line = ROOT.TLine(edges[0], 1., edges[-1], 1.)
     line.SetLineStyle(2)
     line.Draw("SAME")
@@ -269,17 +286,28 @@ def plot(ROOT, path, output, mass, samples, template_dir, binning, use_current_t
         if not draws or draws.numEntries() != samples:
             raise RuntimeError("Failed to sample the workspace prior")
         residuals = np.empty((samples, len(central)))
+        first_group = groups[0]
+        reference_yield = nominal[first_group].sum()
+        if reference_yield <= 0:
+            raise ValueError("Cannot extrapolate a fractional uncertainty from an empty first fit bin")
+        reference_residuals = np.empty(samples)
         for i in range(samples):
             nuis.assignValueOnly(draws.get(i))
-            residuals[i] = np.einsum("brp,rp->b", weights, evaluate(funcs)) - central
+            varied = evaluate(funcs)
+            residuals[i] = np.einsum("brp,rp->b", weights, varied) - central
+            reference_residuals[i] = varied[first_group].sum() / reference_yield - 1.
+    reference_fraction = float(np.sqrt(np.mean(reference_residuals**2)))
+    control_sigma = control.sum(axis=1) * reference_fraction
     covariance = residuals.T @ residuals / samples
     sigma = np.sqrt(covariance.diagonal())
     suffix = "_1GeV" if binning == "1gev" else ""
     stem = output / f"dimuon_mass_M{mass}_prefit_b{suffix}"
     draw(edges, components, np.array([central-sigma, central+sigma]), central, mass, stem, binning == "1gev",
-         "Prefit bkg stat #oplus syst unc. (11#minus80 GeV)", counts, control, model["settings"].get("fit_layout"))
+         "Prefit bkg stat #oplus syst unc.", counts, control, control_sigma, model["settings"].get("fit_layout"))
     stem.with_suffix(".json").write_text(json.dumps(dict(edges=edges.tolist(), central=central.tolist(),
-        control_data=dict(edges=CONTROL_EDGES.tolist(), counts=counts.tolist(),
+        control_data=dict(edges=CONTROL_EDGES.tolist(), counts=counts.tolist(), sigma=control_sigma.tolist(),
+                          extrapolation=dict(method="constant fractional RMS from first native fit bin",
+                                             reference_edges=list(native_edges[:2]), fraction=reference_fraction),
                           background={proc: control[:, j].tolist() for j, proc in enumerate(PROCESSES)}),
         sigma=sigma.tolist(), yield_covariance=covariance.tolist(), projection_notes=notes,
         samples=samples, seed=73100+mass, stage="prefit", source="workspace nuisance constraints"),
