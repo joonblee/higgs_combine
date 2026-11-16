@@ -245,7 +245,45 @@ def replay_yield_covariance(fit, parameters, prediction, centre, count):
     return deltas.T @ deltas / count
 
 
-def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, fit_layout=None):
+def signal_overlay(model, edges, alpha, template_dir=None):
+    """Nominal simulated spectrum at the requested coupling, summed over eras."""
+    import limit_workflow as base
+    from limit_workflow_sideband_fit import BlindedReader
+
+    args = base.build_parser().parse_args([])
+    settings = model["settings"]
+    args.base_dir = str(template_dir or settings["base_dir"])
+    args.trigger = settings["trigger"]
+    args.target = model["target"]
+    files = base.scan_signal_files(args).get(model["mass"], {})
+    hist = base.hist_path(settings["region"])
+    reader = BlindedReader()
+    spectrum = np.zeros(len(edges) - 1)
+    try:
+        for era in model["eras"]:
+            if era not in files:
+                raise ValueError(f"Missing generated M{model['mass']:g} signal for {era} in {args.base_dir}")
+            filename = files[era]
+
+            def integral(low, high):
+                value = reader.integral(filename, hist, low, high)
+                if value is None or not np.isfinite(value.value):
+                    raise ValueError(f"Missing signal integral in {filename}:{hist} [{low}, {high})")
+                return value.value
+
+            for row in model["rows"]:
+                if row["era"] == era:
+                    expected = integral(row["low"], row["high"]) * model["alpha_internal_unit"]
+                    if not np.isclose(expected, row["rates"]["sig"], rtol=2.e-6, atol=1.e-7):
+                        raise ValueError(f"Signal template disagrees with saved yield in {row['channel']}")
+            spectrum += [integral(low, high) for low, high in zip(edges, edges[1:])]
+    finally:
+        reader.close()
+    return alpha * spectrum
+
+
+def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, fit_layout=None,
+         signal=None, signal_alpha=None):
     """Use the ROOT presentation of SKPlotMaker/plotter.py's Run2+3 OS b-jet spectrum."""
     from array import array
     import ROOT
@@ -320,7 +358,8 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
     upper.cd()
     main_frame = frame("mass_axis")
     main_frame.SetMinimum(0.01)
-    main_frame.SetMaximum(80. * max(np.max(bounds[1] / widths), np.max(asimov / widths), 1.))
+    main_frame.SetMaximum(80. * max(np.max(bounds[1] / widths), np.max(asimov / widths),
+                                    np.max(signal / widths) if signal is not None else 0., 1.))
     main_frame.GetYaxis().SetLabelSize(0.045)
     main_frame.GetXaxis().SetLabelSize(0.)
     main_frame.GetXaxis().SetTitleSize(0.)
@@ -341,9 +380,17 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
         hist.Draw("HIST SAME")
     band, points = graphs(widths)
     band.Draw("E2 SAME")
+    if signal is not None:
+        sig_hist = frame("signal_overlay")
+        for i, y in enumerate(signal / widths, start=1):
+            sig_hist.SetBinContent(i, float(y))
+        sig_hist.SetFillStyle(0)
+        sig_hist.SetLineColor(ROOT.kRed + 1)
+        sig_hist.SetLineWidth(3)
+        sig_hist.Draw("HIST SAME")
     points.Draw("PZ SAME")
 
-    leg = ROOT.TLegend(0.56, 0.53, 0.93, 0.86)
+    leg = ROOT.TLegend(0.56, 0.48 if signal is not None else 0.53, 0.93, 0.86)
     leg.SetBorderSize(0)
     leg.SetFillStyle(0)
     leg.SetTextFont(42)
@@ -352,6 +399,8 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
     for hist, name in reversed(list(zip(stack, LABELS))):
         leg.AddEntry(hist, name, "f")
     leg.AddEntry(band, band_label, "f")
+    if signal is not None:
+        leg.AddEntry(sig_hist, f"Z' ({mass:g} GeV, #alpha_{{qZ'}} = {signal_alpha:g})", "l")
     leg.Draw()
 
     label(0.145, 0.925, "CMS", 0.055, 61, 11)
@@ -393,7 +442,7 @@ def draw(edges, components, bounds, asimov, mass, stem, projected, band_label, f
 
 
 def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, freeze_pattern, seed, band,
-              template_dir=None, use_current_templates=False):
+              template_dir=None, use_current_templates=False, signal_alpha=None):
     model = read(fitdir.parent / "model.json")
     summary = read(fitdir / "fit_summary.json")
     fitinfo = summary["fits"]["fit_b"]
@@ -464,10 +513,16 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
         post = project(fitted)
         centre = post.sum(axis=1)
         suffix = "_1GeV" if binning == "1gev" else ""
+        signal = None
+        if signal_alpha is not None:
+            signal = signal_overlay(model, edges, signal_alpha, template_dir)
+            suffix += f"_signalAlpha{str(signal_alpha).replace('.', 'p')}"
         stem = output / f"dimuon_mass_M{mass:g}_postfit_b{suffix}"
         diagnostics = dict(binning=binning, band=band, edges=list(edges),
                            asimov=asimov.tolist(), central=centre.tolist(),
                            projection_notes=notes)
+        if signal is not None:
+            diagnostics["signal_overlay"] = dict(mass=mass, alpha=signal_alpha, yields=signal.tolist())
         if template_dir is not None:
             diagnostics["template_dir"] = str(Path(template_dir).resolve())
         if band == "combine":
@@ -507,7 +562,7 @@ def plot_mass(ROOT, fitdir, mass, output, samples, binning, audit_requested, fre
                     fitinfo["normalisations"], freeze_pattern, acceptance, edges)
         diagnostics.update(lower=bounds[0].tolist(), upper=bounds[1].tolist())
         draw(np.array(edges), post, bounds, asimov, mass, stem, binning == "1gev", band_label,
-             fit_layout=model["settings"].get("fit_layout"))
+             fit_layout=model["settings"].get("fit_layout"), signal=signal, signal_alpha=signal_alpha)
         stem.with_suffix(".json").write_text(json.dumps(diagnostics, indent=2, allow_nan=False)+"\n")
 
 
@@ -515,6 +570,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("batch", type=Path)
     parser.add_argument("--masses", type=int, nargs="+", default=[12, 40, 70])
+    parser.add_argument("--signal-alpha", type=float, help="Overlay nominal signal MC at this alpha for each generated mass.")
     parser.add_argument("--samples", type=int, default=1000)
     parser.add_argument("--band", choices=("combine", "quantile"),
                         help="Default: FitDiagnostics uncertainty about the best fit. "
@@ -536,6 +592,8 @@ def main():
         parser.error("--audit-band studies quantiles; use --band quantile with this option")
     if (args.template_dir is not None or args.use_current_templates) and args.binning != "1gev":
         parser.error("--template-dir is only used for --binning 1gev")
+    if args.signal_alpha is not None and not (np.isfinite(args.signal_alpha) and args.signal_alpha > 0):
+        parser.error("--signal-alpha must be finite and positive")
     if args.seed < 0:
         parser.error("--seed must be non-negative")
     if args.audit_freeze:
@@ -561,7 +619,8 @@ def main():
         if len(paths) != 1:
             raise SystemExit(f"M{m}: expected one collected fit_summary.json, found {len(paths)}")
         plot_mass(ROOT, paths[0].parent, m, output, args.samples, args.binning,
-                  args.audit_band, args.audit_freeze, args.seed, band, args.template_dir, args.use_current_templates)
+                  args.audit_band, args.audit_freeze, args.seed, band, args.template_dir,
+                  args.use_current_templates, args.signal_alpha)
 
 
 if __name__ == "__main__":
