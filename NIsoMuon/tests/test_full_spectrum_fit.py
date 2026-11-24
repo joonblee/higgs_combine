@@ -22,7 +22,7 @@ import limit_workflow_sideband_fit as shared
 
 
 def example_model():
-    opt = fs.make_parser().parse_args(['--masses', '30', '--dy-norm-scope', 'era', '--qcd-tt-norm-scope', 'era'])
+    opt = fs.make_parser().parse_args(['--masses', '30'])
     rows = []
     for era in ('2018', '2023'):
         for i, (lo, hi, qcd, dy, tt, sig) in enumerate([
@@ -285,13 +285,13 @@ class CardTests(unittest.TestCase):
                 self.assertEqual(line[1:], ['lnN'] + [
                     '1.5' if p == process and base.run_group(row['era']) == run else '-'
                     for row in model['rows'] for p in base.PROCESSES])
-        era_opt = copy.copy(opt)
-        era_opt.qcd_tt_norm_scope = 'era'
-        previous = fs.decorate_model(copy.deepcopy(model), era_opt, windows)
-        previous_card = shared.card_text(previous, normalisation_kappa=opt.norm_prior, prefix='FS')
-        prefixes = ('CMS_NPS26009_QCDNorm_', 'CMS_NPS26009_TTbarNorm_')
-        self.assertEqual([line for line in card.splitlines() if not line.startswith(prefixes)],
-                         [line for line in previous_card.splitlines() if not line.startswith(prefixes)])
+        opt.dy_normalisation = 'free'
+        fs.decorate_model(model, opt, windows)
+        free_card = shared.card_text(model, normalisation_kappa=opt.norm_prior, prefix='FS')
+        for row in model['rows']:
+            name = fs.normalisation_name('DY', base.run_group(row['era']))
+            self.assertIn(f'{name} rateParam {row["channel"]} DY 1 [0,10]', free_card.splitlines())
+            self.assertNotIn(name+' lnN', free_card)
         model['rows'][-1]['dy_nf'] = .13
         with self.assertRaisesRegex(ValueError, 'mismatched common DY TFs'):
             fs.decorate_model(model, opt, windows)

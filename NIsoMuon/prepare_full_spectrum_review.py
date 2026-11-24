@@ -3,7 +3,7 @@
 
 No ROOT input preparation or fitting is repeated. The nominal yields, QCD
 responses and statistical inputs remain identical. The explicit study adds
-independent 30% DY era/bin shifts and a free DY scale per era by default.
+independent 30% DY era/bin shifts and a free DY scale per Run by default.
 Use full_spectrum_fit.py --stage fit with the printed options afterwards.
 """
 import argparse
@@ -35,19 +35,14 @@ def review_card(text,model,opt):
     if set(channels)!={r['channel'] for r in model['rows']}:
         raise ValueError('Source-card channels differ from saved model.')
     if opt.dy_normalisation=='free':
-        source_names = [line.split()[0] for line in lines if line.split()[1:2] == ['lnN']]
-        remove = set()
-        for era in model['eras']:
-            candidates = {fs.normalisation_name('DY', era), fs.normalisation_name('DY', base.run_group(era))}
-            matches = [name for name in source_names if name in candidates]
+        for run in dict.fromkeys(base.run_group(era) for era in model['eras']):
+            name = fs.normalisation_name('DY', run)
+            matches = [i for i, line in enumerate(lines) if line.split()[:2] == [name, 'lnN']]
             if len(matches) != 1:
-                raise ValueError('Expected one original DY normalisation lnN for '+era)
-            remove.add(matches[0])
-        lines = [line for line in lines if not line.split() or line.split()[0] not in remove]
-        for era in model['eras']:
-            name=fs.normalisation_name('DY',era)
+                raise ValueError('Expected one original Run-common DY normalisation lnN for '+run)
+            del lines[matches[0]]
             for row in model['rows']:
-                if row['era']==era:
+                if base.run_group(row['era']) == run:
                     lines.append(f'{name} rateParam {row["channel"]} DY 1 [0,{opt.dy_norm_max:.17g}]')
     if opt.dy_shape_uncertainty:
         for row in model['rows']:
@@ -72,7 +67,7 @@ def prepare(path, output_base, uncertainty=.30, normalisation='free', norm_max=1
     opt.output_base=str(Path(output_base).resolve())
     opt.dy_shape_uncertainty=uncertainty
     opt.qcd_tt_norm_scope = original['settings'].get('qcd_tt_norm_scope', 'era')
-    opt.dy_norm_scope = 'era' if normalisation == 'free' else original['settings'].get('dy_norm_scope') or 'era'
+    opt.dy_norm_scope = original['settings'].get('dy_norm_scope', 'era')
     opt.dy_normalisation=normalisation
     opt.dy_norm_max=norm_max
     opt.inject_r=0.

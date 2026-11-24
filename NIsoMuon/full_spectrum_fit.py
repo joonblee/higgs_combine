@@ -83,11 +83,10 @@ def make_parser():
     p.add_argument('--dy-shape-uncertainty', type=float, default=0.,
                    help='Explicit review study: independent era/bin DY lnN shifts (e.g. 0.30 gives 0.70/1.30); 0 preserves the existing model.')
     p.add_argument('--dy-normalisation', choices=('prior','free'), default='prior',
-                   help='prior: existing DY lnN; free: one unconstrained DY rateParam per era.')
-    p.add_argument('--qcd-tt-norm-scope', choices=('run', 'era'), default='run',
-                   help='Correlation scope of the separate QCD and ttbar normalisation priors.')
-    p.add_argument('--dy-norm-scope', choices=('era', 'run'),
-                   help='DY prior scope (default: run, using common-TF templates). Free DY scales use era scope.')
+                   help='DY scale per Run: prior uses lnN; free uses a rateParam without a prior.')
+    # Accept published Run-only command lines. New commands can omit both flags.
+    p.add_argument('--qcd-tt-norm-scope', choices=('run',), default='run', help=argparse.SUPPRESS)
+    p.add_argument('--dy-norm-scope', choices=('run',), default='run', help=argparse.SUPPRESS)
     p.add_argument('--dy-norm-max', type=shared.finite_positive, default=10.,
                    help='Upper numerical bound of a free DY scale; not a prior.')
     p.add_argument('--inject-r', type=float, default=0., help='Asimov signal strength, e.g. 0 or 1.')
@@ -152,12 +151,6 @@ def limit_scan_masses(mode):
     return sorted(masses)
 
 
-def dy_norm_scope(opt):
-    # Saved options predating this setting used an era-specific prior.
-    scope = getattr(opt, 'dy_norm_scope', 'era')
-    return scope or ('era' if getattr(opt, 'dy_normalisation', 'prior') == 'free' else 'run')
-
-
 def configuration(opt):
     if opt.masses is None:
         if opt.interpolate_signal and opt.expected_limits:
@@ -176,9 +169,8 @@ def configuration(opt):
         validate_sideband_options(opt)
         if getattr(opt, 'fast_mode', False) or opt.bin_sigma != 1.:
             raise ValueError('Window layout uses --sideband-edges/--sideband-refine, not --fast-mode/--bin-sigma.')
-    opt.dy_norm_scope = dy_norm_scope(opt)
-    if dy_norm_scope(opt) == 'run' and opt.dy_normalisation != 'prior':
-        raise ValueError('--dy-norm-scope run requires --dy-normalisation prior.')
+    if any(getattr(opt, key, None) != 'run' for key in ('dy_norm_scope', 'qcd_tt_norm_scope')):
+        raise ValueError('Era-specific normalisation model: submit a new Run-correlated batch.')
     if opt.norm_prior <= 1:
         raise ValueError('--norm-prior must exceed one.')
     dy_unc = getattr(opt, 'dy_shape_uncertainty', 0.)
@@ -314,10 +306,7 @@ def model_directory(opt, mass):
 
 def dy_study_tag(opt):
     tag = '_DYlinearShape_v1' if getattr(opt, 'dy_shape_model', 'none') == 'linear' else ''
-    if getattr(opt, 'qcd_tt_norm_scope', 'era') == 'run':
-        tag += '_QCDTTbarRunCommon'
-    if dy_norm_scope(opt) == 'run':
-        tag += '_DYRunCommon'
+    tag += '_QCDTTbarRunCommon_DYRunCommon'
     if getattr(opt, 'dy_shape_uncertainty', 0.):
         tag += '_DYshape'+base.mass_label(opt.dy_shape_uncertainty)
     if getattr(opt, 'dy_normalisation', 'prior') == 'free':
@@ -351,10 +340,7 @@ def signature(opt):
         result['sideband_edges'] = sideband_reference(opt)
         if getattr(opt,'signal_counting_version',1)>=2:
             result['signal_normalisation_reference'] = 'SR'
-    if getattr(opt, 'qcd_tt_norm_scope', 'era') == 'run':
-        result['qcd_tt_norm_scope'] = 'run'
-    if dy_norm_scope(opt) == 'run':
-        result['dy_norm_scope'] = 'run'
+    result.update(qcd_tt_norm_scope='run', dy_norm_scope='run')
     if getattr(opt, 'dy_shape_uncertainty', 0.):
         result['dy_shape_uncertainty'] = opt.dy_shape_uncertainty
     if getattr(opt, 'dy_normalisation', 'prior') == 'free':
@@ -414,22 +400,16 @@ def decorate_model(model, opt, windows):
         info['zero_dy_bins'] = sum(r['rates']['DY'] == 0 for r in model['rows'] if r['era'] == era)
         print(f'[SPECTRUM] {era}: {len(windows[era])} bins, 11--80 GeV; zero-DY bins={info["zero_dy_bins"]}')
     model['normalisations'] = {}
-    for process in MAJOR:
-        scope = dy_norm_scope(opt) if process == 'DY' else getattr(opt, 'qcd_tt_norm_scope', 'era')
-        for era in model['eras']:
-            group = base.run_group(era) if scope == 'run' else era
-            name = normalisation_name(process, group)
-            if scope == 'run':
-                spec = model['normalisations'].setdefault(name, dict(process=process, run=group,
-                                                                      eras=[], kappa=opt.norm_prior))
-                spec['eras'].append(era)
-            else:
-                model['normalisations'][name] = dict(process=process, era=era, kappa=opt.norm_prior)
-    if dy_norm_scope(opt) == 'run':
-        for run in {base.run_group(era) for era in model['eras']}:
-            factors = {row['dy_nf'] for row in model['rows'] if base.run_group(row['era']) == run}
-            if len(factors) != 1:
-                raise ValueError(f'{run}: mismatched common DY TFs across input templates.')
+    for run in dict.fromkeys(base.run_group(era) for era in model['eras']):
+        eras = [era for era in model['eras'] if base.run_group(era) == run]
+        factors = {row['dy_nf'] for row in model['rows'] if row['era'] in eras}
+        if len(factors) != 1:
+            raise ValueError(f'{run}: mismatched common DY TFs across input templates.')
+        for process in MAJOR:
+            spec = dict(process=process, run=run, eras=eras, kappa=opt.norm_prior)
+            if process == 'DY' and getattr(opt, 'dy_normalisation', 'prior') == 'free':
+                spec.update(kind='rateParam', kappa=None, bounds=[0., opt.dy_norm_max])
+            model['normalisations'][normalisation_name(process, run)] = spec
     dy_unc = getattr(opt, 'dy_shape_uncertainty', 0.)
     for row in model['rows']:
         row['nuisances'] = {k:v for k,v in row['nuisances'].items()
@@ -437,10 +417,6 @@ def decorate_model(model, opt, windows):
         if dy_unc:
             name = f'CMS_NPS26009_DYClosure_{row["channel"]}'
             row['nuisances'][name] = {'DY': f'{1-dy_unc:.17g}/{1+dy_unc:.17g}'}
-    if getattr(opt, 'dy_normalisation', 'prior') == 'free':
-        for era in model['eras']:
-            model['normalisations'][normalisation_name('DY',era)] = dict(
-                process='DY', era=era, kappa=None, kind='rateParam', bounds=[0.,opt.dy_norm_max])
     model['dy_review_study'] = dict(relative_bin_uncertainty=dy_unc,
         correlation='independent per era and fit bin; all 11--80 GeV bins',
         normalisation=getattr(opt,'dy_normalisation','prior'),

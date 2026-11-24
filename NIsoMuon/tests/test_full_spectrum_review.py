@@ -21,7 +21,7 @@ import qcd_joint_closure as joint
 from test_full_spectrum_fit import example_model
 
 
-def window_example():
+def window_example(run_norms=False):
     model=example_model()
     model['fit_kind']='window_count_with_sidebands'
     model['settings']['fit_layout']='window'
@@ -30,6 +30,9 @@ def window_example():
             row['region']='SR';row['channel']='SR_'+row['era']
         if row['low']==31.:
             row['region']='bin2';row['channel']='bin2_'+row['era']
+    if run_norms:
+        opt = fs.make_parser().parse_args(['--fit-layout','window'])
+        fs.decorate_model(model,opt,{e:[r for r in model['rows'] if r['era']==e] for e in model['eras']})
     text=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
     model['card_sha256']=hashlib.sha256(text.encode()).hexdigest()
     return model,text
@@ -52,7 +55,7 @@ class ReviewTests(unittest.TestCase):
         self.assertAlmostEqual(result['scale_low'],.8)
 
     def test_review_card_preserves_yields_and_unrelated_nuisance_lines(self):
-        model,text=window_example()
+        model,text=window_example(run_norms=True)
         opt=fs.make_parser().parse_args(['--fit-layout','window','--dy-shape-uncertainty','.3','--dy-normalisation','free'])
         windows={e:[r for r in model['rows'] if r['era']==e] for e in model['eras']}
         opt.qcd_tt_norm_scope = model['settings']['qcd_tt_norm_scope']
@@ -66,7 +69,7 @@ class ReviewTests(unittest.TestCase):
             values=[v for v in line[2:] if v!='-']
             self.assertEqual(len(values),1)
             np.testing.assert_allclose([float(v) for v in values[0].split('/')],[.7,1.3])
-        removed={fs.normalisation_name('DY',e) for e in model['eras']}
+        removed={fs.normalisation_name('DY',fs.base.run_group(e)) for e in model['eras']}
         self.assertFalse(any(line.split()[:2]==[name,'lnN'] for name in removed for line in changed.splitlines()))
         for line in text.splitlines():
             if line.split() and line.split()[0] not in removed:
@@ -129,7 +132,7 @@ class ReviewTests(unittest.TestCase):
             self.assertEqual(fs.base.spectrum_parameter_name(original, labels), expected)
 
     def test_preparation_reuses_saved_card_without_root_inputs(self):
-        model,text=window_example()
+        model,text=window_example(run_norms=True)
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);source=root/'source';source.mkdir()
             path=source/'model.json';path.write_text(json.dumps(model))

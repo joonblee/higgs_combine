@@ -434,7 +434,7 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
                 if specification.get('kind') == 'rateParam':
                     lo, hi = specification['bounds']
                     for row in rows:
-                        if row['era'] == era:
+                        if row['era'] in specification.get('eras', [era]):
                             lines.append(f'{name} rateParam {row["channel"]} {process} 1 [{f(lo)},{f(hi)}]')
                 else:
                     lines.append(name+' lnN '+' '.join(
