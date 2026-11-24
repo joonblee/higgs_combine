@@ -77,15 +77,15 @@ def make_parser():
     p.add_argument('--fast-mode', action='store_true',
                    help='Test only: multiply the target bin width by four; retain all fit diagnostics and systematics.')
     p.add_argument('--norm-prior', type=shared.finite_positive, default=1.5,
-                   help='lnN kappa for each independent process/era QCD, DY and tt scale (>1).')
+                   help='lnN kappa for QCD, DY and tt normalisations (>1).')
     p.add_argument('--dy-shape-model', choices=('none','linear'), default='none',
                    help='linear: common yield-preserving AN DY closure shape (requires new SKPlotMaker DYAux); none preserves existing cards.')
     p.add_argument('--dy-shape-uncertainty', type=float, default=0.,
                    help='Explicit review study: independent era/bin DY lnN shifts (e.g. 0.30 gives 0.70/1.30); 0 preserves the existing model.')
     p.add_argument('--dy-normalisation', choices=('prior','free'), default='prior',
                    help='prior: existing DY lnN; free: one unconstrained DY rateParam per era.')
-    p.add_argument('--dy-norm-scope', choices=('era', 'run'), default='era',
-                   help='Share the DY lnN within each Run using common-TF DY templates.')
+    p.add_argument('--dy-norm-scope', choices=('era', 'run'),
+                   help='DY prior scope (default: run, using common-TF templates). Free DY scales use era scope.')
     p.add_argument('--dy-norm-max', type=shared.finite_positive, default=10.,
                    help='Upper numerical bound of a free DY scale; not a prior.')
     p.add_argument('--inject-r', type=float, default=0., help='Asimov signal strength, e.g. 0 or 1.')
@@ -150,6 +150,12 @@ def limit_scan_masses(mode):
     return sorted(masses)
 
 
+def dy_norm_scope(opt):
+    # Saved options predating this setting used an era-specific prior.
+    scope = getattr(opt, 'dy_norm_scope', 'era')
+    return scope or ('era' if getattr(opt, 'dy_normalisation', 'prior') == 'free' else 'run')
+
+
 def configuration(opt):
     if opt.masses is None:
         if opt.interpolate_signal and opt.expected_limits:
@@ -168,7 +174,8 @@ def configuration(opt):
         validate_sideband_options(opt)
         if getattr(opt, 'fast_mode', False) or opt.bin_sigma != 1.:
             raise ValueError('Window layout uses --sideband-edges/--sideband-refine, not --fast-mode/--bin-sigma.')
-    if getattr(opt, 'dy_norm_scope', 'era') == 'run' and opt.dy_normalisation != 'prior':
+    opt.dy_norm_scope = dy_norm_scope(opt)
+    if dy_norm_scope(opt) == 'run' and opt.dy_normalisation != 'prior':
         raise ValueError('--dy-norm-scope run requires --dy-normalisation prior.')
     if opt.norm_prior <= 1:
         raise ValueError('--norm-prior must exceed one.')
@@ -305,7 +312,7 @@ def model_directory(opt, mass):
 
 def dy_study_tag(opt):
     tag = '_DYlinearShape_v1' if getattr(opt, 'dy_shape_model', 'none') == 'linear' else ''
-    if getattr(opt, 'dy_norm_scope', 'era') == 'run':
+    if dy_norm_scope(opt) == 'run':
         tag += '_DYRunCommon'
     if getattr(opt, 'dy_shape_uncertainty', 0.):
         tag += '_DYshape'+base.mass_label(opt.dy_shape_uncertainty)
@@ -340,7 +347,7 @@ def signature(opt):
         result['sideband_edges'] = sideband_reference(opt)
         if getattr(opt,'signal_counting_version',1)>=2:
             result['signal_normalisation_reference'] = 'SR'
-    if getattr(opt, 'dy_norm_scope', 'era') == 'run':
+    if dy_norm_scope(opt) == 'run':
         result['dy_norm_scope'] = 'run'
     if getattr(opt, 'dy_shape_uncertainty', 0.):
         result['dy_shape_uncertainty'] = opt.dy_shape_uncertainty
@@ -403,7 +410,7 @@ def decorate_model(model, opt, windows):
     model['normalisations'] = {
         normalisation_name(p,e): dict(process=p, era=e, kappa=opt.norm_prior)
         for e in model['eras'] for p in MAJOR}
-    if getattr(opt, 'dy_norm_scope', 'era') == 'run':
+    if dy_norm_scope(opt) == 'run':
         for run in dict.fromkeys(base.run_group(era) for era in model['eras']):
             eras = [era for era in model['eras'] if base.run_group(era) == run]
             factors = [row['dy_nf'] for row in model['rows'] if row['era'] in eras]

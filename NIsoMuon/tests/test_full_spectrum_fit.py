@@ -22,7 +22,7 @@ import limit_workflow_sideband_fit as shared
 
 
 def example_model():
-    opt = fs.make_parser().parse_args(['--masses', '30'])
+    opt = fs.make_parser().parse_args(['--masses', '30', '--dy-norm-scope', 'era'])
     rows = []
     for era in ('2018', '2023'):
         for i, (lo, hi, qcd, dy, tt, sig) in enumerate([
@@ -32,7 +32,7 @@ def example_model():
             region = f'bin{i}'
             rows.append(dict(era=era, region=region, channel=f'{region}_{era}',
                 low=lo, high=hi, rates=rates, asimov=sum(rates[p] for p in shared.BACKGROUNDS),
-                qcd_shape=.02*qcd, qcd_modes=[.01*qcd, (-1)**i*.01*qcd], dy_stat=.1*dy,
+                qcd_shape=.02*qcd, qcd_modes=[.01*qcd, (-1)**i*.01*qcd], dy_stat=.1*dy, dy_nf=.1,
                 nuisances={'tt_stat': {'tt':'0.95/1.05'}, 'QCD_norm': {'QCD':'0.8/1.2'},
                            'DY_NFModel': {'DY':'0.9/1.1'}, 'DY_SourceStat': {'DY':'0.9/1.1'},
                            'PDF_scale_tt_muR': {'tt':'0.9/1.1'}}))
@@ -242,7 +242,7 @@ class CardTests(unittest.TestCase):
         native=SimpleNamespace(GetXaxis=lambda:axis)
         derivative=SimpleNamespace(Integral=lambda a,b:.2*(b-a+2e-8))
         inputs=(metadata,native,[None]*6+[derivative,derivative])
-        reader=SimpleNamespace(_file=lambda path:object(),qcd_inputs=lambda filename,path,era:
+        reader=SimpleNamespace(_file=lambda path:SimpleNamespace(Get=lambda key:SimpleNamespace(GetTitle=lambda:'Run2')),qcd_inputs=lambda filename,path,era:
             base.read_qcd_stat_inputs(object(),era,path))
         def channel_builder(reader,args,mass,files,eras,windows):
             low,high=windows['2018']
@@ -263,6 +263,28 @@ class CardTests(unittest.TestCase):
             stack.enter_context(patch.object(base,'build_channels_for_mass',side_effect=channel_builder))
             model=fs.build_model(reader,args,opt,30.,{'2018':'signal.root'},windows)
         return model
+
+    def test_default_dy_prior_shares_only_same_run_dy_columns(self):
+        opt = fs.make_parser().parse_args([])
+        fs.configuration(opt)
+        model = example_model()
+        model['eras']['2017'] = {}
+        model['rows'] += [dict(row, era='2017') for row in model['rows'] if row['era'] == '2018']
+        for row in model['rows']:
+            row['dy_nf'] = .14 if row['era'] == '2023' else .11
+        windows = {era: [r for r in model['rows'] if r['era'] == era] for era in model['eras']}
+        fs.decorate_model(model, opt, windows)
+        card = shared.card_text(model, normalisation_kappa=opt.norm_prior, prefix='FS')
+        dy = [line.split() for line in card.splitlines() if line.startswith('CMS_NPS26009_DYNorm_')]
+        self.assertEqual(len(dy), 2)
+        for run in ('Run2', 'Run3'):
+            line, = [tokens for tokens in dy if tokens[0] == fs.normalisation_name('DY', run)]
+            self.assertEqual(line[1:], ['lnN'] + [
+                '1.5' if p == 'DY' and base.run_group(row['era']) == run else '-'
+                for row in model['rows'] for p in base.PROCESSES])
+        model['rows'][-1]['dy_nf'] = .13
+        with self.assertRaisesRegex(ValueError, 'mismatched common DY TFs'):
+            fs.decorate_model(model, opt, windows)
 
     def test_full_builder_preserves_all_bins_and_scales_full_signal(self):
         model=self.build_synthetic_model()

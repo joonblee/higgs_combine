@@ -25,8 +25,8 @@ class LinearCardTests(unittest.TestCase):
         model=self.linear_model();card=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
         self.assertEqual(card.count(c.NUISANCE+' param 0 1'),1)
         self.assertNotIn('NFModel',card)
-        for era in model['eras']:
-            self.assertIn(fs.normalisation_name('DY',era)+' lnN',card)
+        for run in ('Run2','Run3'):
+            self.assertIn(fs.normalisation_name('DY',run)+' lnN',card)
         self.assertEqual(shared.nominal_predictions(card),
                          shared.nominal_predictions(shared.card_text(example_model(),normalisation_kappa=1.5,prefix='FS')))
         for theta in (-5.,-1.,-.4,0.,.4,1.,5.):

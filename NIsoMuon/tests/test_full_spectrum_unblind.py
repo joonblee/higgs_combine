@@ -69,7 +69,8 @@ class UnblindTests(unittest.TestCase):
         channel=SimpleNamespace(raw_rates=rates,nuisances={},warnings=[],
             qcd_shape_sigma_down=1.,qcd_shape_sigma_up=1.,dy_nf_amc=.1,dy_lightjet_error=1.)
         windows=[dict(region='SR',low=29.,high=31.),dict(region='R0000',low=31.,high=80.)]
-        reader=SimpleNamespace(qcd_inputs=lambda *a:inputs)
+        reader=SimpleNamespace(qcd_inputs=lambda *a:inputs,
+            _file=lambda path:SimpleNamespace(Get=lambda key:SimpleNamespace(GetTitle=lambda:'Run2')))
         def observed(filename,path,low,high):
             self.assertTrue(filename.endswith('/2018/data.root'))
             return base.YieldResult(0. if low==29. else 4.,0.,1,2)

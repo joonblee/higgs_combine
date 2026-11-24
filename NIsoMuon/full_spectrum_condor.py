@@ -139,7 +139,8 @@ def result_tables(payload, opt):
             for value in fit['normalisations'].values():
                 if value['process'] in ('QCD', 'DY'):
                     normalisations.append(dict(mass=mass, fit=kind,
-                        **{key:value.get(key) for key in ('era','process','scale','scale_low','scale_high','constraint')}))
+                        era=value.get('era') or value.get('run'),
+                        **{key:value.get(key) for key in ('process','scale','scale_low','scale_high','constraint')}))
     paths = []
     for name, rows in (('expected_limits.csv', limits), ('normalisations.csv', normalisations)):
         if not rows:
@@ -607,6 +608,7 @@ def recover(opt, previous):
     check_inputs(previous['preflight_inputs'])
     defaults = vars(fs.make_parser().parse_args([]))
     defaults.update(previous['options'])
+    defaults['dy_norm_scope'] = previous['options'].get('dy_norm_scope', 'era')
     new = argparse.Namespace(**defaults)
     suffix = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')+'_'+uuid4().hex[:8]
     new.condor_dir = opt.condor_recovery_dir or previous['batch']+'_recovered_'+suffix

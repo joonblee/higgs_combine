@@ -210,7 +210,8 @@ def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=F
     if getattr(opt, 'dy_norm_scope', 'era') == 'run':
         filename = base.file_for_process(args, era, 'DY', '', 'nominal')
         root_file = reader._file(filename)
-        if not root_file or not root_file.Get('DYAux/NFRunCommon'):
+        common = root_file.Get('DYAux/NFRunCommon') if root_file else None
+        if not common or str(common.GetTitle()) != base.run_group(era):
             raise ValueError(f'{era}: regenerate the DY template with --nf-scope run.')
     if getattr(opt, 'dy_shape_model', 'none') == 'linear':
         closure = base.read_dy_closure_inputs(reader, base.file_for_process(args, era, 'DY', '', 'nominal'))
