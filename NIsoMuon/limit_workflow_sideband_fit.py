@@ -272,11 +272,22 @@ def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=F
         rows.append(row)
         audits.append(dict(era=era, region=window['region'], requirements=len(audit.entries),
                            diagnostic_failures=diagnostic_info))
-    return dict(era=era, rows=rows, input_audits=audits, transfer_ratios=transfer_ratios)
+    transfer = inputs[0].get("transfer_statistics", {})
+    common_low = transfer.get("common_low_data")
+    calibration = (common_low["id"], transfer["common_transfer"]["id"]) if common_low else None
+    return dict(era=era, rows=rows, input_audits=audits, transfer_ratios=transfer_ratios,
+                qcd_run_calibration=calibration)
 
 
 def assemble_model(args, opt, mass, parts, full_spectrum=False):
     """Assemble disjoint parts, preserving the original joint nuisance model."""
+    calibrations = {}
+    for part in parts:
+        run = base.transfer_group(part["era"])
+        calibration = part.get("qcd_run_calibration")
+        if run in calibrations and calibrations[run] != calibration:
+            raise ValueError(f'{run}: mixed or stale Run-shared QCD templates; regenerate the affected eras.')
+        calibrations[run] = calibration
     rows = [row for part in parts for row in part['rows']]
     audits = [audit for part in parts for audit in part['input_audits']]
     era_info = {}

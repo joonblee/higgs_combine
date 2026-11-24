@@ -49,7 +49,7 @@ Uncertainty policy in this revision
   sigma_lowNFstat + sigma_SSfitStat, bounding their unknown cross-correlation.
   A standard Gaussian MCTransferStat parameter is shared within Run 2/Run 3,
   with a producer-derived yield response. Legacy v2 files retain NF+fit bounds.
-  QCD yield = max(0, shape-yield parameter + local stat + common MC shift),
+  QCD yield = max(0, shape-yield parameter + local stat + Run-shared transfer shifts),
   times norm lnN.
   No separate statistical module is needed; regenerate per-era SS ROOT files
   and cards for this storage format. Older ROOT files/cards are rejected.
@@ -353,6 +353,9 @@ QCD_STAT_BASIS = (["CentralYield"] + [f"FitGradient_{i}" for i in range(5)]
 # Common-transfer helpers mirror SKPlotMaker/qcd_common_transfer.py; keep this workflow standalone.
 COMMON_STAT_SCHEMA = "NPS26009_QCDStat_v3"
 COMMON_STAT_TREATMENT = "local_nf_fit_bound_plus_shared_mc_transport"
+SHARED_STAT_SCHEMA = "NPS26009_QCDStat_v4"
+SHARED_STAT_TREATMENT = "shared_low_nf_and_mc_transport_with_ss_fit_bound"
+COMMON_MC_METHODS = ("run-shared", "run-common")
 GROUP_ERAS = {
     "Run2": ("2016preVFP", "2016postVFP", "2017", "2018"),
     "Run3": ("2022", "2022EE", "2023", "2023BPix"),
@@ -541,24 +544,65 @@ def validate_common_transfer(transfer, era=None):
     return common
 
 
+def pool_low_data_ratio(records, group):
+    """Form the ratio of summed background-subtracted 5–9 GeV yields."""
+    if set(records) != set(GROUP_ERAS[group]):
+        raise ValueError(f"Run-shared QCD calibration requires all {group} eras")
+    totals = {}
+    for sign in ("os", "ss"):
+        counts = [records[era][f"data_{sign}_low"] for era in GROUP_ERAS[group]]
+        if any(not math.isfinite(c["value"]) or c["value"] <= 0 or
+               not math.isfinite(c["variance"]) or c["variance"] < 0 for c in counts):
+            raise ValueError(f"Invalid low-mass data yield or variance for {group} {sign}")
+        totals[sign] = {key: math.fsum(c[key] for c in counts) for key in ("value", "variance")}
+    os, ss = totals["os"], totals["ss"]
+    ratio = os["value"] / ss["value"]
+    variance = (os["variance"] + ratio ** 2 * ss["variance"]) / ss["value"] ** 2
+    identity = hashlib.sha256(json.dumps((group, records), sort_keys=True,
+                                        allow_nan=False).encode()).hexdigest()
+    return dict(group=group, records=records, totals=totals, ratio=ratio,
+                variance=variance, id=identity)
+
+
+def validate_common_low_data(transfer, group, era=None):
+    saved = transfer["common_low_data"]
+    rebuilt = pool_low_data_ratio(saved["records"], group)
+    if saved != rebuilt:
+        raise ValueError("Run-shared QCD low-mass calibration disagrees with its inputs")
+    for key, expected in (("low_transfer", rebuilt["ratio"]), ("low_variance", rebuilt["variance"])):
+        if not math.isclose(transfer[key], expected, rel_tol=1e-10, abs_tol=1e-15):
+            raise ValueError(f"Applied QCD {key} disagrees with the Run-shared data calibration")
+    if era is not None and any(
+            not math.isclose(transfer["primitive"][key][part], value, rel_tol=1e-8, abs_tol=1e-12)
+            for key, count in saved["records"][era].items() for part, value in count.items()):
+        raise ValueError(f"{era}: Run-shared and local QCD low-mass data inputs disagree")
+    return saved
+
+
 def qcd_stat_components(transfer, low_gradient, mc_gradient, fit_sigma):
     local_nf = abs(low_gradient) * math.sqrt(transfer["low_variance"])
     mc_sigma = abs(mc_gradient) * math.sqrt(transfer["double_ratio_variance"])
     nf_sigma = math.hypot(local_nf, mc_sigma)
-    common = transfer.get("common_transfer") if transfer.get("method") == "run-common" else None
-    local_bound = local_nf + fit_sigma if common else nf_sigma + fit_sigma
-    total = math.hypot(local_bound, mc_sigma) if common else local_bound
+    common = transfer.get("common_transfer")
+    shared_low = transfer.get("common_low_data")
+    local_bound = fit_sigma if shared_low else local_nf + fit_sigma if common else nf_sigma + fit_sigma
+    total = math.hypot(fit_sigma + local_nf, mc_sigma) if shared_low else (
+        math.hypot(local_bound, mc_sigma) if common else local_bound)
+    identity = common["id"] if common else None
+    if shared_low:
+        identity += ":" + shared_low["id"]
     return dict(sigma_nf_stat=nf_sigma, sigma_nf_low_stat=local_nf,
                 sigma_mc_transfer_stat=mc_sigma, sigma_local_stat_bound=local_bound,
                 sigma_stat_bound=total,
                 common_transfer_group=common["group"] if common else None,
-                common_transfer_id=common["id"] if common else None)
+                common_transfer_id=identity,
+                sigma_run_low_stat=local_nf if shared_low else 0.0)
 
 
 def qcd_transfer_factors(transfer, era=None):
     """Audit the producer's selected transport; missing method means the default."""
     method = transfer.get("method", "mc-double-ratio")
-    if method not in ("run-common", "mc-double-ratio", "data-low"):
+    if method not in (*COMMON_MC_METHODS, "mc-double-ratio", "data-low"):
         raise ValueError(f"Unsupported QCD transfer method: {method}")
     primitive = transfer["primitive"]
     def value(name):
@@ -570,7 +614,9 @@ def qcd_transfer_factors(transfer, era=None):
     mc_low = value("mc_os_low") / value("mc_ss_low")
     mc_high = value("mc_os_high") / value("mc_ss_high")
     double_ratio = mc_high / mc_low
-    common = validate_common_transfer(transfer, era) if method == "run-common" else None
+    common = validate_common_transfer(transfer, era) if method in COMMON_MC_METHODS else None
+    if method == "run-shared":
+        data_low = validate_common_low_data(transfer, common["group"], era)["ratio"]
     applied_ratio = (common["double_ratio"] if common else
                      double_ratio if method == "mc-double-ratio" else 1.0)
     for key, expected in (("low_transfer", data_low),
@@ -586,9 +632,11 @@ def qcd_transfer_factors(transfer, era=None):
     return data_low, mc_low, mc_high
 
 def validate_qcd_stat_metadata(metadata, era=None, template_path=None):
-    common_method = metadata.get("transfer_statistics", {}).get("method") == "run-common"
-    schema = COMMON_STAT_SCHEMA if common_method else QCD_STAT_SCHEMA
-    treatment = COMMON_STAT_TREATMENT if common_method else QCD_STAT_TREATMENT
+    method = metadata.get("transfer_statistics", {}).get("method")
+    schema, treatment = {
+        "run-shared": (SHARED_STAT_SCHEMA, SHARED_STAT_TREATMENT),
+        "run-common": (COMMON_STAT_SCHEMA, COMMON_STAT_TREATMENT),
+    }.get(method, (QCD_STAT_SCHEMA, QCD_STAT_TREATMENT))
     if metadata.get("schema") != schema:
         raise ValueError("Missing/obsolete QCD statistical metadata; rerun qcd_bkg_estimation.py in ss-data mode.")
     if metadata.get("treatment") != treatment:
@@ -787,6 +835,7 @@ class ChannelResult:
     qcd_fit_stat_sigma: Optional[float] = None
     qcd_local_stat_sigma: Optional[float] = None
     qcd_mc_transfer_stat_sigma: Optional[float] = None
+    qcd_run_low_stat_sigma: float = 0.0
     qcd_common_transfer_group: Optional[str] = None
     qcd_common_transfer_id: Optional[str] = None
     dy_lightjet_yield: Optional[float] = None
@@ -2446,6 +2495,7 @@ def build_channels_for_mass(
         qcd_fit_stat_sigma: Optional[float] = None
         qcd_local_stat_sigma: Optional[float] = None
         qcd_mc_transfer_stat_sigma: Optional[float] = None
+        qcd_run_low_stat_sigma: float = 0.0
         qcd_common_transfer_group: Optional[str] = None
         qcd_common_transfer_id: Optional[str] = None
 
@@ -2556,6 +2606,7 @@ def build_channels_for_mass(
             qcd_fit_stat_sigma = qcd_statistics["sigma_fit_stat"]
             qcd_local_stat_sigma = qcd_statistics["sigma_local_stat_bound"]
             qcd_mc_transfer_stat_sigma = qcd_statistics["sigma_mc_transfer_stat"]
+            qcd_run_low_stat_sigma = qcd_statistics.get("sigma_run_low_stat", 0.0)
             qcd_common_transfer_group = qcd_statistics["common_transfer_group"]
             qcd_common_transfer_id = qcd_statistics["common_transfer_id"]
             audit.add("QCD_stat/metadata", year, True)
@@ -2838,6 +2889,7 @@ def build_channels_for_mass(
             qcd_fit_stat_sigma=qcd_fit_stat_sigma,
             qcd_local_stat_sigma=qcd_local_stat_sigma,
             qcd_mc_transfer_stat_sigma=qcd_mc_transfer_stat_sigma,
+            qcd_run_low_stat_sigma=qcd_run_low_stat_sigma,
             qcd_common_transfer_group=qcd_common_transfer_group,
             qcd_common_transfer_id=qcd_common_transfer_id,
             dy_lightjet_yield=dy_lightjet_yield,
@@ -3350,20 +3402,25 @@ def write_datacard(
     # One yield modifier adds shape and statistical shifts, rather than
     # multiplying two absolute-yield rateParams. Norm lnN still multiplies it.
     if args.qcd_method == "data-driven":
-        lines.append("# QCD yield = max(0, shape-yield parameter + era-local statistical shift + common MC shift)")
+        lines.append("# QCD yield = max(0, shape-yield parameter + era-local statistical shift + Run-shared transfer shifts)")
         common_ids = {}
+        shared_low_groups = set()
         for channel in channels:
             group = transfer_group(channel.year)
             identity = channel.qcd_common_transfer_id
             if group in common_ids and common_ids[group] != identity:
                 raise WorkflowError(f"Mixed/stale common QCD transport in {group}; regenerate all affected era templates/cards")
             common_ids[group] = identity
+            if channel.qcd_run_low_stat_sigma:
+                shared_low_groups.add(group)
             if identity and channel.qcd_common_transfer_group != group:
                 raise WorkflowError(f"{channel.year}: common QCD transport belongs to a different Run")
         for group, identity in common_ids.items():
             if identity:
                 lines.append(f"# QCD common transport {group}: {identity}")
                 lines.append(f"CMS_NPS26009_QCD_MCTransferStat_{group} param 0 1")
+                if group in shared_low_groups:
+                    lines.append(f"CMS_NPS26009_QCD_LowDataTransferStat_{group} param 0 1")
         for channel in channels:
             if channel.qcd_stat_sigma is None:
                 raise WorkflowError(f"{channel.year}: missing QCD statistical propagation; regenerate templates and cards.")
@@ -3399,8 +3456,16 @@ def write_datacard(
                 amplitude = channel.qcd_mc_transfer_stat_sigma
                 if amplitude is None or not math.isfinite(amplitude) or amplitude < 0:
                     raise WorkflowError(f"{channel.year}: invalid common QCD MC statistical shift")
-                formula = f"max(0.0,@0+@1+{format_number(amplitude)}*@2)"
+                response = f"@0+@1+{format_number(amplitude)}*@2"
                 parameters += f",{common_name}"
+                group = channel.qcd_common_transfer_group
+                if group in shared_low_groups:
+                    low_sigma = channel.qcd_run_low_stat_sigma
+                    if not math.isfinite(low_sigma) or low_sigma < 0:
+                        raise WorkflowError(f"{channel.year}: invalid Run-shared QCD low-mass statistical shift")
+                    response += f"+{format_number(low_sigma)}*@3"
+                    parameters += f",CMS_NPS26009_QCD_LowDataTransferStat_{group}"
+                formula = f"max(0.0,{response})"
             lines.append(f"{yield_name} rateParam bin_{channel.year} QCD {formula} {parameters}")
 
     if args.mode == "blind":
@@ -3710,11 +3775,14 @@ def counting_card_nominal_rate_params(card_text: str):
             if len(row) != 6:
                 raise WorkflowError(f"Unsupported nominal rateParam formula: {' '.join(row)}")
             formula = row[4]
-            match = re.fullmatch(r"max\(0\.0,@0\+@1\+([0-9.eE+\-]+)\*@2\)", formula)
+            match = re.fullmatch(
+                r"max\(0\.0,@0\+@1\+([0-9.eE+\-]+)\*@2(?:\+([0-9.eE+\-]+)\*@3)?\)",
+                formula,
+            )
             if formula in {"max(0.0,@0+@1)", "max(0,@0+@1)"}:
                 coefficients = [1.0, 1.0]
             elif match:
-                coefficients = [1.0, 1.0, float(match.group(1))]
+                coefficients = [1.0, 1.0, *(float(c) for c in match.groups() if c is not None)]
             else:
                 raise WorkflowError(f"Unsupported nominal rateParam formula: {' '.join(row)}")
             arguments = row[5].split(",")

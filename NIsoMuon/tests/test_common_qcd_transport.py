@@ -49,6 +49,19 @@ class CommonQCDCardTests(unittest.TestCase):
                        and " param " in line]
         self.assertEqual(sorted(float(row[3]) for row in local_lines), [10., 20.])
 
+    def test_run_shared_data_stat_is_a_separate_common_parameter(self):
+        channels = [channel("2016preVFP", 100., 10., 20.),
+                    channel("2016postVFP", 200., 20., 40.)]
+        channels[0].qcd_run_low_stat_sigma = 5.
+        channels[1].qcd_run_low_stat_sigma = 10.
+        path = self.card(channels)
+        text = path.read_text()
+        common = "CMS_NPS26009_QCD_LowDataTransferStat_Run2"
+        self.assertEqual(text.count(common + " param 0 1"), 1)
+        shifted = text.replace(common + " param 0 1", common + " param 1 1")
+        _, _, shifted_bkg = w.counting_card_observation_signal_background(path, card_text=shifted)
+        self.assertEqual(shifted_bkg, [119., 224.])
+
     def test_runs_are_independent_and_legacy_formula_remains(self):
         path = self.card([channel("2016preVFP", 100., 10., 20.),
                           channel("2022", 200., 20., 40., identity="run3", group="Run3")], "Run2Run3")
