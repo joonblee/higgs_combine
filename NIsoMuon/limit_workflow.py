@@ -2104,41 +2104,59 @@ def _audit_dy_background_inputs(
         )
 
     labels = ("BJetYield", "BJetError", "LightJetYield", "LightJetError", "WindowLow", "WindowHigh")
-    for tag, factor, path in (
-        ("aMC", nf_amc, DY_AUX_NF_AMC_INPUTS_PATH),
-        ("MG", nf_mg, DY_AUX_NF_MG_INPUTS_PATH),
+    root_file = reader._file(filename)
+    common = root_file.Get("DYAux/NFRunCommon") if root_file else None
+    amc_paths = [DY_AUX_NF_AMC_INPUTS_PATH]
+    if common:
+        group = run_group(year)
+        if str(common.GetTitle()) != group:
+            raise WorkflowError(f"{year}: invalid run for common aMC NF in {filename}.")
+        eras = RUN2_ERAS if group == "Run2" else RUN3_ERAS
+        amc_paths = [f"{DY_AUX_NF_AMC_INPUTS_PATH}_{era}" for era in eras]
+    for tag, factor, paths in (
+        ("aMC", nf_amc, amc_paths),
+        ("MG", nf_mg, [DY_AUX_NF_MG_INPUTS_PATH]),
     ):
-        values = _background_aux_values(
-            reader, args, audit, warnings, year, filename, path, labels,
-        )
-        if values is None:
+        measurements = []
+        for path in paths:
+            values = _background_aux_values(reader, args, audit, warnings, year, filename, path, labels)
+            if values is None:
+                continue
+            b, b_error, light, light_error, window_low, window_high = values
+            audit_label = tag if len(paths) == 1 else path.rsplit("/", 1)[-1]
+            _background_check(
+                args, audit, warnings, f"background/DY_NFWindow_{audit_label}", year,
+                _background_close(window_low, DATA_DRIVEN_MASS_WINDOW[0])
+                and _background_close(window_high, DATA_DRIVEN_MASS_WINDOW[1]),
+                f"DY {tag} NF was extracted in [{window_low:g},{window_high:g}] GeV.",
+            )
+            if not _background_check(
+                args, audit, warnings, f"background/DY_NFInputs_{audit_label}", year,
+                b > 0.0 and light > 0.0 and b_error >= 0.0 and light_error >= 0.0,
+                f"Invalid primitive B/light yields or errors in {path}.",
+            ):
+                continue
+            ratio = b / light
+            measurements.append((ratio, math.hypot(b_error / light, ratio * light_error / light)))
+        if len(measurements) != len(paths):
             continue
-        b, b_error, light, light_error, window_low, window_high = values
-        _background_check(
-            args, audit, warnings, f"background/DY_NFWindow_{tag}", year,
-            _background_close(window_low, DATA_DRIVEN_MASS_WINDOW[0])
-            and _background_close(window_high, DATA_DRIVEN_MASS_WINDOW[1]),
-            f"DY {tag} NF was extracted in [{window_low:g},{window_high:g}] GeV, "
-            "not the production interval [11,80] GeV.",
-        )
-        if not _background_check(
-            args, audit, warnings, f"background/DY_NFInputs_{tag}", year,
-            b > 0.0 and light > 0.0 and b_error >= 0.0 and light_error >= 0.0,
-            f"Invalid primitive B/light yields or errors in {path}.",
-        ):
-            continue
-        expected_nf = b / light
-        expected_error = math.hypot(b_error / light, expected_nf * (light_error / light))
+        expected_nf, expected_error = measurements[0]
+        if len(paths) > 1:
+            if any(error <= 0.0 for _, error in measurements):
+                raise WorkflowError(f"{year}: invalid common aMC NF input error in {filename}.")
+            weights = [1 / error**2 for _, error in measurements]
+            total = math.fsum(weights)
+            expected_nf = math.fsum(w * ratio for w, (ratio, _) in zip(weights, measurements)) / total
+            expected_error = 1 / math.sqrt(total)
         _background_check(
             args, audit, warnings, f"background/DY_NFValue_{tag}", year,
             _background_close(factor.value, expected_nf),
-            f"DY {tag} NF={factor.value:g} does not equal B/light={expected_nf:g}.",
+            f"DY {tag} NF={factor.value:g} does not reproduce the MC inputs ({expected_nf:g}).",
         )
         _background_check(
             args, audit, warnings, f"background/DY_NFError_{tag}", year,
             _background_close(factor.error, expected_error),
-            f"DY {tag} NFStat={factor.error:g} does not reproduce the full "
-            f"finite-MC propagation from B/light inputs ({expected_error:g}).",
+            f"DY {tag} NFStat={factor.error:g} does not reproduce the MC inputs ({expected_error:g}).",
         )
 
 

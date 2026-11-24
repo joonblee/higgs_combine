@@ -207,6 +207,11 @@ def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=F
     factor = covariance_factor(inputs[0]['fit']['covariance'])
     transfer_ratios = []
     closure = None
+    if getattr(opt, 'dy_norm_scope', 'era') == 'run':
+        filename = base.file_for_process(args, era, 'DY', '', 'nominal')
+        root_file = reader._file(filename)
+        if not root_file or not root_file.Get('DYAux/NFRunCommon'):
+            raise ValueError(f'{era}: regenerate the DY template with --nf-scope run.')
     if getattr(opt, 'dy_shape_model', 'none') == 'linear':
         closure = base.read_dy_closure_inputs(reader, base.file_for_process(args, era, 'DY', '', 'nominal'))
     for window in windows:
@@ -400,9 +405,17 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
     if normalisation_kappa is not None:
         if not math.isfinite(normalisation_kappa) or normalisation_kappa <= 1:
             raise ValueError('Normalisation lnN kappa must exceed one.')
+        run_dy = {era: name for name, spec in model.get('normalisations', {}).items()
+                  if spec['process'] == 'DY' and 'eras' in spec for era in spec['eras']}
+        emitted = set()
         for era in sorted({r['era'] for r in rows}):
             for process in ('QCD', 'DY', 'tt'):
                 name = base.spectrum_normalisation_name(process, era)
+                if process == 'DY':
+                    name = run_dy.get(era, name)
+                if name in emitted:
+                    continue
+                emitted.add(name)
                 if legacy_norms or previous_norms:
                     tag = 'inSituNorm' if legacy_norms else 'Norm'
                     name = f'CMS_NPS26009_{tag}_{process}_BJetOS_{era}'
@@ -414,7 +427,7 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
                             lines.append(f'{name} rateParam {row["channel"]} {process} 1 [{f(lo)},{f(hi)}]')
                 else:
                     lines.append(name+' lnN '+' '.join(
-                        f(normalisation_kappa) if r['era'] == era and p == process else '-'
+                        f(normalisation_kappa) if r['era'] in specification.get('eras', [era]) and p == process else '-'
                         for r, p in columns))
     params = set()
     for row in rows:
