@@ -71,6 +71,7 @@ def prepare(path, output_base, uncertainty=.30, normalisation='free', norm_max=1
     vars(opt).update(original['settings'])
     opt.output_base=str(Path(output_base).resolve())
     opt.dy_shape_uncertainty=uncertainty
+    opt.qcd_tt_norm_scope = original['settings'].get('qcd_tt_norm_scope', 'era')
     opt.dy_norm_scope = 'era' if normalisation == 'free' else original['settings'].get('dy_norm_scope') or 'era'
     opt.dy_normalisation=normalisation
     opt.dy_norm_max=norm_max

@@ -84,6 +84,8 @@ def make_parser():
                    help='Explicit review study: independent era/bin DY lnN shifts (e.g. 0.30 gives 0.70/1.30); 0 preserves the existing model.')
     p.add_argument('--dy-normalisation', choices=('prior','free'), default='prior',
                    help='prior: existing DY lnN; free: one unconstrained DY rateParam per era.')
+    p.add_argument('--qcd-tt-norm-scope', choices=('run', 'era'), default='run',
+                   help='Correlation scope of the separate QCD and ttbar normalisation priors.')
     p.add_argument('--dy-norm-scope', choices=('era', 'run'),
                    help='DY prior scope (default: run, using common-TF templates). Free DY scales use era scope.')
     p.add_argument('--dy-norm-max', type=shared.finite_positive, default=10.,
@@ -312,6 +314,8 @@ def model_directory(opt, mass):
 
 def dy_study_tag(opt):
     tag = '_DYlinearShape_v1' if getattr(opt, 'dy_shape_model', 'none') == 'linear' else ''
+    if getattr(opt, 'qcd_tt_norm_scope', 'era') == 'run':
+        tag += '_QCDTTbarRunCommon'
     if dy_norm_scope(opt) == 'run':
         tag += '_DYRunCommon'
     if getattr(opt, 'dy_shape_uncertainty', 0.):
@@ -330,7 +334,7 @@ def signature(opt):
                'fit_strategy', 'fit_tolerance', 'fit_max_calls', 'fit_verbosity', 'fit_components', 'fit_robust_hesse', 'fit_output',
                'backend', 'bins_per_job', 'fast_mode', 'fit_layout', 'sr_nsigma',
                'sideband_edges', 'sideband_refine', 'sideband_fragment_fraction', 'sideband_binning',
-               'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_scope', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal', 'signal_counting_version'}
+               'dy_shape_uncertainty', 'dy_normalisation', 'dy_norm_scope', 'qcd_tt_norm_scope', 'dy_norm_max', 'dy_shape_model', 'interpolate_signal', 'signal_counting_version'}
     result = {k: v for k,v in vars(opt).items() if k not in ignored and not k.startswith('condor_')}
     if getattr(opt,'mode','blind') == 'unblind':
         result['mode'] = 'unblind'
@@ -347,6 +351,8 @@ def signature(opt):
         result['sideband_edges'] = sideband_reference(opt)
         if getattr(opt,'signal_counting_version',1)>=2:
             result['signal_normalisation_reference'] = 'SR'
+    if getattr(opt, 'qcd_tt_norm_scope', 'era') == 'run':
+        result['qcd_tt_norm_scope'] = 'run'
     if dy_norm_scope(opt) == 'run':
         result['dy_norm_scope'] = 'run'
     if getattr(opt, 'dy_shape_uncertainty', 0.):
@@ -407,19 +413,23 @@ def decorate_model(model, opt, windows):
         info['bin_edges'] = [windows[era][0]['low']]+[w['high'] for w in windows[era]]
         info['zero_dy_bins'] = sum(r['rates']['DY'] == 0 for r in model['rows'] if r['era'] == era)
         print(f'[SPECTRUM] {era}: {len(windows[era])} bins, 11--80 GeV; zero-DY bins={info["zero_dy_bins"]}')
-    model['normalisations'] = {
-        normalisation_name(p,e): dict(process=p, era=e, kappa=opt.norm_prior)
-        for e in model['eras'] for p in MAJOR}
+    model['normalisations'] = {}
+    for process in MAJOR:
+        scope = dy_norm_scope(opt) if process == 'DY' else getattr(opt, 'qcd_tt_norm_scope', 'era')
+        for era in model['eras']:
+            group = base.run_group(era) if scope == 'run' else era
+            name = normalisation_name(process, group)
+            if scope == 'run':
+                spec = model['normalisations'].setdefault(name, dict(process=process, run=group,
+                                                                      eras=[], kappa=opt.norm_prior))
+                spec['eras'].append(era)
+            else:
+                model['normalisations'][name] = dict(process=process, era=era, kappa=opt.norm_prior)
     if dy_norm_scope(opt) == 'run':
-        for run in dict.fromkeys(base.run_group(era) for era in model['eras']):
-            eras = [era for era in model['eras'] if base.run_group(era) == run]
-            factors = [row['dy_nf'] for row in model['rows'] if row['era'] in eras]
-            if len(set(factors)) != 1:
+        for run in {base.run_group(era) for era in model['eras']}:
+            factors = {row['dy_nf'] for row in model['rows'] if base.run_group(row['era']) == run}
+            if len(factors) != 1:
                 raise ValueError(f'{run}: mismatched common DY TFs across input templates.')
-            for era in eras:
-                del model['normalisations'][normalisation_name('DY', era)]
-            model['normalisations'][normalisation_name('DY', run)] = dict(
-                process='DY', run=run, eras=eras, kappa=opt.norm_prior)
     dy_unc = getattr(opt, 'dy_shape_uncertainty', 0.)
     for row in model['rows']:
         row['nuisances'] = {k:v for k,v in row['nuisances'].items()

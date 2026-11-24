@@ -55,6 +55,7 @@ class ReviewTests(unittest.TestCase):
         model,text=window_example()
         opt=fs.make_parser().parse_args(['--fit-layout','window','--dy-shape-uncertainty','.3','--dy-normalisation','free'])
         windows={e:[r for r in model['rows'] if r['era']==e] for e in model['eras']}
+        opt.qcd_tt_norm_scope = model['settings']['qcd_tt_norm_scope']
         transformed=fs.decorate_model(copy.deepcopy(model),opt,windows)
         changed=review.review_card(text,transformed,opt)
         self.assertEqual(shared.nominal_predictions(text),shared.nominal_predictions(changed))

@@ -417,14 +417,13 @@ def card_text(model, normalisation_kappa=None, prefix='SB'):
     if normalisation_kappa is not None:
         if not math.isfinite(normalisation_kappa) or normalisation_kappa <= 1:
             raise ValueError('Normalisation lnN kappa must exceed one.')
-        run_dy = {era: name for name, spec in model.get('normalisations', {}).items()
-                  if spec['process'] == 'DY' and 'eras' in spec for era in spec['eras']}
+        run_norms = {(spec['process'], era): name for name, spec in model.get('normalisations', {}).items()
+                  for era in spec.get('eras', ())}
         emitted = set()
         for era in sorted({r['era'] for r in rows}):
             for process in ('QCD', 'DY', 'tt'):
                 name = base.spectrum_normalisation_name(process, era)
-                if process == 'DY':
-                    name = run_dy.get(era, name)
+                name = run_norms.get((process, era), name)
                 if name in emitted:
                     continue
                 emitted.add(name)

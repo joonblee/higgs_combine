@@ -22,7 +22,7 @@ import limit_workflow_sideband_fit as shared
 
 
 def example_model():
-    opt = fs.make_parser().parse_args(['--masses', '30', '--dy-norm-scope', 'era'])
+    opt = fs.make_parser().parse_args(['--masses', '30', '--dy-norm-scope', 'era', '--qcd-tt-norm-scope', 'era'])
     rows = []
     for era in ('2018', '2023'):
         for i, (lo, hi, qcd, dy, tt, sig) in enumerate([
@@ -264,7 +264,7 @@ class CardTests(unittest.TestCase):
             model=fs.build_model(reader,args,opt,30.,{'2018':'signal.root'},windows)
         return model
 
-    def test_default_dy_prior_shares_only_same_run_dy_columns(self):
+    def test_default_priors_share_only_same_process_and_run_columns(self):
         opt = fs.make_parser().parse_args([])
         fs.configuration(opt)
         model = example_model()
@@ -275,13 +275,23 @@ class CardTests(unittest.TestCase):
         windows = {era: [r for r in model['rows'] if r['era'] == era] for era in model['eras']}
         fs.decorate_model(model, opt, windows)
         card = shared.card_text(model, normalisation_kappa=opt.norm_prior, prefix='FS')
-        dy = [line.split() for line in card.splitlines() if line.startswith('CMS_NPS26009_DYNorm_')]
-        self.assertEqual(len(dy), 2)
-        for run in ('Run2', 'Run3'):
-            line, = [tokens for tokens in dy if tokens[0] == fs.normalisation_name('DY', run)]
-            self.assertEqual(line[1:], ['lnN'] + [
-                '1.5' if p == 'DY' and base.run_group(row['era']) == run else '-'
-                for row in model['rows'] for p in base.PROCESSES])
+        priors = model['normalisations']
+        self.assertEqual(len(priors), 6)
+        for process in fs.MAJOR:
+            for run in ('Run2', 'Run3'):
+                name = fs.normalisation_name(process, run)
+                self.assertIn(name, priors)
+                line, = [line.split() for line in card.splitlines() if line.startswith(name+' ')]
+                self.assertEqual(line[1:], ['lnN'] + [
+                    '1.5' if p == process and base.run_group(row['era']) == run else '-'
+                    for row in model['rows'] for p in base.PROCESSES])
+        era_opt = copy.copy(opt)
+        era_opt.qcd_tt_norm_scope = 'era'
+        previous = fs.decorate_model(copy.deepcopy(model), era_opt, windows)
+        previous_card = shared.card_text(previous, normalisation_kappa=opt.norm_prior, prefix='FS')
+        prefixes = ('CMS_NPS26009_QCDNorm_', 'CMS_NPS26009_TTbarNorm_')
+        self.assertEqual([line for line in card.splitlines() if not line.startswith(prefixes)],
+                         [line for line in previous_card.splitlines() if not line.startswith(prefixes)])
         model['rows'][-1]['dy_nf'] = .13
         with self.assertRaisesRegex(ValueError, 'mismatched common DY TFs'):
             fs.decorate_model(model, opt, windows)

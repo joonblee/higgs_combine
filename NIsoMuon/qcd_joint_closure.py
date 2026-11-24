@@ -119,7 +119,7 @@ def run(paths, closure_path):
             rows = [by_region[b['region']] for b in record['bins']]
             if any((r['low'],r['high'])!=(b['low'],b['high']) for r,b in zip(rows,record['bins'])):
                 raise ValueError('Closure/model bin geometry differs.')
-            spec = next(v for v in model['normalisations'].values() if v['process']=='QCD' and v['era']==era)
+            spec = next(v for v in model['normalisations'].values() if v['process']=='QCD' and era in v.get('eras', [v.get('era')]))
             output.append(dict(model=str(path),mass=model['mass'],era=era,
                 prior=profile_qcd(rows,record,spec['kappa'],'prior'),
                 free=profile_qcd(rows,record,spec['kappa'],'free')))

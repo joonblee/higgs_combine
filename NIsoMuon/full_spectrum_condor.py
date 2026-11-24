@@ -608,6 +608,7 @@ def recover(opt, previous):
     check_inputs(previous['preflight_inputs'])
     defaults = vars(fs.make_parser().parse_args([]))
     defaults.update(previous['options'])
+    defaults['qcd_tt_norm_scope'] = previous['options'].get('qcd_tt_norm_scope', 'era')
     defaults['dy_norm_scope'] = previous['options'].get('dy_norm_scope', 'era')
     new = argparse.Namespace(**defaults)
     suffix = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')+'_'+uuid4().hex[:8]
