@@ -218,6 +218,10 @@ class GeometryTests(unittest.TestCase):
 
     def test_cli_targets_and_invalid_inputs(self):
         defaults=fs.make_parser().parse_args([])
+        self.assertEqual((defaults.dy_shape_model, defaults.dy_normalisation, defaults.norm_prior),
+                         ('linear', 'prior', 1.5))
+        for flag in ('--dy-norm-scope', '--qcd-tt-norm-scope'):
+            self.assertEqual(fs.make_parser().parse_known_args([flag, 'run'])[1], [flag, 'run'])
         self.assertEqual(defaults.backend,'condor')
         self.assertEqual(defaults.condor_maxjobs,0)
         with patch.dict('os.environ',{'NPS26009_CONDOR_FILESYSTEM_DOMAIN':'old-domain'}):
@@ -233,7 +237,7 @@ class GeometryTests(unittest.TestCase):
 
 class CardTests(unittest.TestCase):
     def build_synthetic_model(self, audit=None):
-        opt=fs.make_parser().parse_args(['--target','2018','--masses','30'])
+        opt=fs.make_parser().parse_args(['--dy-shape-model','none','--target','2018','--masses','30'])
         args=fs.configuration(opt)
         windows={'2018':[dict(region='B0000',low=11.,high=30.),
                          dict(region='B0001',low=30.,high=80.)]}
@@ -265,7 +269,7 @@ class CardTests(unittest.TestCase):
         return model
 
     def test_default_priors_share_only_same_process_and_run_columns(self):
-        opt = fs.make_parser().parse_args([])
+        opt = fs.make_parser().parse_args(['--dy-shape-model','none'])
         fs.configuration(opt)
         model = example_model()
         model['eras']['2017'] = {}

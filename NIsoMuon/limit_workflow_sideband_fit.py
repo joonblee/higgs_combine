@@ -207,7 +207,7 @@ def build_bin_rows(reader, args, opt, mass, files, era, windows, full_spectrum=F
     factor = covariance_factor(inputs[0]['fit']['covariance'])
     transfer_ratios = []
     closure = None
-    if getattr(opt, 'dy_norm_scope', 'era') == 'run':
+    if full_spectrum:
         filename = base.file_for_process(args, era, 'DY', '', 'nominal')
         root_file = reader._file(filename)
         common = root_file.Get('DYAux/NFRunCommon') if root_file else None

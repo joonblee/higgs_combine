@@ -691,7 +691,7 @@ Then submit **fit-only** Condor jobs (no raw input preparation):
 ```bash
 python3 full_spectrum_fit.py --masses 12,30,70 --target full --stage fit \
     --fit-layout window --sideband-binning coarse \
-    --dy-shape-uncertainty 0.30 --dy-normalisation free \
+    --dy-shape-model none --dy-shape-uncertainty 0.30 --dy-normalisation free \
     --output-base full_spectrum_outputs/review_dy30 \
     --condor-dir full_spectrum_outputs/condor/M12_M30_M70_dy30_free
 ```
@@ -803,7 +803,6 @@ unchanged. Old DY files are rejected when the new shape is requested.
 ```bash
 python3 full_spectrum_fit.py --masses 12,30,70 --target full \
     --fit-layout window --sideband-binning coarse \
-    --norm-prior 1.5 --dy-shape-model linear \
     --condor-dir full_spectrum_outputs/condor/M12_M30_M70_coarse_DYlinear_r0
 ```
 
@@ -811,7 +810,7 @@ Submit a **fresh batch**: existing snapshots/cards/parts do not contain the new
 shape inputs. The existing Condor DAG still prepares era/mass bins in parallel,
 assembles a joint card, then runs B-only and S+B fits separately in parallel.
 The new protocol module is included in worker snapshots and source hashes.
-`--dy-shape-model none` (default) preserves existing model signatures and paths.
+`--dy-shape-model linear` is the default. Select `none` for the model without this variation.
 `linear` adds `_DYlinearShape_v1`; it cannot be combined with the independent
 `--dy-shape-uncertainty 0.30` study. No free normalisation is enabled implicitly.
 
@@ -853,7 +852,7 @@ propagation and pre/postfit yields use the workspace expectations automatically.
 ```bash
 python3 full_spectrum_fit.py --masses 12,13,14,15,30,32.5,70 \
   --interpolate-signal --target full --fit-layout window \
-  --sideband-binning coarse --norm-prior 1.5 --dy-shape-model linear \
+  --sideband-binning coarse \
   --condor-dir full_spectrum_outputs/condor/intermediate_DYlinear
 ```
 
@@ -1074,7 +1073,6 @@ for binning in verycoarse central fine; do
     python3 full_spectrum_fit.py \
         --masses 12,30,70 --target full \
         --fit-layout window --sideband-binning "${binning}" \
-        --norm-prior 1.5 --dy-shape-model linear \
         --expected-limits --bins-per-job 4 \
         --condor-dir "full_spectrum_outputs/condor/M12_M30_M70_${binning}_limits_norm_r0"
 done
@@ -1344,8 +1342,8 @@ Run the blinded limit scan with the following command:
 
 ```bash
 python3 full_spectrum_fit.py --mode blind --interpolate-signal --target full \
-  --fit-layout window --sideband-binning central --norm-prior 1.5 \
-  --dy-shape-model linear --fit-components none --limits --bins-per-job 40 \
+  --fit-layout window --sideband-binning central \
+  --fit-components none --limits --bins-per-job 40 \
   --condor-dir full_spectrum_outputs/condor/central_limits_blind_2p5sigma
 ```
 
@@ -1393,7 +1391,6 @@ For a dense observed scan, after activating CMSSW:
 python3 full_spectrum_fit.py \
   --mode unblind --interpolate-signal --target full \
   --fit-layout window --sideband-binning central \
-  --norm-prior 1.5 --dy-shape-model linear \
   --fit-components none --limits --bins-per-job 40 \
   --condor-dir full_spectrum_outputs/condor/dense_central_limits_unblind
 ```

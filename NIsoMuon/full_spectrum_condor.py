@@ -461,7 +461,7 @@ def submit(opt, args, prepared_plan=None):
     for name in SOURCES:
         (batch/'source'/name).parent.mkdir(parents=True,exist_ok=True)
         shutil.copy2(Path(__file__).parent/name, batch/'source'/name)
-    payload = dict(schema=SCHEMA, batch_id=batch_id, batch=str(batch), options=vars(opt),
+    payload = dict(schema=SCHEMA, batch_id=batch_id, batch=str(batch), options=dict(vars(opt), dy_norm_scope='run', qcd_tt_norm_scope='run'),
         jobs=jobs, windows=windows, signal_files=selected, preflight_inputs=preflight,
         input_base_dir=str(Path(args.base_dir).expanduser().resolve()),
         resolution_coefficients=getattr(args, 'resolution_coefficients', {}),
@@ -608,8 +608,8 @@ def recover(opt, previous):
     check_inputs(previous['preflight_inputs'])
     defaults = vars(fs.make_parser().parse_args([]))
     defaults.update(previous['options'])
-    defaults['qcd_tt_norm_scope'] = previous['options'].get('qcd_tt_norm_scope', 'era')
-    defaults['dy_norm_scope'] = previous['options'].get('dy_norm_scope', 'era')
+    if any(defaults.pop(key, None) != 'run' for key in ('dy_norm_scope', 'qcd_tt_norm_scope')):
+        raise ValueError('Recovery requires a Run-correlated batch.')
     new = argparse.Namespace(**defaults)
     suffix = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')+'_'+uuid4().hex[:8]
     new.condor_dir = opt.condor_recovery_dir or previous['batch']+'_recovered_'+suffix

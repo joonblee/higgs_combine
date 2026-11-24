@@ -78,15 +78,12 @@ def make_parser():
                    help='Test only: multiply the target bin width by four; retain all fit diagnostics and systematics.')
     p.add_argument('--norm-prior', type=shared.finite_positive, default=1.5,
                    help='lnN kappa for QCD, DY and tt normalisations (>1).')
-    p.add_argument('--dy-shape-model', choices=('none','linear'), default='none',
+    p.add_argument('--dy-shape-model', choices=('none','linear'), default='linear',
                    help='linear: common yield-preserving AN DY closure shape (requires new SKPlotMaker DYAux); none preserves existing cards.')
     p.add_argument('--dy-shape-uncertainty', type=float, default=0.,
                    help='Explicit review study: independent era/bin DY lnN shifts (e.g. 0.30 gives 0.70/1.30); 0 preserves the existing model.')
     p.add_argument('--dy-normalisation', choices=('prior','free'), default='prior',
                    help='DY scale per Run: prior uses lnN; free uses a rateParam without a prior.')
-    # Accept published Run-only command lines. New commands can omit both flags.
-    p.add_argument('--qcd-tt-norm-scope', choices=('run',), default='run', help=argparse.SUPPRESS)
-    p.add_argument('--dy-norm-scope', choices=('run',), default='run', help=argparse.SUPPRESS)
     p.add_argument('--dy-norm-max', type=shared.finite_positive, default=10.,
                    help='Upper numerical bound of a free DY scale; not a prior.')
     p.add_argument('--inject-r', type=float, default=0., help='Asimov signal strength, e.g. 0 or 1.')
@@ -169,8 +166,6 @@ def configuration(opt):
         validate_sideband_options(opt)
         if getattr(opt, 'fast_mode', False) or opt.bin_sigma != 1.:
             raise ValueError('Window layout uses --sideband-edges/--sideband-refine, not --fast-mode/--bin-sigma.')
-    if any(getattr(opt, key, None) != 'run' for key in ('dy_norm_scope', 'qcd_tt_norm_scope')):
-        raise ValueError('Era-specific normalisation model: submit a new Run-correlated batch.')
     if opt.norm_prior <= 1:
         raise ValueError('--norm-prior must exceed one.')
     dy_unc = getattr(opt, 'dy_shape_uncertainty', 0.)
@@ -359,7 +354,7 @@ def build_model(reader, args, opt, mass, files, windows):
 
 def decorate_model(model, opt, windows):
     """Apply full-spectrum metadata after all raw bins are assembled."""
-    model.update(schema_version=SCHEMA, fit_kind='full_spectrum', settings=vars(opt),
+    model.update(schema_version=SCHEMA, fit_kind='full_spectrum', settings=dict(vars(opt), dy_norm_scope='run', qcd_tt_norm_scope='run'),
                  test_only=bool(getattr(opt, 'fast_mode', False)),
                  effective_bin_sigma=effective_bin_sigma(opt),
                  signal_normalisation_domain=({era:[next(w['low'] for w in windows[era] if w['region']=='SR'),

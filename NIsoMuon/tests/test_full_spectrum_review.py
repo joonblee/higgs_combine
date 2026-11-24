@@ -31,7 +31,7 @@ def window_example(run_norms=False):
         if row['low']==31.:
             row['region']='bin2';row['channel']='bin2_'+row['era']
     if run_norms:
-        opt = fs.make_parser().parse_args(['--fit-layout','window'])
+        opt = fs.make_parser().parse_args(['--dy-shape-model','none','--fit-layout','window'])
         fs.decorate_model(model,opt,{e:[r for r in model['rows'] if r['era']==e] for e in model['eras']})
     text=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
     model['card_sha256']=hashlib.sha256(text.encode()).hexdigest()
@@ -40,7 +40,7 @@ def window_example(run_norms=False):
 
 class ReviewTests(unittest.TestCase):
     def test_default_options_preserve_legacy_signatures_and_paths(self):
-        current=fs.make_parser().parse_args(['--fit-layout','window'])
+        current=fs.make_parser().parse_args(['--dy-shape-model','none','--fit-layout','window'])
         old=copy.copy(current)
         for name in ('dy_shape_uncertainty','dy_normalisation','dy_norm_max'):
             delattr(old,name)
@@ -56,9 +56,8 @@ class ReviewTests(unittest.TestCase):
 
     def test_review_card_preserves_yields_and_unrelated_nuisance_lines(self):
         model,text=window_example(run_norms=True)
-        opt=fs.make_parser().parse_args(['--fit-layout','window','--dy-shape-uncertainty','.3','--dy-normalisation','free'])
+        opt=fs.make_parser().parse_args(['--dy-shape-model','none','--fit-layout','window','--dy-shape-uncertainty','.3','--dy-normalisation','free'])
         windows={e:[r for r in model['rows'] if r['era']==e] for e in model['eras']}
-        opt.qcd_tt_norm_scope = model['settings']['qcd_tt_norm_scope']
         transformed=fs.decorate_model(copy.deepcopy(model),opt,windows)
         changed=review.review_card(text,transformed,opt)
         self.assertEqual(shared.nominal_predictions(text),shared.nominal_predictions(changed))
@@ -150,7 +149,7 @@ class ReviewTests(unittest.TestCase):
     def test_zero_dy_keeps_additive_source_stat_and_zero_nominal(self):
         model,text=window_example();row=model['rows'][0]
         row['rates']['DY']=0.;row['dy_stat']=2.;row['asimov']=sum(row['rates'][p] for p in shared.BACKGROUNDS)
-        opt=fs.make_parser().parse_args(['--dy-shape-uncertainty','.3','--dy-normalisation','free'])
+        opt=fs.make_parser().parse_args(['--dy-shape-model','none','--dy-shape-uncertainty','.3','--dy-normalisation','free'])
         fs.decorate_model(model,opt,{e:[r for r in model['rows'] if r['era']==e] for e in model['eras']})
         card=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
         self.assertIn('CMS_NPS26009_DYStat_'+row['channel']+' param 0 1',card)
@@ -225,7 +224,7 @@ class ToyTests(unittest.TestCase):
 class CombineReviewTests(unittest.TestCase):
     def test_free_dy_with_independent_closure_recovers_injection(self):
         model,_=window_example()
-        opt=fs.make_parser().parse_args(['--fit-layout','window','--dy-shape-uncertainty','.3','--dy-normalisation','free','--inject-r','1'])
+        opt=fs.make_parser().parse_args(['--dy-shape-model','none','--fit-layout','window','--dy-shape-uncertainty','.3','--dy-normalisation','free','--inject-r','1'])
         fs.decorate_model(model,opt,{e:[r for r in model['rows'] if r['era']==e] for e in model['eras']})
         card=shared.card_text(model,normalisation_kappa=1.5,prefix='FS')
         model['card_sha256']=hashlib.sha256(card.encode()).hexdigest()

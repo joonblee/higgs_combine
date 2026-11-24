@@ -54,8 +54,8 @@ class LinearCardTests(unittest.TestCase):
         self.assertNotIn('DYClosureBin_'+row['channel']+' rateParam',card)
         self.assertEqual(row['dy_closure_up'],0.)
 
-    def test_opt_in_changes_signature_and_rejects_double_modelling(self):
-        old=fs.make_parser().parse_args([]);new=fs.make_parser().parse_args(['--dy-shape-model','linear'])
+    def test_default_linear_shape_changes_signature_and_rejects_double_modelling(self):
+        old=fs.make_parser().parse_args(['--dy-shape-model','none']);new=fs.make_parser().parse_args([])
         self.assertNotEqual(fs.signature(old),fs.signature(new))
         self.assertIn('DYlinearShape_v1',str(fs.model_directory(new,30.)))
         both=fs.make_parser().parse_args(['--dy-shape-model','linear','--dy-shape-uncertainty','.3'])

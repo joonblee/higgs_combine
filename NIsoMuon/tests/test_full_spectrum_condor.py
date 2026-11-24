@@ -131,7 +131,7 @@ class CondorTests(unittest.TestCase):
         self.stack.enter_context(redirect_stdout(io.StringIO()))
 
     def make_batch(self, name='batch', grouping=1, stage='all', extra=()):
-        opt = fs.make_parser().parse_args(['--backend','condor','--condor-dry-run',
+        opt = fs.make_parser().parse_args(['--dy-shape-model','none','--backend','condor','--condor-dry-run',
             '--masses','30','--target','Run2','--stage',stage,
             '--condor-dir',str(self.root/name),'--bins-per-job',str(grouping), *extra])
         args = fs.configuration(opt)
@@ -272,7 +272,7 @@ class CondorTests(unittest.TestCase):
             saved_opt,_=batch.worker_options(payload)
             cards.append((fs.model_directory(saved_opt,30.)/'datacard.txt').read_text())
         self.assertEqual(cards[0],cards[1])
-        local=fs.make_parser().parse_args(['--target','Run2','--masses','30'])
+        local=fs.make_parser().parse_args(['--dy-shape-model','none','--target','Run2','--masses','30'])
         self.assertEqual(fs.signature(local),fs.signature(opt))
 
     def test_resume_one_failed_hypothesis_keeps_the_other_fit(self):

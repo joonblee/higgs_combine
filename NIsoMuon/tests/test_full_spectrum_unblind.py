@@ -58,7 +58,7 @@ class UnblindTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'Input changed'):reader.check_inputs()
 
     def test_observed_preparation_reads_integer_data_for_every_bin_without_fallback(self):
-        opt=fs.make_parser().parse_args(['--mode','unblind','--target','2018','--masses','30'])
+        opt=fs.make_parser().parse_args(['--dy-shape-model','none','--mode','unblind','--target','2018','--masses','30'])
         args=fs.configuration(opt)
         metadata={'fit':{'covariance':[[1.]]}}
         axis=SimpleNamespace(FindFixBin=lambda x:1)
