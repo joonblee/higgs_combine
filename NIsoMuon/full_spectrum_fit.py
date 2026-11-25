@@ -892,7 +892,7 @@ def run_fit(model, directory, opt):
     extract_summary(model, directory, opt)
 
 
-def run_expected_limits(model, directory, opt):
+def run_expected_limits(model, directory, opt, *, condition_on_pseudodata=False):
     """Reuse the audited workspace, keeping physical limits separate from diagnostics."""
     if (model.get('blind') is not (getattr(opt,'mode','blind') == 'blind')
             or model.get('test_only') or opt.inject_r != 0):
@@ -910,7 +910,8 @@ def run_expected_limits(model, directory, opt):
     vars(args).update(mode=getattr(opt,'mode','blind'), parameter='alpha', r_min=0., r_max=opt.r_max, strict=True, jobs=1)
     mass, target = model['mass'], model['target']
     label = base.mass_label(mass)
-    result = base.run_asymptotic(args, fit_dir/'workspace.root', target, label, mass, work)
+    kwargs = {'condition_on_pseudodata': True} if condition_on_pseudodata else {}
+    result = base.run_asymptotic(args, fit_dir/'workspace.root', target, label, mass, work, **kwargs)
     values = base._read_single_limit_json(result.expected, work, 'full_spectrum_final')
     invalid, reason = base._limit_range_status(values, opt.r_max, .98, True)
     if invalid:

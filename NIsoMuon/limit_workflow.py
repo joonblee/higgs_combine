@@ -4243,6 +4243,7 @@ def run_asymptotic(
     label: str,
     mass: float,
     outdir: Path,
+    *, condition_on_pseudodata: bool = False,
 ) -> LimitOutputs:
     tag = tag_for(args, target)
 
@@ -4276,7 +4277,7 @@ def run_asymptotic(
                 "-n", f".{fit_tag}",
             ]
             if blind_expected:
-                command.extend(["--run", "blind"])
+                command.extend(["--run", "expected" if condition_on_pseudodata else "blind"])
 
             print(
                 f"[LIMIT-RANGE] {target} M-{label}: "
