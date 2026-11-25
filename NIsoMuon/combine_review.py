@@ -1345,6 +1345,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--hybrid-fork", type=int, default=None,
         help="deprecated compatibility alias for --hybrid-parallel; NOT passed to Combine --fork",
     )
+    parser.add_argument("--hybrid-toys-per-job", type=int,
+                        help="Condor HybridNew toys per job at each grid point (default: all toys for the point)")
     parser.add_argument("--hybrid-grid-points", type=int, default=29)
     parser.add_argument("--hybrid-grid-min-factor", type=float, default=0.20)
     parser.add_argument("--hybrid-grid-max-factor", type=float, default=3.00)

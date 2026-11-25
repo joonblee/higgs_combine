@@ -113,6 +113,28 @@ class ReviewCondorTests(unittest.TestCase):
         self.assertEqual(len(set(seeds)), 5)
         self.assertEqual(points, [0.4, 1.8, 3.2, 4.6, 6.0])
 
+    def test_hybrid_chunks_merge_each_point_once_with_independent_seeds(self):
+        self.args.hybrid_grid_points = 3
+        self.args.hybrid_toys = 101
+        self.args.hybrid_toys_per_job = 50
+        jobs = self.plan('hybrid')
+        chunks, final = jobs[1:-1], jobs[-1]
+        self.assertEqual(final['dependencies'], [j['index'] for j in chunks])
+        self.assertEqual(len(chunks), 9)
+        seeds = set()
+        for i, point in enumerate(final['skip_commands']):
+            group = chunks[3*i:3*i+3]
+            merge = final['merges'][i]
+            self.assertEqual(merge['sources'], [j['files'][0] for j in group])
+            self.assertEqual(Path(merge['destination']), Path(point['cwd']) / condor.root_name(point['cmd']))
+            for job, size in zip(group, [50, 50, 1]):
+                cmd = job['commands'][0]['cmd']
+                seed = condor.option(cmd, '-s')
+                self.assertNotIn(seed, seeds)
+                seeds.add(seed)
+                self.assertEqual(job['dependencies'], [0])
+                self.assertEqual(cmd, condor.replace(condor.replace(point['cmd'], '-T', size), '-s', seed))
+
     def test_impact_nuisances_isolated_and_depend_on_initial(self):
         self.args.inject_r = 1.0
         with patch.object(limit_workflow, 'impact_workspace_parameters', return_value={'scale': (-5, 5), 'shape': (0, 10)}):

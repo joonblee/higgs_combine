@@ -165,11 +165,30 @@ class Planner:
             generation, *grid = commands
             generated = Path(generation["cwd"]) / root_name(generation["cmd"])
             parent = self.remote_command("hybrid_asimov", args, generation["cmd"], generated)
-            points = []
+            points, merges = [], []
             for point in grid:
-                dest = Path(point["cwd"]) / root_name(point["cmd"])
-                points.append(self.remote_command("hybrid_point", args, point["cmd"], dest, [parent]))
-            self.final(task, args, [parent, *points], skip=grid,
+                command = point["cmd"]
+                dest = Path(point["cwd"]) / root_name(command)
+                total = int(option(command, "-T"))
+                size = getattr(args, "hybrid_toys_per_job", None) or total
+                if size >= total:
+                    points.append(self.remote_command("hybrid_point", args, command, dest, [parent]))
+                    continue
+                fragments = []
+                for chunk, start in enumerate(range(0, total, size)):
+                    # Interleave seeds across grid points so every (point, chunk) is independent.
+                    seed = int(option(command, "-s")) + chunk * len(grid)
+                    if not 0 < seed <= 2147483647:
+                        raise RuntimeError("Split HybridNew jobs require distinct positive 32-bit seeds")
+                    cmd = replace(replace(command, "-T", min(size, total - start)), "-s", seed)
+                    index = self.add("hybrid_chunk", args, [parent])
+                    job = self.jobs[index]
+                    fragment = str(Path(job["workdir"]) / root_name(cmd))
+                    job.update(commands=[{"cmd": cmd, "cwd": job["workdir"]}], files=[fragment])
+                    fragments.append(fragment)
+                    points.append(index)
+                merges.append({"destination": str(dest), "sources": fragments})
+            self.final(task, args, points, skip=grid, merges=merges,
                        files=[output / f"hybrid_comparison_M{label}.json"])
         elif task == "sb-impacts":
             initial, fits, _collection = commands
@@ -240,6 +259,9 @@ def prepare(review, args):
     for name in ("condor_memory", "scan_chunk_size", "bias_chunk_size", "bias_toys", "hybrid_toys", "hybrid_grid_points"):
         if getattr(args, name) < 1:
             raise RuntimeError(f"--{name.replace('_', '-')} must be positive")
+    hybrid_size = getattr(args, "hybrid_toys_per_job", None)
+    if hybrid_size is not None and hybrid_size < 1:
+        raise RuntimeError("--hybrid-toys-per-job must be positive")
     if args.condor_max_jobs < 0 or args.scan_points < 5 or args.r_max <= 0:
         raise RuntimeError("Invalid Condor cap, scan point count or rMax")
     if args.inject_r is not None and (not math.isfinite(args.inject_r) or args.inject_r < 0 or args.inject_r >= args.r_max):
@@ -265,7 +287,7 @@ def prepare(review, args):
         cfg.mass = mass
         card = review.card_path(cfg)
         for line in card.read_text().splitlines():
-            if line.strip().startswith("shapes "):
+            if line.split()[:1] == ["shapes"] and line.split() != ["shapes", "*", "*", "FAKE"]:
                 raise RuntimeError("Condor review currently supports self-contained counting cards only")
         source_cards[mass] = card
         if task in ("bias", "hybrid") or (task == "sb-impacts" and changes.get("inject_r", args.inject_r) is None):
